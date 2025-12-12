@@ -117,7 +117,7 @@ MetaQuery.__new__.__defaults__ = ("", False, 0, 0, False, False, False, False)
 
 OutputSettings = namedtuple(
     "OutputSettings",
-    "table_format dcmlfmt floatfmt column_date_formats missingval expanded max_width case_function style_output max_field_width",
+    "table_format dcmlfmt floatfmt column_date_formats missingval expanded max_width case_function style_output max_field_width tuples_only",
 )
 OutputSettings.__new__.__defaults__ = (
     None,
@@ -130,6 +130,7 @@ OutputSettings.__new__.__defaults__ = (
     lambda x: x,
     None,
     DEFAULT_MAX_FIELD_WIDTH,
+    False,
 )
 
 
@@ -185,7 +186,9 @@ class PGCli:
         warn=None,
         ssh_tunnel_url: Optional[str] = None,
         log_file: Optional[str] = None,
+        output_file: Optional[str] = None,
         force_destructive: bool = False,
+        tuples_only=None,
     ):
         self.force_passwd_prompt = force_passwd_prompt
         self.never_passwd_prompt = never_passwd_prompt
@@ -237,7 +240,15 @@ class PGCli:
 
         self.min_num_menu_lines = c["main"].as_int("min_num_menu_lines")
         self.multiline_continuation_char = c["main"]["multiline_continuation_char"]
-        self.table_format = c["main"]["table_format"]
+
+        # Override table_format if tuples_only is specified
+        if tuples_only:
+            self.table_format = tuples_only
+            self.tuples_only = True
+        else:
+            self.table_format = c["main"]["table_format"]
+            self.tuples_only = False
+
         self.syntax_style = c["main"]["syntax_style"]
         self.cli_style = c["colors"]
         self.wider_completion_menu = c["main"].as_bool("wider_completion_menu")
@@ -301,6 +312,17 @@ class PGCli:
             with open(log_file, "a+"):
                 pass  # ensure writeable
         self.log_file = log_file
+
+        # Set initial output file if specified via command line
+        if output_file:
+            output_file = os.path.abspath(os.path.expanduser(output_file))
+            try:
+                with open(output_file, "w"):
+                    pass  # ensure writeable
+            except OSError as e:
+                click.secho(f"Cannot write to output file: {e}", err=True, fg="red")
+                sys.exit(1)
+        self.output_file = output_file
 
         # formatter setup
         self.formatter = TabularOutputFormatter(format_name=c["main"]["table_format"])
@@ -801,11 +823,11 @@ class PGCli:
                     destroy = True
                 else:
                     destroy = confirm_destructive_query(text, self.destructive_warning, self.dsn_alias)
-                if destroy is False:
-                    click.secho("Wise choice!")
-                    raise KeyboardInterrupt
-                elif destroy and not self.force_destructive:
-                    click.secho("Your call!")
+                    if destroy is False:
+                        click.secho("Wise choice!")
+                        raise KeyboardInterrupt
+                    elif destroy:
+                        click.secho("Your call!")
 
             output, query = self._evaluate_command(text)
         except KeyboardInterrupt:
@@ -858,7 +880,7 @@ class PGCli:
             except KeyboardInterrupt:
                 pass
 
-            if self.pgspecial.timing_enabled:
+            if self.pgspecial.timing_enabled and not self.tuples_only:
                 # Only add humanized time display if > 1 second
                 if query.total_time > 1:
                     print(
@@ -918,6 +940,47 @@ class PGCli:
 
     def run_cli(self):
         logger = self.logger
+
+        # Handle command mode (-c flag) - similar to psql behavior
+        # Multiple -c options are executed sequentially
+        if hasattr(self, 'commands') and self.commands:
+            try:
+                for command in self.commands:
+                    logger.debug("Running command: %s", command)
+                    # Execute the command using the same logic as interactive mode
+                    self.handle_watch_command(command)
+            except PgCliQuitError:
+                # Normal exit from quit command
+                sys.exit(0)
+            except Exception as e:
+                logger.error("Error executing command: %s", e)
+                logger.error("traceback: %r", traceback.format_exc())
+                click.secho(str(e), err=True, fg="red")
+                sys.exit(1)
+            # Exit successfully after executing all commands
+            sys.exit(0)
+
+        # Handle file mode (-f flag) - execute SQL from files
+        # Multiple -f options are executed sequentially
+        if hasattr(self, 'input_files') and self.input_files:
+            try:
+                for input_file in self.input_files:
+                    logger.debug("Reading commands from file: %s", input_file)
+                    with open(input_file, 'r', encoding='utf-8') as f:
+                        file_content = f.read()
+                    if file_content.strip():
+                        logger.debug("Executing commands from file: %s", input_file)
+                        self.handle_watch_command(file_content)
+            except PgCliQuitError:
+                # Normal exit from quit command
+                sys.exit(0)
+            except Exception as e:
+                logger.error("Error executing commands from file: %s", e)
+                logger.error("traceback: %r", traceback.format_exc())
+                click.secho(str(e), err=True, fg="red")
+                sys.exit(1)
+            # Exit successfully after executing all files
+            sys.exit(0)
 
         history_file = self.config["main"]["history_file"]
         if history_file == "default":
@@ -1143,6 +1206,7 @@ class PGCli:
                 case_function=(self.completer.case if self.settings["case_column_headers"] else lambda x: x),
                 style_output=self.style_output,
                 max_field_width=self.max_field_width,
+                tuples_only=self.tuples_only,
             )
             execution = time() - start
             formatted = format_output(title, cur, headers, status, settings, self.explain_mode)
@@ -1286,7 +1350,9 @@ class PGCli:
         return len(lines) >= (self.prompt_app.output.get_size().rows - 4)
 
     def echo_via_pager(self, text, color=None):
-        if self.pgspecial.pager_config == PAGER_OFF or self.watch_command:
+        # Disable pager for command mode (-c) and file mode (-f)
+        in_command_or_file_mode = (hasattr(self, 'commands') and self.commands) or (hasattr(self, 'input_files') and self.input_files)
+        if self.pgspecial.pager_config == PAGER_OFF or self.watch_command or in_command_or_file_mode:
             click.echo(text, color=color)
         elif self.pgspecial.pager_config == PAGER_LONG_OUTPUT and self.table_format != "csv":
             lines = text.split("\n")
@@ -1442,6 +1508,37 @@ class PGCli:
     default=False,
     help="Force destructive commands without confirmation prompt.",
 )
+@click.option(
+    "-c",
+    "--command",
+    "commands",
+    multiple=True,
+    help="run command (SQL or internal) and exit. Multiple -c options are allowed.",
+)
+@click.option(
+    "-f",
+    "--file",
+    "input_files",
+    multiple=True,
+    type=click.Path(exists=True, readable=True, dir_okay=False),
+    help="execute commands from file, then exit. Multiple -f options are allowed.",
+)
+@click.option(
+    "-t",
+    "--tuples-only",
+    "tuples_only",
+    is_flag=False,
+    flag_value="csv-noheader",
+    default=None,
+    help="Print rows only (default: csv-noheader). Optionally specify a format (e.g., -t minimal).",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_file",
+    default=None,
+    help="Send query results to file (or |pipe).",
+)
 @click.argument("dbname", default=lambda: None, envvar="PGDATABASE", nargs=1)
 @click.argument("username", default=lambda: None, envvar="PGUSER", nargs=1)
 def cli(
@@ -1471,6 +1568,10 @@ def cli(
     init_command: str,
     log_file: str,
     force_destructive: bool,
+    commands,
+    input_files,
+    tuples_only,
+    output_file: str,
 ):
     if version:
         print("Version:", __version__)
@@ -1529,8 +1630,14 @@ def cli(
         warn=warn,
         ssh_tunnel_url=ssh_tunnel,
         log_file=log_file,
+        output_file=output_file,
         force_destructive=force_destructive,
+        tuples_only=tuples_only,
     )
+
+    # Assign command and file options
+    pgcli.commands = commands if commands else None
+    pgcli.input_files = input_files if input_files else None
 
     # Choose which ever one has a valid value.
     if dbname_opt and dbname:
@@ -1911,8 +2018,8 @@ def format_output(title, cur, headers, status, settings, explain_mode=False):
 
         output = itertools.chain(output, formatted)
 
-    # Only print the status if it's not None
-    if status:
+    # Only print the status if it's not None and tuples_only is not enabled
+    if status and not settings.tuples_only:
         output = itertools.chain(output, [format_status(cur, status)])
 
     return output
