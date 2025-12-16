@@ -13,6 +13,31 @@ Features:
     * Command line option `-y` or `--yes`.
     * Skips the destructive command confirmation prompt when enabled.
     * Useful for automated scripts and CI/CD pipelines.
+* Add support for executing SQL commands from command line.
+    * Command line option `-c` or `--command` to execute SQL and exit
+    * Supports multiple `-c` options executed sequentially
+    * Example: `pgcli -c "SELECT 1" -c "SELECT 2"`
+* Add support for executing SQL from files.
+    * Command line option `-f` or `--file` to execute SQL from file and exit
+    * Supports multiple files executed in order
+    * Example: `pgcli -f setup.sql -f data.sql`
+* Add tuples-only output mode (psql-compatible).
+    * Command line option `-t` or `--tuples-only` to print only rows without headers/status
+    * Supports custom format: `-t minimal`, `-t simple`, etc.
+    * Defaults to `csv-noheader` format
+    * Suppresses timing, status messages, and headers
+* Add output file redirection (psql-compatible).
+    * Command line option `-o` or `--output` to redirect output to file
+    * Similar to psql's `\o` command but from command line
+    * Validates file is writable before execution
+    * Example: `pgcli -o results.txt -c "SELECT * FROM users"`
+* Add log rotation support with multiple modes (inspired by PostgreSQL `log_filename`).
+    * Config option `log_rotation_mode`: `none` (default), `day-of-week`, `day-of-month`, `date`
+    * Config option `log_destination`: customize log directory location
+    * Day-of-week mode creates files like `pgcli-Mon.log`, overwrites weekly
+    * Day-of-month mode creates files like `pgcli-01.log`, overwrites monthly
+    * Date mode creates files like `pgcli-20250127.log`, never overwrites
+    * Backward compatible: defaults to single `pgcli.log` file when `log_rotation_mode = none`
 
 Internal:
 ---------
