@@ -1,6 +1,7 @@
 from zoneinfo import ZoneInfoNotFoundError
 from configobj import ConfigObj, ParseError
 from pgspecial.namedqueries import NamedQueries
+from .namedqueries import ExtendedNamedQueries
 from .config import skip_initial_comment
 
 import atexit
@@ -204,7 +205,8 @@ class PGCli:
         self.config_writer = load_config(get_config_filename(pgclirc_file))
 
         # make sure to use self.config_writer, not self.config
-        NamedQueries.instance = NamedQueries.from_config(self.config_writer)
+        # Use ExtendedNamedQueries to support loading from namedqueries.d directory
+        NamedQueries.instance = ExtendedNamedQueries.from_config(self.config_writer)
 
         self.logger = logging.getLogger(__name__)
         self.initialize_logging()
