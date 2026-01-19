@@ -138,3 +138,28 @@ exclude = [
 minversion = "6.0"
 addopts = "--capture=sys --showlocals -rxs"
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_equality = true
+extra_checks = true
+check_untyped_defs = true
+disallow_untyped_defs = false  # Start permissive, tighten later
+ignore_missing_imports = true  # For third-party libs without stubs
+explicit_package_bases = true
+mypy_path = "."
+exclude = [
+    "build/",
+    "dist/",
+    ".venv/",
+    "tests/",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+]

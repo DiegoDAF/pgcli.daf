@@ -90,3 +90,6 @@ jobs:
 
       - name: Run style checks
         run: uv run tox -e style
+
+      - name: Run type checks
+        run: uv run tox -e mypy

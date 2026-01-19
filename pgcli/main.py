@@ -198,6 +198,7 @@ class PGCli:
         self.dsn_alias = None
         self.watch_command = None
         self.force_destructive = force_destructive
+        self.pgclirc_file = pgclirc_file
 
         # Load config.
         c = self.config = get_config(pgclirc_file)
@@ -426,6 +427,14 @@ class PGCli:
             "Toggle verbose errors.",
         )
 
+        self.pgspecial.register(
+            self.reload_named_queries,
+            "\\nr",
+            "\\nr",
+            "Reload named queries from config and namedqueries.d.",
+            arg_type=NO_QUERY,
+        )
+
     def toggle_verbose_errors(self, pattern, **_):
         flag = pattern.strip()
 
@@ -441,6 +450,18 @@ class PGCli:
 
     def echo(self, pattern, **_):
         return [(None, None, None, pattern)]
+
+    def reload_named_queries(self, pattern, **_):
+        """Reload named queries from config and namedqueries.d directory."""
+        # Re-read config file to catch any changes
+        self.config_writer = load_config(get_config_filename(self.pgclirc_file))
+
+        # Re-create NamedQueries instance
+        NamedQueries.instance = ExtendedNamedQueries.from_config(self.config_writer)
+
+        # Count loaded queries
+        count = len(NamedQueries.instance.list())
+        return [(None, None, None, f"Reloaded {count} named queries.")]
 
     def change_table_format(self, pattern, **_):
         try:
@@ -744,13 +765,18 @@ class PGCli:
                 self.ssh_tunnel_url = f"ssh://{self.ssh_tunnel_url}"
 
             tunnel_info = urlparse(self.ssh_tunnel_url)
+
+            # Read allow_agent from config (default True to use SSH agent)
+            ssh_tunnels_config = self.config.get("ssh tunnels", {})
+            allow_agent = ssh_tunnels_config.get("allow_agent", "True").lower() == "true"
+
             params = {
                 "local_bind_address": ("127.0.0.1",),
                 "remote_bind_address": (host, int(port or 5432)),
                 "ssh_address_or_host": (tunnel_info.hostname, tunnel_info.port or 22),
                 "logger": self.logger,
                 "ssh_config_file": "~/.ssh/config",  # Use SSH config for host settings
-                "allow_agent": False,  # Disable agent to use keys from ssh_config
+                "allow_agent": allow_agent,  # Use SSH agent for key authentication
                 "compression": False,  # Disable compression for better performance
             }
             if tunnel_info.username:

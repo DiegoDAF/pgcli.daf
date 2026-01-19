@@ -27,21 +27,32 @@ _pg_services()
 
 _pgcli_dsn_aliases()
 {
-    # return list of DSN aliases from pgcli config
+    # return list of DSN aliases from pgcli config and dsn.d directory
     local dsn_aliases
     local config_file="${HOME}/.config/pgcli/config"
+    local dsn_dir="${HOME}/.config/pgcli/dsn.d"
 
     if [[ -f "$config_file" ]]; then
-        # Extract DSN aliases from [alias_dsn] section
-        # Read from [alias_dsn] section until next section
+        # Extract DSN aliases from [alias_dsn] section (excluding includedir directive)
         dsn_aliases=$(awk '
             /^\[alias_dsn\]$/ { in_section=1; next }
             /^\[.*\]$/ { in_section=0 }
-            in_section && /^[a-zA-Z0-9_-]+ *=/ && !/^#/ {
+            in_section && /^[a-zA-Z0-9_-]+ *=/ && !/^#/ && !/^includedir *=/ {
                 sub(/ *=.*/, "")
                 print $0
             }
         ' "$config_file")
+    fi
+
+    # Also read from dsn.d directory if it exists
+    if [[ -d "$dsn_dir" ]]; then
+        for f in "$dsn_dir"/*.conf; do
+            [[ -f "$f" ]] || continue
+            # Extract alias name from each .conf file (first key = value line)
+            # Pattern already excludes comments since # is not in [a-zA-Z0-9_-]
+            local alias=$(awk '/^[a-zA-Z0-9_-]+ *=/ { sub(/ *=.*/, ""); print $0; exit }' "$f")
+            [[ -n "$alias" ]] && dsn_aliases="$dsn_aliases $alias"
+        done
     fi
 
     COMPREPLY=( $(compgen -W "$dsn_aliases" -- "$cur") )

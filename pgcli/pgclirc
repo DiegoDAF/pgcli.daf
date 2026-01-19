@@ -308,6 +308,10 @@ float = ""
 
 # Per host ssh tunnel configuration
 [ssh tunnels]
+# Use SSH agent for key authentication (default: True)
+# Set to False if you want to use only keys specified in ~/.ssh/config
+allow_agent = True
+
 # ^example.*\.host$ = myuser:mypasswd@my.tunnel.com:4000
 # .*\.net = another.tunnel.com
 

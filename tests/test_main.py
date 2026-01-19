@@ -369,6 +369,40 @@ def test_qecho_works(executor):
     assert result == ["asdf"]
 
 
+def test_reload_named_queries():
+    """Test \\nr command reloads named queries."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a config file with named queries
+        config_file = os.path.join(tmpdir, "config")
+        log_file = os.path.join(tmpdir, "pgcli.log")
+        with open(config_file, "w") as f:
+            f.write("[main]\n")
+            f.write(f"log_file = {log_file}\n")
+            f.write("[named queries]\n")
+            f.write('query1 = "SELECT 1"\n')
+
+        # Create namedqueries.d directory
+        nq_dir = os.path.join(tmpdir, "namedqueries.d")
+        os.makedirs(nq_dir)
+        with open(os.path.join(nq_dir, "test.conf"), "w") as f:
+            f.write('query2 = "SELECT 2"\n')
+
+        cli = PGCli(pgclirc_file=config_file)
+
+        # Run the reload command
+        result = cli.reload_named_queries("")
+        assert len(result) == 1
+        assert "Reloaded" in result[0][3]
+        assert "2 named queries" in result[0][3]
+
+        # Add another query file and reload
+        with open(os.path.join(nq_dir, "new.conf"), "w") as f:
+            f.write('query3 = "SELECT 3"\n')
+
+        result = cli.reload_named_queries("")
+        assert "3 named queries" in result[0][3]
+
+
 @dbtest
 def test_logfile_works(executor):
     with tempfile.TemporaryDirectory() as tmpdir:

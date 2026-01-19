@@ -31,6 +31,7 @@ class SSHTunnelManager:
         ssh_tunnel_config: Optional[dict] = None,
         dsn_ssh_tunnel_config: Optional[dict] = None,
         logger: Optional[logging.Logger] = None,
+        allow_agent: bool = True,
     ):
         """
         Initialize SSH tunnel manager.
@@ -40,12 +41,14 @@ class SSHTunnelManager:
             ssh_tunnel_config: Dict of host_regex -> tunnel_url mappings
             dsn_ssh_tunnel_config: Dict of dsn_regex -> tunnel_url mappings
             logger: Logger instance for debug output
+            allow_agent: Whether to allow SSH agent for key authentication (default True)
         """
         self.ssh_tunnel_url = ssh_tunnel_url
         self.ssh_tunnel_config = ssh_tunnel_config or {}
         self.dsn_ssh_tunnel_config = dsn_ssh_tunnel_config or {}
         self.logger = logger or logging.getLogger(__name__)
         self.tunnel = None
+        self.allow_agent = allow_agent
 
     def find_tunnel_url(
         self,
@@ -140,7 +143,7 @@ class SSHTunnelManager:
             "ssh_address_or_host": (tunnel_info.hostname, tunnel_info.port or 22),
             "logger": self.logger,
             "ssh_config_file": "~/.ssh/config",
-            "allow_agent": False,
+            "allow_agent": self.allow_agent,
             "compression": False,
         }
 
@@ -200,9 +203,14 @@ def get_tunnel_manager_from_config(
     Returns:
         Configured SSHTunnelManager instance
     """
+    # Extract allow_agent from ssh tunnels config (default True)
+    ssh_tunnels_config = config.get("ssh tunnels", {})
+    allow_agent = str(ssh_tunnels_config.get("allow_agent", "True")).lower() == "true"
+
     return SSHTunnelManager(
         ssh_tunnel_url=ssh_tunnel_url,
-        ssh_tunnel_config=config.get("ssh tunnels"),
+        ssh_tunnel_config=ssh_tunnels_config,
         dsn_ssh_tunnel_config=config.get("dsn ssh tunnels"),
         logger=logger,
+        allow_agent=allow_agent,
     )

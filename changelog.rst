@@ -3,9 +3,26 @@ Upcoming (TBD)
 
 Features:
 ---------
+* Add `allow_agent` config option in `[ssh tunnels]` section.
+    * Enables SSH agent for keys with passphrase (default: True)
+    * Set to False to use only keys specified in ~/.ssh/config
+    * Fixes "No password or public key available!" error for passphrase-protected keys
+    * Applies to pgcli, pgcli_dump, and pgcli_dumpall
+* Add `\nr` command to reload named queries without restarting pgcli.
+    * Reloads both main config and `namedqueries.d/` directory
+    * Shows count of loaded queries after reload
+    * Useful when editing queries in external editor
+* Add `mypy` type checking to CI pipeline and pre-commit hooks.
 
 Bug Fixes:
 ----------
+* Fix bash completion showing "includedir" instead of DSN aliases.
+    * Simplified awk pattern to avoid bash history expansion escaping `!` character
+    * Now correctly reads DSN aliases from both config file and `dsn.d/` directory
+* Fix `.pgpass` password lookup for `pgcli_dump` and `pgcli_dumpall` with SSH tunnels.
+    * Password is now looked up using the original hostname before tunneling
+    * Sets `PGPASSWORD` environment variable for pg_dump/pg_dumpall
+    * Fixes "password authentication failed" when using SSH tunnels with `.pgpass`
 
 
 4.3.13 (2026-01-19)

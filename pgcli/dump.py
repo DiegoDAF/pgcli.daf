@@ -5,16 +5,116 @@ This tool provides the same functionality as pg_dump but adds support for
 SSH tunnels using pgcli's configuration.
 """
 
+import fnmatch
 import logging
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import List, Optional
 
 import click
 
 from .config import get_config
 from .ssh_tunnel import get_tunnel_manager_from_config, SSH_TUNNEL_SUPPORT
+
+
+def get_password_from_pgpass(
+    host: str, port: int, database: str, user: str
+) -> Optional[str]:
+    """
+    Read password from ~/.pgpass file.
+
+    The .pgpass format is: hostname:port:database:username:password
+    Wildcards (*) are supported for hostname, port, database, and username.
+
+    Returns:
+        Password if found, None otherwise
+    """
+    pgpass_path = Path.home() / ".pgpass"
+    if not pgpass_path.exists():
+        return None
+
+    try:
+        with open(pgpass_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+
+                parts = line.split(":")
+                if len(parts) < 5:
+                    continue
+
+                # Handle escaped colons in password (last field)
+                pg_host, pg_port, pg_db, pg_user = parts[:4]
+                pg_pass = ":".join(parts[4:])  # Password may contain colons
+
+                # Match using fnmatch for wildcard support
+                if (
+                    (pg_host == "*" or fnmatch.fnmatch(host, pg_host))
+                    and (pg_port == "*" or str(port) == pg_port)
+                    and (pg_db == "*" or fnmatch.fnmatch(database, pg_db))
+                    and (pg_user == "*" or fnmatch.fnmatch(user, pg_user))
+                ):
+                    return pg_pass
+    except (IOError, PermissionError):
+        pass
+
+    return None
+
+
+def parse_user_and_database(args: List[str]) -> tuple:
+    """
+    Parse user and database from command line arguments.
+
+    Returns:
+        Tuple of (user, database)
+    """
+    user = os.environ.get("PGUSER", "postgres")
+    database = os.environ.get("PGDATABASE", "*")
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+
+        # Handle -U/--username
+        if arg in ("-U", "--username"):
+            if i + 1 < len(args):
+                user = args[i + 1]
+                i += 2
+                continue
+        elif arg.startswith("--username="):
+            user = arg.split("=", 1)[1]
+            i += 1
+            continue
+
+        # Handle -d/--dbname (simple case, not connection string)
+        if arg in ("-d", "--dbname"):
+            if i + 1 < len(args):
+                dbname = args[i + 1]
+                if "=" not in dbname:  # Not a connection string
+                    database = dbname
+                i += 2
+                continue
+        elif arg.startswith("--dbname="):
+            dbname = arg.split("=", 1)[1]
+            if "=" not in dbname:
+                database = dbname
+            i += 1
+            continue
+
+        # Positional database argument (last non-option arg)
+        if not arg.startswith("-") and i == len(args) - 1:
+            # Check if it's not a value for a previous option
+            if i > 0 and args[i-1] in ("-h", "--host", "-p", "--port", "-U", "--username", "-d", "--dbname", "-f", "--file", "-F", "--format"):
+                pass
+            else:
+                database = arg
+
+        i += 1
+
+    return user, database
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -310,6 +410,9 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
     pg_dump_path = find_pg_dump()
     logger.debug("Using pg_dump: %s", pg_dump_path)
 
+    # Prepare environment (may need to set PGPASSWORD for tunneled connections)
+    env = os.environ.copy()
+
     if tunnel_host != host or tunnel_port != port:
         # Tunnel is active, modify connection args
         logger.debug("SSH tunnel active: %s:%d -> %s:%d", host, port, tunnel_host, tunnel_port)
@@ -322,6 +425,16 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
             has_host,
             has_port,
         )
+
+        # Look up password from .pgpass using ORIGINAL host (not tunneled)
+        # This is needed because pg_dump will see 127.0.0.1 but .pgpass has the real host
+        if "PGPASSWORD" not in env:
+            user, database = parse_user_and_database(pg_dump_args)
+            logger.debug("Looking up password for %s@%s:%d/%s", user, host, port, database)
+            password = get_password_from_pgpass(host, port, database, user)
+            if password:
+                logger.debug("Found password in .pgpass for original host")
+                env["PGPASSWORD"] = password
     else:
         # No tunnel, use original args
         final_args = pg_dump_args
@@ -331,7 +444,7 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
     logger.debug("Executing: %s", " ".join(cmd))
 
     try:
-        result = subprocess.run(cmd)
+        result = subprocess.run(cmd, env=env)
         sys.exit(result.returncode)
     except FileNotFoundError:
         click.secho(

@@ -15,6 +15,7 @@ import click
 
 from .config import get_config
 from .ssh_tunnel import get_tunnel_manager_from_config, SSH_TUNNEL_SUPPORT
+from .dump import get_password_from_pgpass, parse_user_and_database
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -310,6 +311,9 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
     pg_dumpall_path = find_pg_dumpall()
     logger.debug("Using pg_dumpall: %s", pg_dumpall_path)
 
+    # Prepare environment (may need to set PGPASSWORD for tunneled connections)
+    env = os.environ.copy()
+
     if tunnel_host != host or tunnel_port != port:
         # Tunnel is active, modify connection args
         logger.debug("SSH tunnel active: %s:%d -> %s:%d", host, port, tunnel_host, tunnel_port)
@@ -322,6 +326,17 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
             has_host,
             has_port,
         )
+
+        # Look up password from .pgpass using ORIGINAL host (not tunneled)
+        # This is needed because pg_dumpall will see 127.0.0.1 but .pgpass has the real host
+        if "PGPASSWORD" not in env:
+            user, _ = parse_user_and_database(pg_dumpall_args)
+            # pg_dumpall connects to all databases, use wildcard
+            logger.debug("Looking up password for %s@%s:%d/*", user, host, port)
+            password = get_password_from_pgpass(host, port, "*", user)
+            if password:
+                logger.debug("Found password in .pgpass for original host")
+                env["PGPASSWORD"] = password
     else:
         # No tunnel, use original args
         final_args = pg_dumpall_args
@@ -331,7 +346,7 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
     logger.debug("Executing: %s", " ".join(cmd))
 
     try:
-        result = subprocess.run(cmd)
+        result = subprocess.run(cmd, env=env)
         sys.exit(result.returncode)
     except FileNotFoundError:
         click.secho(

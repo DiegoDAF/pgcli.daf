@@ -753,6 +753,30 @@ class TestConfigBasedSSHTunnel:
         runner = CliRunner()
         result = runner.invoke(dump_cli, ["--dsn", "prod-main", "-h", "db.internal", "-d", "mydb"])
 
+    def test_allow_agent_config_option(self):
+        """Test allow_agent config option is passed to SSHTunnelManager."""
+        from pgcli.ssh_tunnel import get_tunnel_manager_from_config
+
+        # Test default (True when not specified)
+        config = {"ssh tunnels": {}}
+        manager = get_tunnel_manager_from_config(config)
+        assert manager.allow_agent is True
+
+        # Test explicit True
+        config = {"ssh tunnels": {"allow_agent": "True"}}
+        manager = get_tunnel_manager_from_config(config)
+        assert manager.allow_agent is True
+
+        # Test explicit False
+        config = {"ssh tunnels": {"allow_agent": "False"}}
+        manager = get_tunnel_manager_from_config(config)
+        assert manager.allow_agent is False
+
+        # Test case insensitive
+        config = {"ssh tunnels": {"allow_agent": "true"}}
+        manager = get_tunnel_manager_from_config(config)
+        assert manager.allow_agent is True
+
 
 # =============================================================================
 # Tests for dumpall-specific options
