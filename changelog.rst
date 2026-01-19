@@ -3,6 +3,16 @@ Upcoming (TBD)
 
 Features:
 ---------
+
+Bug Fixes:
+----------
+
+
+4.3.12 (2026-01-19)
+==================
+
+Features:
+---------
 * Add `pgcli_dump` and `pgcli_dumpall` commands (wrappers for pg_dump/pg_dumpall with SSH tunnel support).
     * Uses the same SSH tunnel configuration as pgcli
     * Supports `--ssh-tunnel` option for explicit tunnel URL
