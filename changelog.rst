@@ -3,6 +3,14 @@ Upcoming (TBD)
 
 Features:
 ---------
+* Add support for organizing DSN aliases in separate files via `dsn.d` directory.
+    * Use `includedir = "./dsn.d"` in `[alias_dsn]` section
+    * Default directory is `dsn.d` in config directory (works without explicit directive)
+    * Files can use simple format (just `alias = "connection_string"`) without `[alias_dsn]` header
+    * Aliases from main config take precedence over included files
+    * Files are loaded in alphabetical order (later files override earlier ones)
+    * Example: `~/.config/pgcli/dsn.d/production.conf` with `prod-db = "postgresql://prod.example.com/app"`
+    * Useful for organizing large collections of DSN aliases by environment or project
 
 Bug Fixes:
 ----------

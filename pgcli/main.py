@@ -2,6 +2,7 @@ from zoneinfo import ZoneInfoNotFoundError
 from configobj import ConfigObj, ParseError
 from pgspecial.namedqueries import NamedQueries
 from .namedqueries import ExtendedNamedQueries
+from .dsnaliases import DsnAliases
 from .config import skip_initial_comment
 
 import atexit
@@ -1669,8 +1670,9 @@ def cli(
     if list_dsn:
         try:
             cfg = load_config(pgclirc, config_full_path)
-            for alias in cfg["alias_dsn"]:
-                click.secho(alias + " : " + cfg["alias_dsn"][alias])
+            dsn_aliases = DsnAliases.from_config(cfg)
+            for alias in dsn_aliases:
+                click.secho(alias + " : " + dsn_aliases[alias])
             sys.exit(0)
         except Exception:
             click.secho(
@@ -1730,17 +1732,18 @@ def cli(
     cfg = load_config(pgclirc, config_full_path)
     if dsn != "":
         try:
-            dsn_config = cfg["alias_dsn"][dsn]
+            dsn_aliases = DsnAliases.from_config(cfg)
+            dsn_config = dsn_aliases[dsn]
         except KeyError:
             click.secho(
-                f"Could not find a DSN with alias {dsn}. Please check the \"[alias_dsn]\" section in pgclirc.",
+                f"Could not find a DSN with alias {dsn}. Please check the \"[alias_dsn]\" section in pgclirc or dsn.d/ directory.",
                 err=True,
                 fg="red",
             )
             sys.exit(1)
         except Exception:
             click.secho(
-                "Invalid DSNs found in the config file. Please check the \"[alias_dsn]\" section in pgclirc.",
+                "Invalid DSNs found in the config file. Please check the \"[alias_dsn]\" section in pgclirc or dsn.d/ directory.",
                 err=True,
                 fg="red",
             )
