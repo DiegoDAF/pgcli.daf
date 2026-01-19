@@ -6,6 +6,7 @@ Features:
 
 Bug Fixes:
 ----------
+* Sort named queries alphabetically in `\n` output for easier navigation.
 
 
 4.3.12 (2026-01-19)

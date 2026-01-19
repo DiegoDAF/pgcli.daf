@@ -175,7 +175,7 @@ class ExtendedNamedQueries(NamedQueries):
         all_queries = dict(self._included_queries)
         all_queries.update(main_queries)
 
-        return list(all_queries.keys())
+        return sorted(all_queries.keys())
 
     def get(self, name):
         """Get a named query by name.
