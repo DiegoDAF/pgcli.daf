@@ -3,6 +3,16 @@ Upcoming (TBD)
 
 Features:
 ---------
+
+Bug Fixes:
+----------
+
+
+4.3.13 (2026-01-19)
+==================
+
+Features:
+---------
 * Add support for organizing DSN aliases in separate files via `dsn.d` directory.
     * Use `includedir = "./dsn.d"` in `[alias_dsn]` section
     * Default directory is `dsn.d` in config directory (works without explicit directive)

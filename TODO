@@ -1,11 +1,7 @@
 # vi: ft=vimwiki
 
-* [X] Include .d for the \n 
-* [X] Include .d for the dsn
 * [ ] Allow save passwords for ssh-tunnel
 * [ ] Create template for named queries
-* [X] Sort alphabetically the \n print
-
 
 * [ ] Add coverage.
 * [ ] Refactor to sqlcompletion to consume the text from left to right and use a state machine to suggest cols or tables instead of relying on hacks.
