@@ -2,6 +2,8 @@
 
 * [ ] Allow save passwords for ssh-tunnel
 * [ ] Create template for named queries
+* [ ] Autocomplete \n with loaded named queries
+* [ ] Reload named queries without restarting (\nr or similar)
 
 * [ ] Add coverage.
 * [ ] Refactor to sqlcompletion to consume the text from left to right and use a state machine to suggest cols or tables instead of relying on hacks.
