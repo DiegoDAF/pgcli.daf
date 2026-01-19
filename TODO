@@ -1,10 +1,10 @@
 # vi: ft=vimwiki
 
 * [X] Include .d for the \n 
-* [ ] Include .d for the dsn
+* [X] Include .d for the dsn
 * [ ] Allow save passwords for ssh-tunnel
 * [ ] Create template for named queries
-
+* [X] Sort alphabetically the \n print
 
 
 * [ ] Add coverage.
