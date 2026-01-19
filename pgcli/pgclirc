@@ -280,6 +280,11 @@ output.null = "#808080"
 # You can use it by passing the -D option. `pgcli -D example_dsn`
 [alias_dsn]
 # example_dsn = postgresql://[user[:password]@][netloc][:port][/dbname]
+# Include additional DSN aliases from a directory (like sudoers.d)
+# Default directory is dsn.d in config directory
+# Each .conf file can contain alias = "connection_string" entries
+# Files can optionally have [alias_dsn] section header
+# includedir = ./dsn.d
 
 # Initial commands to execute when connecting to any database.
 [init-commands]
