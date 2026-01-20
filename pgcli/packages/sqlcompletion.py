@@ -40,6 +40,7 @@ Column.__new__.__defaults__ = (None, None, (), False, None)
 Keyword = namedtuple("Keyword", ["last_token"])
 Keyword.__new__.__defaults__ = (None,)
 NamedQuery = namedtuple("NamedQuery", [])
+Role = namedtuple("Role", [])
 Datatype = namedtuple("Datatype", ["schema"])
 Alias = namedtuple("Alias", ["aliases"])
 
@@ -380,6 +381,14 @@ def suggest_based_on_last_token(token, stmt):
 
         # E.g. 'UPDATE foo SET'
         return (Column(table_refs=stmt.get_tables(), local_tables=stmt.local_tables),)
+
+    elif token_v == "role":
+        # SET ROLE <rolename>
+        # Need n_skip=2 to skip past whitespace and ROLE token to find SET
+        prev_keyword = stmt.reduce_to_prev_keyword(n_skip=2)
+        if prev_keyword and prev_keyword.value.lower() == "set":
+            return (Role(),)
+        return (Keyword(),)
 
     elif token_v in ("select", "where", "having", "order by", "distinct"):
         return _suggest_expression(token_v, stmt)

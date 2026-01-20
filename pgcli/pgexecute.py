@@ -631,6 +631,18 @@ class PGExecute:
             headers = [x[0] for x in cur.description]
             return cur.fetchall(), headers, cur.statusmessage
 
+    def roles(self):
+        """Yields role names that can be used with SET ROLE."""
+        query = """
+            SELECT rolname
+            FROM pg_catalog.pg_roles
+            ORDER BY rolname
+        """
+        with self.conn.cursor() as cur:
+            _logger.debug("Roles Query. sql: %r", query)
+            cur.execute(query)
+            return [x[0] for x in cur.fetchall()]
+
     def is_protocol_error(self):
         query = "SELECT 1"
         with self.conn.cursor() as cur:

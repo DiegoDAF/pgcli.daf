@@ -128,6 +128,11 @@ def refresh_databases(completer, executor):
     completer.extend_database_names(executor.databases())
 
 
+@refresher("roles")
+def refresh_roles(completer, executor):
+    completer.extend_role_names(executor.roles())
+
+
 @refresher("casing")
 def refresh_casing(completer, executor):
     casing_file = completer.casing_file

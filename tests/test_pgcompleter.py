@@ -92,3 +92,32 @@ def test_generate_alias_prefers_alias_over_upper_case_name(table_name, alias_map
 )
 def test_generate_alias_prefers_upper_case_name_over_underscore_name(table_name, alias):
     assert pgcompleter.generate_alias(table_name) == alias
+
+
+def test_extend_role_names():
+    """Test that roles can be extended and retrieved."""
+    completer = pgcompleter.PGCompleter()
+    completer.extend_role_names(["admin", "readonly", "readwrite"])
+    assert completer.roles == ["admin", "readonly", "readwrite"]
+
+
+def test_reset_completions_clears_roles():
+    """Test that reset_completions clears the roles list."""
+    completer = pgcompleter.PGCompleter()
+    completer.extend_role_names(["admin", "readonly"])
+    completer.reset_completions()
+    assert completer.roles == []
+
+
+def test_get_role_matches():
+    """Test that get_role_matches returns matching roles."""
+    completer = pgcompleter.PGCompleter()
+    completer.extend_role_names(["admin", "analyst", "readonly"])
+
+    # Test matching - using "adm" which should match "admin" but not others
+    from pgcli.packages.sqlcompletion import Role
+    matches = list(completer.get_role_matches(Role(), "adm"))
+    role_names = [m.completion.text for m in matches]
+    assert "admin" in role_names
+    # Fuzzy matching may include other roles, but admin should be present
+    assert len(role_names) >= 1

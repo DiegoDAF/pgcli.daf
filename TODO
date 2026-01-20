@@ -2,7 +2,7 @@
 
 * [X] Autocomplete \n with loaded named queries
 * [X] Reload named queries without restarting (\nr) - v4.3.14
-* [ ] autocomplete set role command with roles.
+* [X] autocomplete set role command with roles. - v4.3.15
 
 * [ ] Add coverage.
 * [ ] Fix mypy errors (134 total). Main issues:

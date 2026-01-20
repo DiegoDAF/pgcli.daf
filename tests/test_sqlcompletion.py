@@ -13,6 +13,7 @@ from pgcli.packages.sqlcompletion import (
     Alias,
     JoinCondition,
     Join,
+    Role,
 )
 from pgcli.packages.parseutils.tables import TableReference
 import pytest
@@ -928,3 +929,24 @@ def test_suggestion_when_setting_search_path():
     sql_set_search_path_to = "SET search_path TO "
     suggestion_set_search_path_to = suggest_type(sql_set_search_path_to, sql_set_search_path_to)
     assert set(suggestion_set_search_path_to) == {Schema()}
+
+
+def test_suggestion_for_set_role():
+    """Test that SET ROLE suggests roles."""
+    sql_set_role = "SET ROLE "
+    suggestion = suggest_type(sql_set_role, sql_set_role)
+    assert set(suggestion) == {Role()}
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "set role ",
+        "SET ROLE ",
+        "Set Role ",
+    ],
+)
+def test_set_role_case_insensitive(sql):
+    """Test that SET ROLE works with different casings."""
+    suggestion = suggest_type(sql, sql)
+    assert Role() in set(suggestion)

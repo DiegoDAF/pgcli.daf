@@ -24,6 +24,7 @@ def test_ctor(refresher):
         "views",
         "types",
         "databases",
+        "roles",
         "casing",
         "functions",
     ]
