@@ -3,7 +3,15 @@ Upcoming (TBD)
 
 Features:
 ---------
-
+* Add ``pgcli_isready`` command - ``pg_isready`` wrapper with SSH tunnel support.
+    * Same SSH tunnel integration as ``pgcli_dump``/``pgcli_dumpall``
+    * Options: ``--ssh-tunnel``, ``--dsn``, ``-v``/``--verbose``
+    * All ``pg_isready`` options are passed through
+    * Exit codes: 0=accepting, 1=rejecting, 2=no response, 3=no attempt
+* Complete ``\restrict`` meta-command blocking (CVE-2025-8714).
+    * Meta-commands (``\d``, ``\l``, ``\i``, etc.) are now blocked during restricted mode
+    * Only ``\unrestrict`` with the correct token is allowed through
+    * Regular SQL statements continue to work normally during restricted mode
 
 Bug Fixes:
 ----------
