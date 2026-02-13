@@ -13,6 +13,7 @@ from pgcli.packages.sqlcompletion import (
     Alias,
     JoinCondition,
     Join,
+    NamedQuery,
     Role,
 )
 from pgcli.packages.parseutils.tables import TableReference
@@ -875,6 +876,21 @@ def test_suggest_where_keyword(text):
 def test_named_query_completion(text, before, expected):
     suggestions = suggest_type(text, before)
     assert set(expected) == set(suggestions)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "\\n ",
+        "\\nd ",
+        "\\np ",
+        "\\ns ",
+    ],
+)
+def test_named_query_commands_suggest_namedquery(text):
+    """Test that \\n, \\nd, \\np, \\ns commands suggest named queries."""
+    suggestions = suggest_type(text, text)
+    assert NamedQuery() in suggestions
 
 
 def test_select_suggests_fields_from_function():

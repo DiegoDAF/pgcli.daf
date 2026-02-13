@@ -403,6 +403,76 @@ def test_reload_named_queries():
         assert "3 named queries" in result[0][3]
 
 
+def test_restrict_mode_enter():
+    """Test \\restrict command enters restricted mode."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_file = os.path.join(tmpdir, "config")
+        log_file = os.path.join(tmpdir, "pgcli.log")
+        with open(config_file, "w") as f:
+            f.write("[main]\n")
+            f.write(f"log_file = {log_file}\n")
+
+        cli = PGCli(pgclirc_file=config_file)
+        assert cli.restrict_token is None
+
+        # Enter restricted mode
+        result = cli.enter_restrict_mode("test_token_abc123")
+        assert result == [(None, None, None, None)]  # Silent success
+        assert cli.restrict_token == "test_token_abc123"
+
+        # Cannot enter again while already restricted
+        result = cli.enter_restrict_mode("another_token")
+        assert "Already in restricted mode" in result[0][3]
+
+
+def test_restrict_mode_exit():
+    """Test \\unrestrict command exits restricted mode."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_file = os.path.join(tmpdir, "config")
+        log_file = os.path.join(tmpdir, "pgcli.log")
+        with open(config_file, "w") as f:
+            f.write("[main]\n")
+            f.write(f"log_file = {log_file}\n")
+
+        cli = PGCli(pgclirc_file=config_file)
+
+        # Cannot exit if not in restricted mode
+        result = cli.exit_restrict_mode("any_token")
+        assert "Not in restricted mode" in result[0][3]
+
+        # Enter restricted mode first
+        cli.enter_restrict_mode("correct_token")
+        assert cli.restrict_token == "correct_token"
+
+        # Wrong token should fail
+        result = cli.exit_restrict_mode("wrong_token")
+        assert "Token mismatch" in result[0][3]
+        assert cli.restrict_token == "correct_token"  # Still restricted
+
+        # Correct token should work
+        result = cli.exit_restrict_mode("correct_token")
+        assert result == [(None, None, None, None)]  # Silent success
+        assert cli.restrict_token is None
+
+
+def test_restrict_mode_requires_token():
+    """Test \\restrict and \\unrestrict require token argument."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_file = os.path.join(tmpdir, "config")
+        log_file = os.path.join(tmpdir, "pgcli.log")
+        with open(config_file, "w") as f:
+            f.write("[main]\n")
+            f.write(f"log_file = {log_file}\n")
+
+        cli = PGCli(pgclirc_file=config_file)
+
+        result = cli.enter_restrict_mode("")
+        assert "requires a token" in result[0][3]
+
+        result = cli.exit_restrict_mode("")
+        assert "requires a token" in result[0][3]
+
+
 @dbtest
 def test_logfile_works(executor):
     with tempfile.TemporaryDirectory() as tmpdir:

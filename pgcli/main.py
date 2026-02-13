@@ -270,6 +270,7 @@ class PGCli:
         self.column_date_formats = c["column_date_formats"]
         auth.keyring_initialize(c["main"].as_bool("keyring"), logger=self.logger)
         self.show_bottom_toolbar = c["main"].as_bool("show_bottom_toolbar")
+        self.restrict_token = None  # Token for \restrict/\unrestrict mode (CVE-2025-8714)
 
         self.pgspecial.pset_pager(self.config["main"].as_bool("enable_pager") and "on" or "off")
 
@@ -428,6 +429,20 @@ class PGCli:
             arg_type=NO_QUERY,
         )
 
+        self.pgspecial.register(
+            self.enter_restrict_mode,
+            "\\restrict",
+            "\\restrict token",
+            "Enter restricted mode (pg_dump CVE-2025-8714 mitigation).",
+        )
+
+        self.pgspecial.register(
+            self.exit_restrict_mode,
+            "\\unrestrict",
+            "\\unrestrict token",
+            "Exit restricted mode (pg_dump CVE-2025-8714 mitigation).",
+        )
+
     def toggle_verbose_errors(self, pattern, **_):
         flag = pattern.strip()
 
@@ -455,6 +470,40 @@ class PGCli:
         # Count loaded queries
         count = len(NamedQueries.instance.list())
         return [(None, None, None, f"Reloaded {count} named queries.")]
+
+    def enter_restrict_mode(self, pattern, **_):
+        """Enter restricted mode (CVE-2025-8714 mitigation).
+
+        This command is emitted by pg_dump to prevent injection of malicious
+        meta-commands in dump files. The token must match the corresponding
+        \\unrestrict command.
+
+        Note: pgcli currently only recognizes these commands to allow
+        restoring dumps from PostgreSQL 17.6+/16.10+/15.14+ etc.
+        Full restriction of meta-commands is not yet implemented.
+        """
+        token = pattern.strip()
+        if not token:
+            return [(None, None, None, "\\restrict requires a token argument")]
+        if self.restrict_token is not None:
+            return [(None, None, None, "Already in restricted mode")]
+        self.restrict_token = token
+        return [(None, None, None, None)]  # Silent success
+
+    def exit_restrict_mode(self, pattern, **_):
+        """Exit restricted mode (CVE-2025-8714 mitigation).
+
+        The token must match the one provided to \\restrict.
+        """
+        token = pattern.strip()
+        if not token:
+            return [(None, None, None, "\\unrestrict requires a token argument")]
+        if self.restrict_token is None:
+            return [(None, None, None, "Not in restricted mode")]
+        if self.restrict_token != token:
+            return [(None, None, None, "Token mismatch for \\unrestrict")]
+        self.restrict_token = None
+        return [(None, None, None, None)]  # Silent success
 
     def change_table_format(self, pattern, **_):
         try:

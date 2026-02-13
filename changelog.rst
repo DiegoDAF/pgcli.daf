@@ -1,3 +1,22 @@
+Upcoming (TBD)
+==============
+
+Features:
+---------
+* Add support for `\restrict` and `\unrestrict` commands (CVE-2025-8714).
+    * These commands are emitted by pg_dump in PostgreSQL 17.6/16.10/15.14+ to prevent
+      injection of malicious meta-commands in dump files
+    * Allows restoring dumps created by recent PostgreSQL versions
+    * Note: Full meta-command restriction not yet implemented, commands are recognized
+      and tracked but other meta-commands are not blocked during restricted mode
+
+Bug Fixes:
+----------
+* Fix `\np` command autocomplete not suggesting named queries.
+    * Added `\np` to the list of commands that suggest named query names
+    * Autocomplete now works for all named query commands: `\n`, `\nd`, `\np`, `\ns`
+
+
 4.3.16 (2026-01-20)
 ===================
 
