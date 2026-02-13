@@ -12,6 +12,14 @@ Bug Fixes:
       `~/.ssh/` for key files (id_ecdsa, id_rsa, etc.)
     * SSH agent is still used for key authentication (`allow_agent=True`)
 
+Security:
+---------
+* Sanitize SSH tunnel passwords from debug logs.
+    * SSH password is now redacted as `***` before logging tunnel params
+    * Applies to both `main.py` and `ssh_tunnel.py` log messages
+* Mask passwords in `--list-dsn` output.
+    * Connection strings in URI format now show `***` instead of the password
+
 
 4.3.17 (2026-02-13)
 ===================

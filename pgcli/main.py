@@ -832,7 +832,8 @@ class PGCli:
             # We can remove this when https://github.com/pahaz/sshtunnel/pull/250 is merged.
             logger_handlers = self.logger.handlers.copy()
             try:
-                self.logger.debug("Creating SSH tunnel with params: %r", params)
+                log_params = {k: ("***" if k == "ssh_password" else v) for k, v in params.items()}
+                self.logger.debug("Creating SSH tunnel with params: %r", log_params)
                 ssh_tunnel = sshtunnel.SSHTunnelForwarder(**params)
                 self.ssh_tunnel = ssh_tunnel
                 self.logger.debug("SSH tunnel created, calling start()...")
@@ -1743,7 +1744,8 @@ def cli(
             cfg = load_config(pgclirc, config_full_path)
             dsn_aliases = DsnAliases.from_config(cfg)
             for alias in dsn_aliases:
-                click.secho(alias + " : " + dsn_aliases[alias])
+                dsn_value = re.sub(r"://([^:]+):([^@]+)@", r"://\1:***@", dsn_aliases[alias])
+                click.secho(alias + " : " + dsn_value)
             sys.exit(0)
         except Exception:
             click.secho(

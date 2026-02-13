@@ -36,3 +36,23 @@
         - Other meta-commands should be ignored or raise error
       - TODO: PR to dbcli/pgcli (not implemented upstream yet)
 * [ ] pgcli_isready: pg_isready wrapper with SSH tunnel support
+* [X] Security: Sanitize SSH passwords from debug logs - v4.3.18
+* [X] Security: Mask passwords in --list-dsn output - v4.3.18
+* [ ] Security: Evaluate sshtunnel alternatives (unmaintained, incompatible with paramiko 4.x)
+      - sshtunnel 0.4.0 has no releases in 12+ months
+      - paramiko 4.0 removed DSSKey, sshtunnel crashes on import
+      - Options: fork sshtunnel, find alternative, or monkey-patch
+* [ ] Security: Configure explicit SSH host key verification policy
+      - sshtunnel may default to AutoAddPolicy (accepts any host key)
+      - Vulnerable to MITM attacks on SSH tunnels
+* [ ] Security: Use re.fullmatch() for SSH tunnel regex matching
+      - Currently re.search() can match partial hostnames (e.g. "prod" matches "nonprod")
+* [ ] Security: \i command opens user-specified file paths without sanitization
+      - main.py:570 - os.path.expanduser(pattern) with no validation
+      - Low practical risk (user already has shell access), but could sanitize
+* [ ] Security: \o and \log-file write to user-specified paths without sanitization
+      - main.py:619-634 - opens arbitrary paths for writing
+      - Same consideration as \i
+* [ ] Security: SQL statements with passwords may be logged
+      - pgexecute.py:439 - CREATE USER/ALTER USER with PASSWORD gets logged at DEBUG
+      - Could detect and redact password clauses before logging

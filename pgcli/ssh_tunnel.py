@@ -72,7 +72,7 @@ class SSHTunnelManager:
         # Check DSN-based tunnel config
         if dsn_alias and self.dsn_ssh_tunnel_config:
             for dsn_regex, tunnel_url in self.dsn_ssh_tunnel_config.items():
-                if re.search(dsn_regex, dsn_alias):
+                if re.fullmatch(dsn_regex, dsn_alias):
                     self.logger.debug(
                         "Found SSH tunnel for DSN '%s' matching '%s': %s",
                         dsn_alias,
@@ -156,7 +156,8 @@ class SSHTunnelManager:
         # Hack: sshtunnel adds a console handler to the logger, so we revert handlers.
         logger_handlers = self.logger.handlers.copy()
         try:
-            self.logger.debug("Creating SSH tunnel with params: %r", params)
+            log_params = {k: ("***" if k == "ssh_password" else v) for k, v in params.items()}
+            self.logger.debug("Creating SSH tunnel with params: %r", log_params)
             tunnel = sshtunnel.SSHTunnelForwarder(**params)
             self.tunnel = tunnel
             self.logger.debug("SSH tunnel created, calling start()...")
