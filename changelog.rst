@@ -3,6 +3,17 @@ Upcoming (TBD)
 
 Features:
 ---------
+
+
+Bug Fixes:
+----------
+
+
+4.3.17 (2026-02-13)
+===================
+
+Features:
+---------
 * Add support for `\restrict` and `\unrestrict` commands (CVE-2025-8714).
     * These commands are emitted by pg_dump in PostgreSQL 17.6/16.10/15.14+ to prevent
       injection of malicious meta-commands in dump files
