@@ -814,19 +814,52 @@ class PGCli:
             ssh_tunnels_config = self.config.get("ssh tunnels", {})
             allow_agent = ssh_tunnels_config.get("allow_agent", "True").lower() == "true"
 
+            import paramiko
+
+            ssh_hostname = tunnel_info.hostname
+            ssh_port = tunnel_info.port or 22
+            ssh_username = tunnel_info.username
+            ssh_proxy = None
+
+            # Read SSH config manually to get username/port/proxycommand
+            # but NOT IdentityFile (which would cause passphrase prompts).
+            # We rely on ssh-agent for key authentication instead.
+            ssh_config_path = os.path.expanduser("~/.ssh/config")
+            if ssh_hostname and os.path.isfile(ssh_config_path):
+                try:
+                    ssh_config = paramiko.SSHConfig()
+                    with open(ssh_config_path) as f:
+                        ssh_config.parse(f)
+                    host_config = ssh_config.lookup(ssh_hostname)
+                    ssh_hostname = host_config.get("hostname", ssh_hostname)
+                    if not ssh_username:
+                        ssh_username = host_config.get("user")
+                    if not tunnel_info.port and "port" in host_config:
+                        ssh_port = int(host_config["port"])
+                    proxycommand = host_config.get("proxycommand")
+                    if proxycommand:
+                        ssh_proxy = paramiko.ProxyCommand(proxycommand)
+                except Exception as e:
+                    self.logger.warning("Could not read SSH config: %s", e)
+
             params = {
                 "local_bind_address": ("127.0.0.1",),
                 "remote_bind_address": (host, int(port or 5432)),
-                "ssh_address_or_host": (tunnel_info.hostname, tunnel_info.port or 22),
+                "ssh_address_or_host": (ssh_hostname, ssh_port),
                 "logger": self.logger,
-                "ssh_config_file": "~/.ssh/config",  # Use SSH config for host settings
-                "allow_agent": allow_agent,  # Use SSH agent for key authentication
-                "compression": False,  # Disable compression for better performance
+                "ssh_config_file": None,  # Don't let sshtunnel read config (it picks up IdentityFile)
+                "allow_agent": allow_agent,
+                "host_pkey_directories": [],  # Don't scan ~/.ssh/ for keys, use ssh-agent only
+                "compression": False,
             }
-            if tunnel_info.username:
-                params["ssh_username"] = tunnel_info.username
+            if ssh_username:
+                params["ssh_username"] = ssh_username
+            else:
+                params["ssh_username"] = getuser()
             if tunnel_info.password:
                 params["ssh_password"] = tunnel_info.password
+            if ssh_proxy:
+                params["ssh_proxy"] = ssh_proxy
 
             # Hack: sshtunnel adds a console handler to the logger, so we revert handlers.
             # We can remove this when https://github.com/pahaz/sshtunnel/pull/250 is merged.

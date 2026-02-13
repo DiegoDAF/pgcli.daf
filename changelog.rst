@@ -8,9 +8,11 @@ Features:
 Bug Fixes:
 ----------
 * Fix SSH tunnel prompting for key passphrases unnecessarily.
-    * Pass `host_pkey_directories=[]` to SSHTunnelForwarder to prevent scanning
-      `~/.ssh/` for key files (id_ecdsa, id_rsa, etc.)
-    * SSH agent is still used for key authentication (`allow_agent=True`)
+    * Read ``~/.ssh/config`` manually for user/port/proxycommand settings,
+      but do NOT pass ``ssh_config_file`` to sshtunnel (prevents it from
+      picking up ``IdentityFile`` directives and prompting for passphrases)
+    * Pass ``host_pkey_directories=[]`` to prevent scanning ``~/.ssh/`` for keys
+    * SSH agent is still used for key authentication (``allow_agent=True``)
 
 Security:
 ---------

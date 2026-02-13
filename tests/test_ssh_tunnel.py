@@ -40,9 +40,11 @@ def test_ssh_tunnel(mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicM
         "remote_bind_address": (db_params["host"], 5432),
         "ssh_address_or_host": (tunnel_url, 22),
         "logger": ANY,
-        "ssh_config_file": "~/.ssh/config",
+        "ssh_config_file": None,
         "allow_agent": True,
+        "host_pkey_directories": [],
         "compression": False,
+        "ssh_username": ANY,  # from SSH config or getuser()
     }
 
     pgcli = PGCli(ssh_tunnel_url=tunnel_url)
@@ -293,21 +295,24 @@ def test_ssh_tunnel_with_port_in_dsn(
     assert f"port={pgcli.ssh_tunnel.local_bind_ports[0]}" in dsn_arg
 
 
-def test_ssh_tunnel_config_with_ssh_config_file(
+def test_ssh_tunnel_reads_config_without_identity_file(
     mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicMock
 ) -> None:
-    """Test that SSH tunnel uses ssh_config_file parameter"""
+    """Test that SSH tunnel reads SSH config for user/port/proxy but does NOT
+    pass ssh_config_file to sshtunnel (to avoid IdentityFile passphrase prompts)."""
     tunnel_url = "tunnel.host"
 
     pgcli = PGCli(ssh_tunnel_url=tunnel_url)
     pgcli.connect(database="db", host="remote.host", user="user")
 
-    # Verify SSHTunnelForwarder was called with ssh_config_file
+    # Verify SSHTunnelForwarder was called with ssh_config_file=None
+    # (we read the config ourselves to avoid sshtunnel picking up IdentityFile)
     call_args, call_kwargs = mock_ssh_tunnel_forwarder.call_args
-    assert "ssh_config_file" in call_kwargs
-    assert call_kwargs["ssh_config_file"] == "~/.ssh/config"
+    assert call_kwargs["ssh_config_file"] is None
+    assert call_kwargs["host_pkey_directories"] == []
     assert call_kwargs["allow_agent"] is True
     assert call_kwargs["compression"] is False
+    assert "ssh_username" in call_kwargs
 
 
 def test_connect_uri_without_ssh_tunnel(mock_pgexecute: MagicMock) -> None:
