@@ -1,3 +1,4 @@
+from typing import List
 from sqlparse import parse
 from sqlparse.tokens import Keyword, CTE, DML
 from sqlparse.sql import Identifier, IdentifierList, Parenthesis
@@ -24,7 +25,7 @@ def isolate_query_ctes(full_text, text_before_cursor):
         return full_text, text_before_cursor, ()
 
     current_position = len(text_before_cursor)
-    meta = []
+    meta: List[TableMetadata] = []
 
     for cte in ctes:
         if cte.start < current_position < cte.stop:

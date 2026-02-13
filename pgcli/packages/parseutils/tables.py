@@ -1,12 +1,18 @@
 import sqlparse
-from collections import namedtuple
+from typing import NamedTuple, Optional
 from sqlparse.sql import IdentifierList, Identifier, Function
 from sqlparse.tokens import Keyword, DML, Punctuation
 
-TableReference = namedtuple("TableReference", ["schema", "name", "alias", "is_function"])
-TableReference.ref = property(
-    lambda self: self.alias or (self.name if self.name.islower() or self.name[0] == '"' else '"' + self.name + '"')
-)
+
+class TableReference(NamedTuple):
+    schema: Optional[str]
+    name: str
+    alias: Optional[str]
+    is_function: bool
+
+    @property
+    def ref(self) -> str:
+        return self.alias or (self.name if self.name.islower() or self.name[0] == '"' else '"' + self.name + '"')
 
 
 # This code is borrowed from sqlparse example script.

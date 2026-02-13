@@ -4,8 +4,13 @@
 * [X] Reload named queries without restarting (\nr) - v4.3.14
 * [X] autocomplete set role command with roles. - v4.3.15
 
+* [ ] ssh_tunnel.py: Pass `host_pkey_directories=[]` to SSHTunnelForwarder to prevent
+      sshtunnel from scanning ~/.ssh/ for key files (id_ecdsa, id_rsa, etc.) and prompting
+      for passphrases. Keep `allow_agent=True` so it uses keys loaded in ssh-agent.
+      File: pgcli/ssh_tunnel.py, line ~140 (params dict in start_tunnel method).
+      See: sshtunnel.py get_keys() method - it iterates host_pkey_directories looking for id_* files.
 * [ ] Add coverage.
-* [ ] Fix mypy errors (134 total). Main issues:
+* [X] Fix mypy errors (134 total). Main issues:
       - pgexecute.py: ~30 errors (Optional/None checks)
       - main.py: 25 errors (Optional checks, namedtuple naming)
       - packages/sqlcompletion.py: ~25 errors (missing call args)
@@ -22,4 +27,3 @@
 * [ ] Add a test for 'select * from custom.abc where custom.abc.' should suggest columns from abc.
 * [ ] pgexecute columns(), tables() etc can be just cursors instead of fetchall()
 * [ ] Add colorschemes in config file.
-

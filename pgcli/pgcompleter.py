@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from typing import Any, Dict, List
 from itertools import count, chain
 import operator
 from collections import namedtuple, defaultdict, OrderedDict
@@ -38,14 +39,14 @@ _logger = logging.getLogger(__name__)
 
 Match = namedtuple("Match", ["completion", "priority"])
 
-_SchemaObject = namedtuple("SchemaObject", "name schema meta")
+_SchemaObject = namedtuple("_SchemaObject", "name schema meta")
 
 
 def SchemaObject(name, schema=None, meta=None):
     return _SchemaObject(name, schema, meta)
 
 
-_Candidate = namedtuple("Candidate", "completion prio meta synonyms prio2 display")
+_Candidate = namedtuple("_Candidate", "completion prio meta synonyms prio2 display")
 
 
 def Candidate(completion, prio=None, meta=None, synonyms=None, prio2=None, display=None):
@@ -136,7 +137,7 @@ class PGCompleter(Completer):
 
         self.databases = []
         self.roles = []
-        self.dbmetadata = {"tables": {}, "views": {}, "functions": {}, "datatypes": {}}
+        self.dbmetadata: Dict[str, Dict[str, Any]] = {"tables": {}, "views": {}, "functions": {}, "datatypes": {}}
         self.search_path = []
         self.casing = {}
 
@@ -168,7 +169,7 @@ class PGCompleter(Completer):
         self.roles.extend(roles)
 
     def extend_keywords(self, additional_keywords):
-        self.keywords.extend(additional_keywords)
+        self.keywords.extend(additional_keywords)  # type: ignore[attr-defined]
         self.all_completions.update(additional_keywords)
 
     def extend_schemata(self, schemata):
@@ -408,9 +409,9 @@ class PGCompleter(Completer):
                 item, prio, display_meta, synonyms, prio2, display = cand
                 if display_meta is None:
                     display_meta = meta
-                syn_matches = (_match(x) for x in synonyms)
+                syn_matches_gen = (_match(x) for x in synonyms)
                 # Nones need to be removed to avoid max() crashing in Python 3
-                syn_matches = [m for m in syn_matches if m]
+                syn_matches = [m for m in syn_matches_gen if m]
                 sort_key = max(syn_matches) if syn_matches else None
             else:
                 item, display_meta, prio, prio2, display = cand, meta, 0, 0, cand
@@ -483,7 +484,7 @@ class PGCompleter(Completer):
             # Map suggestion type to method
             # e.g. 'table' -> self.get_table_matches
             matcher = self.suggestion_matchers[suggestion_type]
-            matches.extend(matcher(self, suggestion, word_before_cursor))
+            matches.extend(matcher(self, suggestion, word_before_cursor))  # type: ignore[operator]
 
         # Sort matches so highest priorities are first
         matches = sorted(matches, key=operator.attrgetter("priority"), reverse=True)
@@ -693,7 +694,7 @@ class PGCompleter(Completer):
         return matches
 
     def get_schema_matches(self, suggestion, word_before_cursor):
-        schema_names = self.dbmetadata["tables"].keys()
+        schema_names = list(self.dbmetadata["tables"].keys())
 
         # Unless we're sure the user really wants them, hide schema names
         # starting with pg_, which are mostly temporary schemas
@@ -901,7 +902,7 @@ class PGCompleter(Completer):
 
         """
         ctes = {normalize_ref(t.name): t.columns for t in local_tbls}
-        columns = OrderedDict()
+        columns: OrderedDict[Any, List[Any]] = OrderedDict()
         meta = self.dbmetadata
 
         def addcols(schema, rel, alias, reltype, cols):

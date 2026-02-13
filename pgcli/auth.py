@@ -34,6 +34,8 @@ def keyring_get_password(key):
     """Attempt to get password from keyring"""
     # Find password from store
     passwd = ""
+    if keyring is None:
+        return passwd
     try:
         passwd = keyring.get_password("pgcli", key) or ""
     except Exception as e:
@@ -46,6 +48,8 @@ def keyring_get_password(key):
 
 
 def keyring_set_password(key, passwd):
+    if keyring is None:
+        return
     try:
         keyring.set_password("pgcli", key, passwd)
     except Exception as e:

@@ -1,12 +1,13 @@
 import threading
 import os
 from collections import OrderedDict
+from typing import Any, Callable, OrderedDict as OrderedDictType
 
 from .pgcompleter import PGCompleter
 
 
 class CompletionRefresher:
-    refreshers = OrderedDict()
+    refreshers: OrderedDictType[str, Callable[..., Any]] = OrderedDict()
 
     def __init__(self):
         self._completer_thread = None

@@ -1,12 +1,21 @@
-Upcoming (TBD)
-==============
-
-Features:
----------
-
+4.3.16 (2026-01-20)
+===================
 
 Bug Fixes:
 ----------
+* Restore `dsn=uri` parameter in `connect_uri()` for proper `.pgpass` support.
+    * Parameter was accidentally lost in a previous merge
+    * Required for SSH tunnel connections to use `.pgpass` file correctly
+
+Internal:
+---------
+* Fix all mypy type checking errors (136 errors resolved).
+    * Convert namedtuples to `typing.NamedTuple` classes with proper defaults
+    * Add type annotations throughout codebase
+    * Files affected: sqlcompletion.py, tables.py, meta.py, pgexecute.py,
+      main.py, ssh_tunnel.py, auth.py, config.py, pgcompleter.py, completion_refresher.py
+* Fix log directory creation to properly create the full path.
+    * Use `os.makedirs()` instead of `ensure_dir_exists()` for log directories
 
 
 4.3.15 (2026-01-20)

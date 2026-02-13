@@ -1,6 +1,6 @@
 from collections import namedtuple
 
-_ColumnMetadata = namedtuple("ColumnMetadata", ["name", "datatype", "foreignkeys", "default", "has_default"])
+_ColumnMetadata = namedtuple("_ColumnMetadata", ["name", "datatype", "foreignkeys", "default", "has_default"])
 
 
 def ColumnMetadata(name, datatype, foreignkeys=None, default=None, has_default=False):
@@ -64,16 +64,18 @@ class FunctionMetadata:
         arg_defaults,
     ):
         """Class for describing a postgresql function"""
+        from typing import Optional, Tuple, Any
 
         self.schema_name = schema_name
         self.func_name = func_name
 
-        self.arg_modes = tuple(arg_modes) if arg_modes else None
-        self.arg_names = tuple(arg_names) if arg_names else None
+        self.arg_modes: Optional[Tuple[Any, ...]] = tuple(arg_modes) if arg_modes else None
+        self.arg_names: Optional[Tuple[Any, ...]] = tuple(arg_names) if arg_names else None
 
         # Be flexible in not requiring arg_types -- use None as a placeholder
         # for each arg. (Used for compatibility with old versions of postgresql
         # where such info is hard to get.
+        self.arg_types: Optional[Tuple[Any, ...]]
         if arg_types:
             self.arg_types = tuple(arg_types)
         elif arg_modes:
@@ -130,6 +132,8 @@ class FunctionMetadata:
         """Returns a list of input-parameter ColumnMetadata namedtuples."""
         if not self.arg_names:
             return []
+        if not self.arg_types:
+            return []
         modes = self.arg_modes or ["i"] * len(self.arg_names)
         args = [
             (name, typ)
@@ -157,6 +161,8 @@ class FunctionMetadata:
             # E.g. 'SELECT unnest FROM unnest(...);'
             return [ColumnMetadata(self.func_name, self.return_type, [])]
 
+        if not self.arg_names or not self.arg_types:
+            return []
         return [
             ColumnMetadata(name, typ, [])
             for name, typ, mode in zip(self.arg_names, self.arg_types, self.arg_modes)

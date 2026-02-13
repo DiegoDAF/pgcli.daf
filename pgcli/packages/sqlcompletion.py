@@ -1,6 +1,6 @@
 import re
+from typing import Any, List, NamedTuple, Optional, Tuple
 import sqlparse
-from collections import namedtuple
 from sqlparse.sql import Comparison, Identifier, Where
 from .parseutils.utils import last_word, find_prev_keyword, parse_partial_identifier
 from .parseutils.tables import extract_tables
@@ -8,43 +8,90 @@ from .parseutils.ctes import isolate_query_ctes
 from pgspecial.main import parse_special_command
 
 
-Special = namedtuple("Special", [])
-Database = namedtuple("Database", [])
-Schema = namedtuple("Schema", ["quoted"])
-Schema.__new__.__defaults__ = (False,)
+class Special(NamedTuple):
+    pass
+
+
+class Database(NamedTuple):
+    pass
+
+
+class Schema(NamedTuple):
+    quoted: bool = False
+
+
 # FromClauseItem is a table/view/function used in the FROM clause
 # `table_refs` contains the list of tables/... already in the statement,
 # used to ensure that the alias we suggest is unique
-FromClauseItem = namedtuple("FromClauseItem", "schema table_refs local_tables")
-Table = namedtuple("Table", ["schema", "table_refs", "local_tables"])
-TableFormat = namedtuple("TableFormat", [])
-View = namedtuple("View", ["schema", "table_refs"])
+class FromClauseItem(NamedTuple):
+    schema: Optional[str] = None
+    table_refs: Tuple[Any, ...] = ()
+    local_tables: Tuple[Any, ...] = ()
+
+
+class Table(NamedTuple):
+    schema: Optional[str] = None
+    table_refs: Tuple[Any, ...] = ()
+    local_tables: Tuple[Any, ...] = ()
+
+
+class TableFormat(NamedTuple):
+    pass
+
+
+class View(NamedTuple):
+    schema: Optional[str] = None
+    table_refs: Tuple[Any, ...] = ()
+
+
 # JoinConditions are suggested after ON, e.g. 'foo.barid = bar.barid'
-JoinCondition = namedtuple("JoinCondition", ["table_refs", "parent"])
+class JoinCondition(NamedTuple):
+    table_refs: Tuple[Any, ...]
+    parent: Any
+
+
 # Joins are suggested after JOIN, e.g. 'foo ON foo.barid = bar.barid'
-Join = namedtuple("Join", ["table_refs", "schema"])
+class Join(NamedTuple):
+    table_refs: Tuple[Any, ...]
+    schema: Optional[str]
 
-Function = namedtuple("Function", ["schema", "table_refs", "usage"])
-# For convenience, don't require the `usage` argument in Function constructor
-Function.__new__.__defaults__ = (None, (), None)
-Table.__new__.__defaults__ = (None, (), ())
-View.__new__.__defaults__ = (None, ())
-FromClauseItem.__new__.__defaults__ = (None, (), ())
 
-Column = namedtuple(
-    "Column",
-    ["table_refs", "require_last_table", "local_tables", "qualifiable", "context"],
-)
-Column.__new__.__defaults__ = (None, None, (), False, None)
+class Function(NamedTuple):
+    schema: Optional[str] = None
+    table_refs: Tuple[Any, ...] = ()
+    usage: Optional[str] = None
 
-Keyword = namedtuple("Keyword", ["last_token"])
-Keyword.__new__.__defaults__ = (None,)
-NamedQuery = namedtuple("NamedQuery", [])
-Role = namedtuple("Role", [])
-Datatype = namedtuple("Datatype", ["schema"])
-Alias = namedtuple("Alias", ["aliases"])
 
-Path = namedtuple("Path", [])
+class Column(NamedTuple):
+    table_refs: Optional[Tuple[Any, ...]] = None
+    require_last_table: Optional[bool] = None
+    local_tables: Tuple[Any, ...] = ()
+    qualifiable: bool = False
+    context: Optional[str] = None
+
+
+class Keyword(NamedTuple):
+    last_token: Optional[str] = None
+
+
+class NamedQuery(NamedTuple):
+    pass
+
+
+class Role(NamedTuple):
+    pass
+
+
+class Datatype(NamedTuple):
+    schema: Optional[str]
+
+
+class Alias(NamedTuple):
+    aliases: Tuple[str, ...]
+
+
+class Path(NamedTuple):
+    pass
 
 
 class SqlStatement:
@@ -105,7 +152,7 @@ class SqlStatement:
     def get_identifier_schema(self):
         schema = (self.identifier and self.identifier.get_parent_name()) or None
         # If schema name is unquoted, lower-case it
-        if schema and self.identifier.value[0] != '"':
+        if schema and self.identifier and self.identifier.value[0] != '"':
             schema = schema.lower()
 
         return schema
@@ -402,7 +449,7 @@ def suggest_based_on_last_token(token, stmt):
 
         # Suggest tables from either the currently-selected schema or the
         # public schema if no schema has been specified
-        suggest = []
+        suggest: List[Any] = []
 
         if not schema:
             # Suggest schemas
@@ -505,7 +552,7 @@ def suggest_based_on_last_token(token, stmt):
         # Note that tables are a form of composite type in postgresql, so
         # they're suggested here as well
         schema = stmt.get_identifier_schema()
-        suggestions = [Datatype(schema=schema), Table(schema=schema)]
+        suggestions: List[Any] = [Datatype(schema=schema), Table(schema=schema)]
         if not schema:
             suggestions.append(Schema())
         return tuple(suggestions)
@@ -531,16 +578,17 @@ def _suggest_expression(token_v, stmt):
     Return suggestions for an expression, taking account of any partially-typed
     identifier's parent, which may be a table alias or schema name.
     """
-    parent = stmt.identifier.get_parent_name() if stmt.identifier else []
+    parent = stmt.identifier.get_parent_name() if stmt.identifier else None
     tables = stmt.get_tables()
 
     if parent:
         tables = tuple(t for t in tables if identifies(parent, t))
+        parent_str = str(parent) if parent else None
         return (
             Column(table_refs=tables, local_tables=stmt.local_tables),
-            Table(schema=parent),
-            View(schema=parent),
-            Function(schema=parent),
+            Table(schema=parent_str),
+            View(schema=parent_str),
+            Function(schema=parent_str),
         )
 
     return (

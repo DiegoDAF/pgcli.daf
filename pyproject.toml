@@ -157,6 +157,7 @@ exclude = [
     "dist/",
     ".venv/",
     "tests/",
+    "pgcli/magic.py",  # IPython-specific, uses runtime features
 ]
 
 [dependency-groups]

@@ -19,7 +19,7 @@ import itertools
 import pathlib
 import platform
 from time import time, sleep
-from typing import Optional
+from typing import Any, List, NamedTuple, Optional
 
 from cli_helpers.tabular_output import TabularOutputFormatter
 from cli_helpers.tabular_output.preprocessors import (
@@ -101,39 +101,30 @@ COLOR_CODE_REGEX = re.compile(r"\x1b(\[.*?[@-~]|\].*?(\x07|\x1b\\))")
 DEFAULT_MAX_FIELD_WIDTH = 500
 
 # Query tuples are used for maintaining history
-MetaQuery = namedtuple(
-    "Query",
-    [
-        "query",  # The entire text of the command
-        "successful",  # True If all subqueries were successful
-        "total_time",  # Time elapsed executing the query and formatting results
-        "execution_time",  # Time elapsed executing the query
-        "meta_changed",  # True if any subquery executed create/alter/drop
-        "db_changed",  # True if any subquery changed the database
-        "path_changed",  # True if any subquery changed the search path
-        "mutated",  # True if any subquery executed insert/update/delete
-        "is_special",  # True if the query is a special command
-    ],
-)
-MetaQuery.__new__.__defaults__ = ("", False, 0, 0, False, False, False, False)
+class MetaQuery(NamedTuple):
+    query: str = ""  # The entire text of the command
+    successful: bool = False  # True If all subqueries were successful
+    total_time: float = 0  # Time elapsed executing the query and formatting results
+    execution_time: float = 0  # Time elapsed executing the query
+    meta_changed: bool = False  # True if any subquery executed create/alter/drop
+    db_changed: bool = False  # True if any subquery changed the database
+    path_changed: bool = False  # True if any subquery changed the search path
+    mutated: bool = False  # True if any subquery executed insert/update/delete
+    is_special: bool = False  # True if the query is a special command
 
-OutputSettings = namedtuple(
-    "OutputSettings",
-    "table_format dcmlfmt floatfmt column_date_formats missingval expanded max_width case_function style_output max_field_width tuples_only",
-)
-OutputSettings.__new__.__defaults__ = (
-    None,
-    None,
-    None,
-    None,
-    "<null>",
-    False,
-    None,
-    lambda x: x,
-    None,
-    DEFAULT_MAX_FIELD_WIDTH,
-    False,
-)
+
+class OutputSettings(NamedTuple):
+    table_format: Optional[str] = None
+    dcmlfmt: Optional[str] = None
+    floatfmt: Optional[str] = None
+    column_date_formats: Optional[Any] = None
+    missingval: str = "<null>"
+    expanded: bool = False
+    max_width: Optional[int] = None
+    case_function: Any = lambda x: x
+    style_output: Optional[Any] = None
+    max_field_width: int = DEFAULT_MAX_FIELD_WIDTH
+    tuples_only: bool = False
 
 
 class PgCliQuitError(Exception):
@@ -150,6 +141,8 @@ def notify_callback(notify: Notify):
 class PGCli:
     default_prompt = "\\u@\\h:\\d> "
     max_len_prompt = 30
+    commands: Optional[tuple] = None
+    input_files: Optional[tuple] = None
 
     def set_default_pager(self, config):
         configured_pager = config["main"].get("pager")
@@ -286,7 +279,7 @@ class PGCli:
 
         self.completion_refresher = CompletionRefresher()
 
-        self.query_history = []
+        self.query_history: List[Any] = []
 
         # Initialize completer
         smart_completion = c["main"].as_bool("smart_completion")
@@ -610,7 +603,7 @@ class PGCli:
         else:
             log_dir = os.path.expanduser(log_destination)
 
-        ensure_dir_exists(log_dir)
+        os.makedirs(os.path.expanduser(log_dir), exist_ok=True)
 
         # Determine log filename based on rotation mode
         if log_rotation_mode == "day-of-week":
@@ -635,6 +628,7 @@ class PGCli:
 
         # Disable logging if value is NONE by switching to a no-op handler.
         # Set log level to a high value so it doesn't even waste cycles getting called.
+        handler: logging.Handler
         if log_level.upper() == "NONE":
             handler = logging.NullHandler()
         else:
@@ -687,7 +681,8 @@ class PGCli:
         kwargs = conninfo_to_dict(uri)
         remap = {"dbname": "database", "password": "passwd"}
         kwargs = {remap.get(k, k): v for k, v in kwargs.items()}
-        self.connect(**kwargs)
+        # Pass the original URI as dsn parameter for .pgpass support with SSH tunnels
+        self.connect(dsn=uri, **kwargs)
 
     def connect(self, database="", host="", user="", port="", passwd="", dsn="", **kwargs):
         # Connect to the database.
@@ -789,14 +784,15 @@ class PGCli:
             logger_handlers = self.logger.handlers.copy()
             try:
                 self.logger.debug("Creating SSH tunnel with params: %r", params)
-                self.ssh_tunnel = sshtunnel.SSHTunnelForwarder(**params)
+                ssh_tunnel = sshtunnel.SSHTunnelForwarder(**params)
+                self.ssh_tunnel = ssh_tunnel
                 self.logger.debug("SSH tunnel created, calling start()...")
-                self.ssh_tunnel.start()
-                self.logger.debug("SSH tunnel start() returned, is_active: %s", self.ssh_tunnel.is_active)
+                ssh_tunnel.start()
+                self.logger.debug("SSH tunnel start() returned, is_active: %s", ssh_tunnel.is_active)
 
                 # Verify tunnel is actually active
-                if not self.ssh_tunnel.is_active:
-                    raise Exception(f"SSH tunnel failed to start (is_active={self.ssh_tunnel.is_active})")
+                if not ssh_tunnel.is_active:
+                    raise Exception(f"SSH tunnel failed to start (is_active={ssh_tunnel.is_active})")
 
                 self.logger.debug("SSH tunnel verified active")
             except Exception as e:
@@ -807,11 +803,11 @@ class PGCli:
                 sys.exit(1)
             self.logger.handlers = logger_handlers
 
-            atexit.register(self.ssh_tunnel.stop)
+            atexit.register(ssh_tunnel.stop)
             # Preserve original host for .pgpass lookup and SSL certificate verification
             # Use hostaddr to specify the actual connection endpoint (SSH tunnel)
             hostaddr = "127.0.0.1"
-            port = self.ssh_tunnel.local_bind_ports[0]
+            port = ssh_tunnel.local_bind_ports[0]
             self.logger.debug("SSH tunnel ready, local port: %d, hostaddr: %s", port, hostaddr)
 
             if dsn:
@@ -897,7 +893,7 @@ class PGCli:
                 raise RuntimeError(message)
             while True:
                 try:
-                    text = self.prompt_app.prompt(default=sql)
+                    text = self.prompt_app.prompt(default=sql)  # type: ignore[attr-defined]
                     break
                 except KeyboardInterrupt:
                     sql = ""
@@ -1098,7 +1094,7 @@ class PGCli:
         try:
             while True:
                 try:
-                    text = self.prompt_app.prompt()
+                    text = self.prompt_app.prompt()  # type: ignore[attr-defined]
                 except KeyboardInterrupt:
                     continue
                 except EOFError:
@@ -1265,8 +1261,8 @@ class PGCli:
         db_changed = False
         path_changed = False
         output = []
-        total = 0
-        execution = 0
+        total = 0.0
+        execution = 0.0
 
         # Run the query.
         start = time()
@@ -1279,7 +1275,7 @@ class PGCli:
             explain_mode=self.explain_mode,
         )
 
-        is_special = None
+        is_special = False
 
         for title, cur, headers, status, sql, success, is_special in res:
             logger.debug("headers: %r", headers)
@@ -1290,7 +1286,7 @@ class PGCli:
                 cur, status = self._limit_output(cur)
 
             if self.pgspecial.auto_expand or self.auto_expand:
-                max_width = self.prompt_app.output.get_size().columns
+                max_width = self.prompt_app.output.get_size().columns  # type: ignore[attr-defined]
             else:
                 max_width = None
 
@@ -1833,7 +1829,7 @@ def cli(
             echo_error(e.args[0])
 
     # Merge init-commands: global, DSN-specific, then CLI-provided
-    init_cmds = []
+    init_cmds: List[str] = []
     # 1) Global init-commands
     global_section = pgcli.config.get("init-commands", {})
     for _, val in global_section.items():
@@ -2022,7 +2018,7 @@ def exception_formatter(e, verbose_errors: bool = False):
 
 
 def format_output(title, cur, headers, status, settings, explain_mode=False):
-    output = []
+    output: Any = []
     expanded = settings.expanded or settings.table_format == "vertical"
     table_format = "vertical" if settings.expanded else settings.table_format
     max_width = settings.max_width
@@ -2089,7 +2085,7 @@ def format_output(title, cur, headers, status, settings, explain_mode=False):
         headers = [case_function(x) for x in headers]
         if max_width is not None:
             cur = list(cur)
-        column_types = None
+        column_types: Optional[List[type]] = None
         if hasattr(cur, "description"):
             column_types = []
             for d in cur.description:
@@ -2132,10 +2128,11 @@ def parse_service_info(service):
     service_file = os.getenv("PGSERVICEFILE")
     if not service_file:
         # try ~/.pg_service.conf (if that exists)
-        if platform.system() == "Windows":
-            service_file = os.getenv("PGSYSCONFDIR") + "\\pg_service.conf"
-        elif os.getenv("PGSYSCONFDIR"):
-            service_file = os.path.join(os.getenv("PGSYSCONFDIR"), ".pg_service.conf")
+        pgsysconfdir = os.getenv("PGSYSCONFDIR")
+        if platform.system() == "Windows" and pgsysconfdir:
+            service_file = pgsysconfdir + "\\pg_service.conf"
+        elif pgsysconfdir:
+            service_file = os.path.join(pgsysconfdir, ".pg_service.conf")
         else:
             service_file = os.path.expanduser("~/.pg_service.conf")
     if not service or not os.path.exists(service_file):

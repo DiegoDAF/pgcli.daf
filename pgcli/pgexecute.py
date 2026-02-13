@@ -3,6 +3,7 @@ import logging
 import traceback
 from collections import namedtuple
 import re
+from typing import Any, Optional
 import pgspecial as special
 import psycopg
 import psycopg.sql
@@ -168,17 +169,23 @@ class PGExecute:
     ):
         self._conn_params = {}
         self._is_virtual_database = None
-        self.conn = None
-        self.dbname = None
-        self.user = None
-        self.password = None
-        self.host = None
-        self.port = None
-        self.server_version = None
+        self.conn: Optional[psycopg.Connection[Any]] = None
+        self.dbname: Optional[str] = None
+        self.user: Optional[str] = None
+        self.password: Optional[str] = None
+        self.host: Optional[str] = None
+        self.port: Optional[str] = None
+        self.server_version: Optional[str] = None
         self.extra_args = None
         self.notify_callback = notify_callback
         self.connect(database, user, password, host, port, dsn, **kwargs)
         self.reset_expanded = None
+
+    @property
+    def _conn(self) -> psycopg.Connection[Any]:
+        """Return connection, asserting it exists. Use for type-safe access."""
+        assert self.conn is not None, "Connection not established"
+        return self.conn
 
     def is_virtual_database(self):
         if self._is_virtual_database is None:
@@ -273,6 +280,8 @@ class PGExecute:
 
     @property
     def short_host(self):
+        if not self.host:
+            return ""
         try:
             ipaddress.ip_address(self.host)
             return self.host
@@ -296,10 +305,10 @@ class PGExecute:
         return cur.fetchone()
 
     def failed_transaction(self):
-        return self.conn.info.transaction_status == psycopg.pq.TransactionStatus.INERROR
+        return self.conn.info.transaction_status == psycopg.pq.TransactionStatus.INERROR  # type: ignore[union-attr]
 
     def valid_transaction(self):
-        status = self.conn.info.transaction_status
+        status = self.conn.info.transaction_status  # type: ignore[union-attr]
         return status == psycopg.pq.TransactionStatus.ACTIVE or status == psycopg.pq.TransactionStatus.INTRANS
 
     def run(
@@ -370,7 +379,7 @@ class PGExecute:
                     # First try to run each query as special
                     _logger.debug("Trying a pgspecial command. sql: %r", sql)
                     try:
-                        cur = self.conn.cursor()
+                        cur = self.conn.cursor()  # type: ignore[union-attr]
                     except psycopg.InterfaceError:
                         # edge case when connection is already closed, but we
                         # don't need cursor for special_cmd.arg_type == NO_QUERY.
@@ -423,7 +432,7 @@ class PGExecute:
         :return: Bool. True if ``run`` must raise this exception.
 
         """
-        return self.conn.closed != 0
+        return self.conn.closed != 0  # type: ignore[union-attr]
 
     def execute_normal_sql(self, split_sql):
         """Returns tuple (title, rows, headers, status)"""
@@ -439,15 +448,15 @@ class PGExecute:
             if n.message_detail is not None:
                 title = f"{title}\n{n.message_detail}"
 
-        self.conn.add_notice_handler(handle_notices)
+        self.conn.add_notice_handler(handle_notices)  # type: ignore[union-attr]
 
         if self.is_virtual_database() and "show help" in split_sql.lower():
             # see https://github.com/psycopg/psycopg/issues/303
             # special case "show help" in pgbouncer
-            res = self.conn.pgconn.exec_(split_sql.encode())
+            res = self.conn.pgconn.exec_(split_sql.encode())  # type: ignore[union-attr]
             return title, None, None, res.command_status.decode()
 
-        cur = self.conn.cursor()
+        cur = self.conn.cursor()  # type: ignore[union-attr]
         cur.execute(split_sql)
 
         # cur.description will be None for operations that do not return
@@ -466,13 +475,13 @@ class PGExecute:
         """Returns the current search path as a list of schema names"""
 
         try:
-            with self.conn.cursor() as cur:
+            with self.conn.cursor() as cur:  # type: ignore[union-attr]
                 _logger.debug("Search path query. sql: %r", self.search_path_query)
                 cur.execute(self.search_path_query)
                 return [x[0] for x in cur.fetchall()]
         except psycopg.ProgrammingError:
             fallback = "SELECT * FROM current_schemas(true)"
-            with self.conn.cursor() as cur:
+            with self.conn.cursor() as cur:  # type: ignore[union-attr]
                 _logger.debug("Search path query. sql: %r", fallback)
                 cur.execute(fallback)
                 return cur.fetchone()[0]
@@ -483,7 +492,7 @@ class PGExecute:
         # 2: relkind, v or m (materialized)
         # 4: reloptions, null
         # 5: checkoption: local or cascaded
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             sql = self.view_definition_query
             _logger.debug("View Definition Query. sql: %r\nspec: %r", sql, spec)
             try:
@@ -507,7 +516,7 @@ class PGExecute:
     def function_definition(self, spec):
         """Returns the SQL defining functions described by `spec`"""
 
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             sql = self.function_definition_query
             _logger.debug("Function Definition Query. sql: %r\nspec: %r", sql, spec)
             try:
@@ -520,7 +529,7 @@ class PGExecute:
     def schemata(self):
         """Returns a list of schema names in the database"""
 
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             _logger.debug("Schemata Query. sql: %r", self.schemata_query)
             cur.execute(self.schemata_query)
             return [x[0] for x in cur.fetchall()]
@@ -537,7 +546,7 @@ class PGExecute:
         :return: (schema_name, rel_name) tuples
         """
 
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             # sql = cur.mogrify(self.tables_query, kinds)
             # _logger.debug("Tables Query. sql: %r", sql)
             cur.execute(self.tables_query, [kinds])
@@ -566,7 +575,7 @@ class PGExecute:
         :return: list of (schema_name, relation_name, column_name, column_type) tuples
         """
 
-        if self.conn.info.server_version >= 80400:
+        if self.conn.info.server_version >= 80400:  # type: ignore[union-attr]
             columns_query = """
                 SELECT  nsp.nspname schema_name,
                         cls.relname table_name,
@@ -606,7 +615,7 @@ class PGExecute:
                         AND att.attnum  > 0
                 ORDER BY 1, 2, att.attnum"""
 
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             # sql = cur.mogrify(columns_query, kinds)
             # _logger.debug("Columns Query. sql: %r", sql)
             cur.execute(columns_query, [kinds])
@@ -619,13 +628,13 @@ class PGExecute:
         yield from self._columns(kinds=["v", "m"])
 
     def databases(self):
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             _logger.debug("Databases Query. sql: %r", self.databases_query)
             cur.execute(self.databases_query)
             return [x[0] for x in cur.fetchall()]
 
     def full_databases(self):
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             _logger.debug("Databases Query. sql: %r", self.full_databases_query)
             cur.execute(self.full_databases_query)
             headers = [x[0] for x in cur.description]
@@ -638,20 +647,20 @@ class PGExecute:
             FROM pg_catalog.pg_roles
             ORDER BY rolname
         """
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             _logger.debug("Roles Query. sql: %r", query)
             cur.execute(query)
             return [x[0] for x in cur.fetchall()]
 
     def is_protocol_error(self):
         query = "SELECT 1"
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             _logger.debug("Simple Query. sql: %r", query)
             cur.execute(query)
             return bool(cur.protocol_error)
 
     def get_socket_directory(self):
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             _logger.debug("Socket directory Query. sql: %r", self.socket_directory_query)
             cur.execute(self.socket_directory_query)
             result = cur.fetchone()
@@ -660,10 +669,10 @@ class PGExecute:
     def foreignkeys(self):
         """Yields ForeignKey named tuples"""
 
-        if self.conn.info.server_version < 90000:
+        if self.conn.info.server_version < 90000:  # type: ignore[union-attr]
             return
 
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             query = """
                 SELECT s_p.nspname AS parentschema,
                        t_p.relname AS parenttable,
@@ -700,7 +709,7 @@ class PGExecute:
     def functions(self):
         """Yields FunctionMetadata named tuples"""
 
-        if self.conn.info.server_version >= 110000:
+        if self.conn.info.server_version >= 110000:  # type: ignore[union-attr]
             query = """
                 SELECT n.nspname schema_name,
                         p.proname func_name,
@@ -720,7 +729,7 @@ class PGExecute:
                 WHERE p.prorettype::regtype != 'trigger'::regtype
                 ORDER BY 1, 2
                 """
-        elif self.conn.info.server_version > 90000:
+        elif self.conn.info.server_version > 90000:  # type: ignore[union-attr]
             query = """
                 SELECT n.nspname schema_name,
                         p.proname func_name,
@@ -740,7 +749,7 @@ class PGExecute:
                 WHERE p.prorettype::regtype != 'trigger'::regtype
                 ORDER BY 1, 2
                 """
-        elif self.conn.info.server_version >= 80400:
+        elif self.conn.info.server_version >= 80400:  # type: ignore[union-attr]
             query = """
                 SELECT n.nspname schema_name,
                         p.proname func_name,
@@ -781,7 +790,7 @@ class PGExecute:
                 ORDER BY 1, 2
                 """
 
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             _logger.debug("Functions Query. sql: %r", query)
             cur.execute(query)
             for row in cur:
@@ -790,8 +799,8 @@ class PGExecute:
     def datatypes(self):
         """Yields tuples of (schema_name, type_name)"""
 
-        with self.conn.cursor() as cur:
-            if self.conn.info.server_version > 90000:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
+            if self.conn.info.server_version > 90000:  # type: ignore[union-attr]
                 query = """
                     SELECT n.nspname schema_name,
                            t.typname type_name
@@ -833,7 +842,7 @@ class PGExecute:
 
     def casing(self):
         """Yields the most common casing for names used in db functions"""
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             query = r"""
           WITH Words AS (
                 SELECT regexp_split_to_table(prosrc, '\W+') AS Word, COUNT(1)
@@ -885,11 +894,12 @@ class PGExecute:
 
     def get_timezone(self) -> str:
         query = psycopg.sql.SQL("show time zone")
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             cur.execute(query)
-            return cur.fetchone()[0]
+            result = cur.fetchone()
+            return str(result[0]) if result else ""
 
     def set_timezone(self, timezone: str):
         query = psycopg.sql.SQL("set time zone {}").format(psycopg.sql.Identifier(timezone))
-        with self.conn.cursor() as cur:
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
             cur.execute(query)

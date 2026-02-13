@@ -1,7 +1,10 @@
 # coding=utf-8
+from typing import Any
 
 from pgcli.packages.parseutils.tables import extract_tables
 
+# Module-level formatter instance, set by register_new_formatter
+formatter: Any = None
 
 supported_formats = (
     "sql-insert",

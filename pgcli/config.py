@@ -11,7 +11,8 @@ def config_location():
     if "XDG_CONFIG_HOME" in os.environ:
         return "%s/pgcli/" % expanduser(os.environ["XDG_CONFIG_HOME"])
     elif platform.system() == "Windows":
-        return os.getenv("USERPROFILE") + "\\AppData\\Local\\dbcli\\pgcli\\"
+        user_profile = os.getenv("USERPROFILE", "")
+        return user_profile + "\\AppData\\Local\\dbcli\\pgcli\\"
     else:
         return expanduser("~/.config/pgcli/")
 

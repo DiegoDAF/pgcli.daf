@@ -9,7 +9,7 @@ import atexit
 import logging
 import re
 import sys
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple, cast
 from urllib.parse import urlparse
 
 import click
@@ -47,7 +47,7 @@ class SSHTunnelManager:
         self.ssh_tunnel_config = ssh_tunnel_config or {}
         self.dsn_ssh_tunnel_config = dsn_ssh_tunnel_config or {}
         self.logger = logger or logging.getLogger(__name__)
-        self.tunnel = None
+        self.tunnel: Optional[Any] = None
         self.allow_agent = allow_agent
 
     def find_tunnel_url(
@@ -79,7 +79,7 @@ class SSHTunnelManager:
                         dsn_regex,
                         tunnel_url,
                     )
-                    return tunnel_url
+                    return cast(str, tunnel_url)
 
         # Check host-based tunnel config
         if host and self.ssh_tunnel_config:
@@ -91,7 +91,7 @@ class SSHTunnelManager:
                         host_regex,
                         tunnel_url,
                     )
-                    return tunnel_url
+                    return cast(str, tunnel_url)
 
         return None
 
@@ -156,13 +156,14 @@ class SSHTunnelManager:
         logger_handlers = self.logger.handlers.copy()
         try:
             self.logger.debug("Creating SSH tunnel with params: %r", params)
-            self.tunnel = sshtunnel.SSHTunnelForwarder(**params)
+            tunnel = sshtunnel.SSHTunnelForwarder(**params)
+            self.tunnel = tunnel
             self.logger.debug("SSH tunnel created, calling start()...")
-            self.tunnel.start()
-            self.logger.debug("SSH tunnel start() returned, is_active: %s", self.tunnel.is_active)
+            tunnel.start()
+            self.logger.debug("SSH tunnel start() returned, is_active: %s", tunnel.is_active)
 
-            if not self.tunnel.is_active:
-                raise Exception(f"SSH tunnel failed to start (is_active={self.tunnel.is_active})")
+            if not tunnel.is_active:
+                raise Exception(f"SSH tunnel failed to start (is_active={tunnel.is_active})")
 
             self.logger.debug("SSH tunnel verified active")
         except Exception as e:
@@ -174,7 +175,7 @@ class SSHTunnelManager:
         self.logger.handlers = logger_handlers
         atexit.register(self.stop_tunnel)
 
-        local_port = self.tunnel.local_bind_ports[0]
+        local_port = tunnel.local_bind_ports[0]
         self.logger.debug("SSH tunnel ready, local port: %d", local_port)
 
         return "127.0.0.1", local_port
