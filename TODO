@@ -29,13 +29,13 @@
 * [X] Support \restrict/\unrestrict commands (CVE-2025-8714) - v4.3.17
       - Commands added in PostgreSQL 17.6/16.10/15.14+ (August 2025)
       - pg_dump emits \restrict <token> at start and \unrestrict <token> at end
-      - Current implementation: recognizes commands and tracks token
-      - TODO: Block meta-commands during restricted mode
-        - Requires modifying pgexecute.py run() to check self.restrict_token
-        - If restrict_token != None, only allow \unrestrict with correct token
-        - Other meta-commands should be ignored or raise error
+      - v4.3.17: recognizes commands and tracks token
+      - v4.3.18: Blocks meta-commands during restricted mode (complete implementation)
+        - pgexecute.py run() checks restrict_token before pgspecial.execute()
+        - Only \unrestrict with correct token passes through
+        - Regular SQL allowed, all other meta-commands blocked
       - TODO: PR to dbcli/pgcli (not implemented upstream yet)
-* [ ] pgcli_isready: pg_isready wrapper with SSH tunnel support
+* [X] pgcli_isready: pg_isready wrapper with SSH tunnel support - v4.3.18
 * [X] Security: Sanitize SSH passwords from debug logs - v4.3.18
 * [X] Security: Mask passwords in --list-dsn output - v4.3.18
 * [ ] Security: Evaluate sshtunnel alternatives (unmaintained, incompatible with paramiko 4.x)

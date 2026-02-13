@@ -480,6 +480,80 @@ def test_restrict_mode_requires_token():
         assert "requires a token" in result[0][3]
 
 
+def test_restrict_mode_blocks_meta_commands():
+    """Test that meta-commands are blocked during restricted mode via pgexecute.run()."""
+    from pgcli.pgexecute import PGExecute
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_file = os.path.join(tmpdir, "config")
+        log_file = os.path.join(tmpdir, "pgcli.log")
+        with open(config_file, "w") as f:
+            f.write("[main]\n")
+            f.write(f"log_file = {log_file}\n")
+
+        cli = PGCli(pgclirc_file=config_file)
+        cli.enter_restrict_mode("secret_token")
+
+        pgspecial = mock.MagicMock()
+
+        # Meta-commands should be blocked before reaching pgspecial
+        for cmd in ["\\d", "\\l", "\\dt", "\\i /tmp/evil.sql", "\\!", "\\e"]:
+            # Call pgexecute.run() directly with a mock connection
+            executor = mock.MagicMock(spec=PGExecute)
+            executor.run = PGExecute.run.__get__(executor)
+            executor.conn = mock.MagicMock()
+            executor.reset_expanded = False
+            result = list(executor.run(cmd, pgspecial=pgspecial, restrict_token="secret_token"))
+            statuses = [r[3] for r in result if r[3]]
+            assert any("Restricted mode active" in s for s in statuses), (
+                f"Expected '{cmd}' to be blocked in restricted mode"
+            )
+
+
+def test_restrict_mode_allows_unrestrict_through():
+    """Test that \\unrestrict passes through to pgspecial during restricted mode."""
+    from pgcli.pgexecute import PGExecute
+
+    pgspecial = mock.MagicMock()
+    pgspecial.execute.return_value = iter([(None, None, None, "OK")])
+
+    executor = mock.MagicMock(spec=PGExecute)
+    executor.run = PGExecute.run.__get__(executor)
+    executor.conn = mock.MagicMock()
+    executor.reset_expanded = False
+
+    result = list(executor.run("\\unrestrict my_token", pgspecial=pgspecial, restrict_token="secret"))
+    # \unrestrict should NOT be blocked - it should reach pgspecial
+    statuses = [r[3] for r in result if r[3]]
+    assert not any("Restricted mode active" in s for s in statuses), (
+        "\\unrestrict should not be blocked in restricted mode"
+    )
+
+
+def test_restrict_mode_allows_sql():
+    """Test that regular SQL passes through during restricted mode."""
+    from pgcli.pgexecute import PGExecute
+
+    pgspecial = mock.MagicMock()
+    from pgspecial.main import CommandNotFound
+    pgspecial.execute.side_effect = CommandNotFound("not special")
+
+    executor = mock.MagicMock(spec=PGExecute)
+    executor.run = PGExecute.run.__get__(executor)
+    executor.conn = mock.MagicMock()
+    executor.reset_expanded = False
+    executor.execute_normal_sql = mock.MagicMock(
+        return_value=("title", [("1",)], ["?column?"], "SELECT 1")
+    )
+
+    result = list(executor.run("SELECT 1", pgspecial=pgspecial, restrict_token="secret"))
+    statuses = [r[3] for r in result if r[3]]
+    assert not any("Restricted mode active" in s for s in statuses), (
+        "Regular SQL should not be blocked in restricted mode"
+    )
+    executor.execute_normal_sql.assert_called_once()
+
+
 @dbtest
 def test_logfile_works(executor):
     with tempfile.TemporaryDirectory() as tmpdir:

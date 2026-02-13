@@ -318,6 +318,7 @@ class PGExecute:
         exception_formatter=None,
         on_error_resume=False,
         explain_mode=False,
+        restrict_token=None,
     ):
         """Execute the sql in the database and return the results.
 
@@ -375,6 +376,15 @@ class PGExecute:
                             pgspecial.expanded_output = True
                             self.reset_expanded = True
                         sql = sql[:-2].strip()
+
+                    # Block meta-commands during restricted mode (CVE-2025-8714)
+                    if restrict_token and sql.startswith("\\"):
+                        cmd_name = sql.split()[0] if sql.split() else sql
+                        if cmd_name != "\\unrestrict":
+                            yield (None, None, None,
+                                   "Restricted mode active: only \\unrestrict is allowed",
+                                   sql, False, True)
+                            continue
 
                     # First try to run each query as special
                     _logger.debug("Trying a pgspecial command. sql: %r", sql)

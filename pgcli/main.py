@@ -614,6 +614,7 @@ class PGCli:
             self.pgspecial,
             on_error_resume=on_error_resume,
             explain_mode=self.explain_mode,
+            restrict_token=self.restrict_token,
         )
 
     def write_to_logfile(self, pattern, **_):
@@ -1382,6 +1383,7 @@ class PGCli:
             lambda x: exception_formatter(x, self.verbose_errors),
             on_error_resume,
             explain_mode=self.explain_mode,
+            restrict_token=self.restrict_token,
         )
 
         is_special = False
