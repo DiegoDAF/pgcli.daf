@@ -30,6 +30,13 @@ from collections import namedtuple
 @pytest.mark.skipif(platform.system() == "Windows", reason="Not applicable in windows")
 @pytest.mark.skipif(not setproctitle, reason="setproctitle not available")
 def test_obfuscate_process_password():
+    # Verify setproctitle works in this process state (other tests using
+    # subprocess or Click runners can corrupt the process argv buffer,
+    # making setproctitle silently fail to set/get titles)
+    setproctitle.setproctitle("pgcli_test_canary")
+    if setproctitle.getproctitle() != "pgcli_test_canary":
+        pytest.skip("setproctitle not functional (process argv buffer corrupted by prior tests)")
+
     original_title = setproctitle.getproctitle()
 
     setproctitle.setproctitle("pgcli user=root password=secret host=localhost")
