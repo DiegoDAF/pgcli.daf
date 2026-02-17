@@ -38,12 +38,15 @@
 * [X] pgcli_isready: pg_isready wrapper with SSH tunnel support - v4.3.18
 * [X] Security: Sanitize SSH passwords from debug logs - v4.3.18
 * [X] Security: Mask passwords in --list-dsn output - v4.3.18
-* [ ] Security: Evaluate sshtunnel alternatives (unmaintained, incompatible with paramiko 4.x)
-      - sshtunnel 0.4.0 has no releases in 12+ months
-      - paramiko 4.0 removed DSSKey, sshtunnel crashes on import
-      - Options: fork sshtunnel, find alternative, or monkey-patch
+* [X] Migrate from sshtunnel to native Paramiko SSH tunneling - v4.3.18
+      - Replaced sshtunnel.SSHTunnelForwarder with native paramiko.SSHClient
+      - Uses socketserver.ThreadingTCPServer + direct-tcpip channel for port forwarding
+      - Eliminated ~115 lines of duplicate inline tunnel code from main.py
+      - paramiko >= 3.0 without upper bound (paramiko 4.x compatible)
+      - sshtunnel package no longer required
 * [ ] Security: Configure explicit SSH host key verification policy
-      - sshtunnel may default to AutoAddPolicy (accepts any host key)
+      - Currently uses AutoAddPolicy (accepts any host key)
+      - Should use RejectPolicy or configurable policy
       - Vulnerable to MITM attacks on SSH tunnels
 * [X] Security: Use re.fullmatch() for SSH tunnel regex matching - v4.3.18
       - Currently re.search() can match partial hostnames (e.g. "prod" matches "nonprod")
@@ -56,3 +59,9 @@
 * [X] Security: SQL statements with passwords may be logged - v4.3.18
       - pgexecute.py:439 - CREATE USER/ALTER USER with PASSWORD gets logged at DEBUG
       - Could detect and redact password clauses before logging
+* [ ] Cambiar versionado a CalVer YY.DDD (año.dia_juliano)
+      - Formato: 26.44 = 2026, día 44 (13 de febrero) - SIN zero-pad
+      - Release diario (un release por día)
+      - 3er número para excepciones: 26.44.1 si hay 2 releases el mismo día
+      - Reemplaza semver x.y.z actual
+      - Afecta: pgcli/__init__.py, pyproject.toml, changelog.rst, CLAUDE.md

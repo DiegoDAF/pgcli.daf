@@ -12,15 +12,14 @@ Features:
     * Meta-commands (``\d``, ``\l``, ``\i``, etc.) are now blocked during restricted mode
     * Only ``\unrestrict`` with the correct token is allowed through
     * Regular SQL statements continue to work normally during restricted mode
+* Migrate SSH tunnel from ``sshtunnel`` to native Paramiko.
+    * Eliminates dependency on unmaintained ``sshtunnel`` library
+    * Allows ``paramiko >= 3.0`` without upper version bound (paramiko 4.x compatible)
+    * Refactored ``main.py`` to use ``SSHTunnelManager`` (eliminated ~115 lines of duplicate code)
+    * No changes to SSH tunnel configuration format or user-facing behavior
 
 Bug Fixes:
 ----------
-* Fix SSH tunnel prompting for key passphrases unnecessarily.
-    * Read ``~/.ssh/config`` manually for user/port/proxycommand settings,
-      but do NOT pass ``ssh_config_file`` to sshtunnel (prevents it from
-      picking up ``IdentityFile`` directives and prompting for passphrases)
-    * Pass ``host_pkey_directories=[]`` to prevent scanning ``~/.ssh/`` for keys
-    * SSH agent is still used for key authentication (``allow_agent=True``)
 
 Security:
 ---------

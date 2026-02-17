@@ -3,6 +3,8 @@ SSH Tunnel helper module for pgcli tools.
 
 This module provides reusable SSH tunnel functionality that can be used
 by pgcli, pgcli_dump, pgcli_dumpall, and other tools.
+
+Uses native Paramiko for SSH tunneling (no sshtunnel dependency).
 """
 
 import atexit
@@ -10,19 +12,171 @@ import getpass
 import logging
 import os
 import re
+import select
+import socketserver
 import sys
+import threading
 from typing import Any, Optional, Tuple, cast
 from urllib.parse import urlparse
 
 import click
 import paramiko
 
-try:
-    import sshtunnel
+SSH_TUNNEL_SUPPORT = True
 
-    SSH_TUNNEL_SUPPORT = True
-except ImportError:
-    SSH_TUNNEL_SUPPORT = False
+
+class _ForwardHandler(socketserver.StreamRequestHandler):
+    """Handles a single forwarded connection through the SSH tunnel.
+
+    Class attributes are set dynamically by _NativeSSHTunnel via type().
+    """
+
+    ssh_transport: paramiko.Transport
+    remote_host: str
+    remote_port: int
+    logger: logging.Logger
+
+    def handle(self):
+        try:
+            channel = self.ssh_transport.open_channel(
+                "direct-tcpip",
+                (self.remote_host, self.remote_port),
+                self.request.getpeername(),
+            )
+        except Exception as e:
+            self.logger.error("Failed to open SSH channel: %s", e)
+            return
+
+        if channel is None:
+            self.logger.error("SSH channel open was rejected by server")
+            return
+
+        self.logger.debug("SSH channel opened to %s:%d", self.remote_host, self.remote_port)
+
+        try:
+            while True:
+                r, _, _ = select.select([self.request, channel], [], [], 1.0)
+                if self.request in r:
+                    data = self.request.recv(4096)
+                    if not data:
+                        break
+                    channel.sendall(data)
+                if channel in r:
+                    data = channel.recv(4096)
+                    if not data:
+                        break
+                    self.request.sendall(data)
+        except (OSError, EOFError):
+            pass
+        finally:
+            channel.close()
+
+
+class _NativeSSHTunnel:
+    """Native Paramiko SSH tunnel implementation.
+
+    Replaces sshtunnel.SSHTunnelForwarder with direct Paramiko usage.
+    Binds a local TCP port and forwards connections through an SSH channel.
+    """
+
+    def __init__(
+        self,
+        ssh_hostname: str,
+        ssh_port: int,
+        remote_host: str,
+        remote_port: int,
+        ssh_username: Optional[str] = None,
+        ssh_password: Optional[str] = None,
+        ssh_proxy: Optional[Any] = None,
+        allow_agent: bool = True,
+        logger: Optional[logging.Logger] = None,
+    ):
+        self.ssh_hostname = ssh_hostname
+        self.ssh_port = ssh_port
+        self.remote_host = remote_host
+        self.remote_port = remote_port
+        self.ssh_username = ssh_username
+        self.ssh_password = ssh_password
+        self.ssh_proxy = ssh_proxy
+        self.allow_agent = allow_agent
+        self.logger = logger or logging.getLogger(__name__)
+
+        self._ssh_client: Optional[paramiko.SSHClient] = None
+        self._server: Optional[socketserver.ThreadingTCPServer] = None
+        self._server_thread: Optional[threading.Thread] = None
+        self._is_active = False
+
+    @property
+    def is_active(self) -> bool:
+        return self._is_active
+
+    @property
+    def local_bind_port(self) -> Optional[int]:
+        if self._server:
+            return self._server.server_address[1]
+        return None
+
+    def start(self):
+        """Start SSH connection and local forwarding server."""
+        self._ssh_client = paramiko.SSHClient()
+        self._ssh_client.load_system_host_keys()
+        self._ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        connect_kwargs: dict[str, Any] = {
+            "hostname": self.ssh_hostname,
+            "port": self.ssh_port,
+            "username": self.ssh_username,
+            "allow_agent": self.allow_agent,
+            "look_for_keys": False,
+            "compress": False,
+            "timeout": 10,
+        }
+        if self.ssh_password:
+            connect_kwargs["password"] = self.ssh_password
+        if self.ssh_proxy:
+            connect_kwargs["sock"] = self.ssh_proxy
+
+        self._ssh_client.connect(**connect_kwargs)
+        self.logger.debug("SSH connection established to %s:%d", self.ssh_hostname, self.ssh_port)
+
+        handler_class = type(
+            "BoundForwardHandler",
+            (_ForwardHandler,),
+            {
+                "ssh_transport": self._ssh_client.get_transport(),
+                "remote_host": self.remote_host,
+                "remote_port": self.remote_port,
+                "logger": self.logger,
+            },
+        )
+
+        self._server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler_class)
+        self._server.daemon_threads = True
+
+        self._server_thread = threading.Thread(
+            target=self._server.serve_forever,
+            daemon=True,
+        )
+        self._server_thread.start()
+        self._is_active = True
+
+        self.logger.debug(
+            "Local forwarding server started on 127.0.0.1:%d -> %s:%d",
+            self.local_bind_port,
+            self.remote_host,
+            self.remote_port,
+        )
+
+    def stop(self):
+        """Stop the forwarding server and SSH connection."""
+        self._is_active = False
+        if self._server:
+            self._server.shutdown()
+            self._server = None
+        if self._ssh_client:
+            self._ssh_client.close()
+            self._ssh_client = None
+        self._server_thread = None
 
 
 class SSHTunnelManager:
@@ -50,7 +204,7 @@ class SSHTunnelManager:
         self.ssh_tunnel_config = ssh_tunnel_config or {}
         self.dsn_ssh_tunnel_config = dsn_ssh_tunnel_config or {}
         self.logger = logger or logging.getLogger(__name__)
-        self.tunnel: Optional[Any] = None
+        self.tunnel: Optional[_NativeSSHTunnel] = None
         self.allow_agent = allow_agent
 
     def find_tunnel_url(
@@ -117,23 +271,13 @@ class SSHTunnelManager:
             If no tunnel is needed, returns (host, port) unchanged.
 
         Raises:
-            SystemExit: If tunnel is configured but sshtunnel package is missing
+            SystemExit: If tunnel is configured but paramiko is missing
         """
         tunnel_url = self.find_tunnel_url(host=host, dsn_alias=dsn_alias)
 
         if not tunnel_url:
             self.logger.debug("No SSH tunnel configured for host=%s, dsn=%s", host, dsn_alias)
             return host, port
-
-        # Verify sshtunnel is available
-        if not SSH_TUNNEL_SUPPORT:
-            click.secho(
-                'Cannot open SSH tunnel, "sshtunnel" package was not found. '
-                "Please install pgcli with `pip install pgcli[sshtunnel]` if you want SSH tunnel support.",
-                err=True,
-                fg="red",
-            )
-            sys.exit(1)
 
         # Add protocol if missing
         if "://" not in tunnel_url:
@@ -166,51 +310,42 @@ class SSHTunnelManager:
             except Exception as e:
                 self.logger.warning("Could not read SSH config: %s", e)
 
-        params = {
-            "local_bind_address": ("127.0.0.1",),
-            "remote_bind_address": (host, int(port)),
-            "ssh_address_or_host": (ssh_hostname, ssh_port),
-            "logger": self.logger,
-            "ssh_config_file": None,  # Don't let sshtunnel read config (it picks up IdentityFile)
-            "allow_agent": self.allow_agent,
-            "host_pkey_directories": [],  # Don't scan ~/.ssh/ for keys, use ssh-agent only
-            "compression": False,
-        }
+        if not ssh_username:
+            ssh_username = getpass.getuser()
 
-        if ssh_username:
-            params["ssh_username"] = ssh_username
-        else:
-            params["ssh_username"] = getpass.getuser()
-        if tunnel_info.password:
-            params["ssh_password"] = tunnel_info.password
-        if ssh_proxy:
-            params["ssh_proxy"] = ssh_proxy
+        self.logger.debug(
+            "Creating SSH tunnel: %s@%s:%d -> %s:%d (allow_agent=%s)",
+            ssh_username, ssh_hostname, ssh_port, host, int(port),
+            self.allow_agent,
+        )
 
-        # Hack: sshtunnel adds a console handler to the logger, so we revert handlers.
-        logger_handlers = self.logger.handlers.copy()
         try:
-            log_params = {k: ("***" if k == "ssh_password" else v) for k, v in params.items()}
-            self.logger.debug("Creating SSH tunnel with params: %r", log_params)
-            tunnel = sshtunnel.SSHTunnelForwarder(**params)
-            self.tunnel = tunnel
-            self.logger.debug("SSH tunnel created, calling start()...")
+            tunnel = _NativeSSHTunnel(
+                ssh_hostname=ssh_hostname,
+                ssh_port=ssh_port,
+                remote_host=host,
+                remote_port=int(port),
+                ssh_username=ssh_username,
+                ssh_password=tunnel_info.password,
+                ssh_proxy=ssh_proxy,
+                allow_agent=self.allow_agent,
+                logger=self.logger,
+            )
             tunnel.start()
-            self.logger.debug("SSH tunnel start() returned, is_active: %s", tunnel.is_active)
+            self.tunnel = tunnel
 
             if not tunnel.is_active:
                 raise Exception(f"SSH tunnel failed to start (is_active={tunnel.is_active})")
 
             self.logger.debug("SSH tunnel verified active")
         except Exception as e:
-            self.logger.handlers = logger_handlers
             self.logger.error("SSH tunnel failed: %s", str(e))
             click.secho(f"SSH tunnel error: {e}", err=True, fg="red")
             sys.exit(1)
 
-        self.logger.handlers = logger_handlers
         atexit.register(self.stop_tunnel)
 
-        local_port = tunnel.local_bind_ports[0]
+        local_port = tunnel.local_bind_port
         self.logger.debug("SSH tunnel ready, local port: %d", local_port)
 
         return "127.0.0.1", local_port

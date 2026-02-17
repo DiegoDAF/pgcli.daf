@@ -1,23 +1,40 @@
+import logging
 import os
-from unittest.mock import patch, MagicMock, ANY
+from unittest.mock import patch, MagicMock, ANY, call
 
 import pytest
 from configobj import ConfigObj
 from click.testing import CliRunner
-from sshtunnel import SSHTunnelForwarder
 
 from pgcli.main import cli, notify_callback, PGCli
 from pgcli.pgexecute import PGExecute
+from pgcli.ssh_tunnel import (
+    SSHTunnelManager,
+    get_tunnel_manager_from_config,
+    SSH_TUNNEL_SUPPORT,
+    _NativeSSHTunnel,
+)
+
+
+# =============================================================================
+# Fixtures
+# =============================================================================
+
+TUNNEL_LOCAL_PORT = 1111
 
 
 @pytest.fixture
-def mock_ssh_tunnel_forwarder() -> MagicMock:
-    mock_ssh_tunnel_forwarder = MagicMock(SSHTunnelForwarder, local_bind_ports=[1111], autospec=True)
-    with patch(
-        "pgcli.main.sshtunnel.SSHTunnelForwarder",
-        return_value=mock_ssh_tunnel_forwarder,
-    ) as mock:
-        yield mock
+def mock_tunnel_manager():
+    """Mock SSHTunnelManager for main.py integration tests."""
+    with patch("pgcli.main.SSHTunnelManager") as mock_cls:
+        mock_mgr = MagicMock(spec=SSHTunnelManager)
+        mock_mgr.start_tunnel.return_value = ("127.0.0.1", TUNNEL_LOCAL_PORT)
+        mock_tunnel = MagicMock()
+        mock_tunnel.local_bind_port = TUNNEL_LOCAL_PORT
+        mock_tunnel.is_active = True
+        mock_mgr.tunnel = mock_tunnel
+        mock_cls.return_value = mock_mgr
+        yield mock_cls, mock_mgr
 
 
 @pytest.fixture
@@ -26,7 +43,44 @@ def mock_pgexecute() -> MagicMock:
         yield mock_pgexecute
 
 
-def test_ssh_tunnel(mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicMock) -> None:
+@pytest.fixture
+def mock_native_tunnel():
+    """Mock paramiko + socketserver for SSHTunnelManager unit tests."""
+    with patch("pgcli.ssh_tunnel.paramiko.SSHClient") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_transport = MagicMock()
+        mock_client.get_transport.return_value = mock_transport
+        mock_client_cls.return_value = mock_client
+
+        with patch("pgcli.ssh_tunnel.socketserver.ThreadingTCPServer") as mock_srv_cls:
+            mock_server = MagicMock()
+            mock_server.server_address = ("127.0.0.1", 12345)
+            mock_server.daemon_threads = True
+            mock_srv_cls.return_value = mock_server
+
+            with patch("pgcli.ssh_tunnel.threading.Thread") as mock_thread_cls:
+                mock_thread = MagicMock()
+                mock_thread_cls.return_value = mock_thread
+
+                yield {
+                    "client_cls": mock_client_cls,
+                    "client": mock_client,
+                    "transport": mock_transport,
+                    "server_cls": mock_srv_cls,
+                    "server": mock_server,
+                    "thread_cls": mock_thread_cls,
+                    "thread": mock_thread,
+                }
+
+
+# =============================================================================
+# Layer 1: main.py integration tests (mock SSHTunnelManager)
+# =============================================================================
+
+
+def test_ssh_tunnel(mock_tunnel_manager, mock_pgexecute: MagicMock) -> None:
+    mock_cls, mock_mgr = mock_tunnel_manager
+
     # Test with just a host
     tunnel_url = "some.host"
     db_params = {
@@ -35,80 +89,53 @@ def test_ssh_tunnel(mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicM
         "user": "db_user",
         "passwd": "db_passwd",
     }
-    expected_tunnel_params = {
-        "local_bind_address": ("127.0.0.1",),
-        "remote_bind_address": (db_params["host"], 5432),
-        "ssh_address_or_host": (tunnel_url, 22),
-        "logger": ANY,
-        "ssh_config_file": None,
-        "allow_agent": True,
-        "host_pkey_directories": [],
-        "compression": False,
-        "ssh_username": ANY,  # from SSH config or getuser()
-    }
 
     pgcli = PGCli(ssh_tunnel_url=tunnel_url)
     pgcli.connect(**db_params)
 
-    mock_ssh_tunnel_forwarder.assert_called_once_with(**expected_tunnel_params)
-    mock_ssh_tunnel_forwarder.return_value.start.assert_called_once()
-    mock_pgexecute.assert_called_once()
+    # SSHTunnelManager should be created with the tunnel URL
+    mock_cls.assert_called_once()
+    init_kwargs = mock_cls.call_args[1]
+    assert init_kwargs["ssh_tunnel_url"] == tunnel_url
 
-    call_args, call_kwargs = mock_pgexecute.call_args
-    # With SSH tunnel, host should be preserved for .pgpass lookup
-    # and hostaddr should be set to 127.0.0.1 for actual connection
-    assert call_args == (
-        db_params["database"],
-        db_params["user"],
-        db_params["passwd"],
-        db_params["host"],  # Original host preserved
-        pgcli.ssh_tunnel.local_bind_ports[0],
-        "",
-        notify_callback,
+    # start_tunnel should be called with the db host/port
+    mock_mgr.start_tunnel.assert_called_once_with(
+        host="db.host", port=5432, dsn_alias=None,
     )
-    # Verify hostaddr is passed in kwargs
+
+    # PGExecute should get original host, tunnel port, and hostaddr
+    mock_pgexecute.assert_called_once()
+    call_args, call_kwargs = mock_pgexecute.call_args
+    assert call_args[0] == db_params["database"]
+    assert call_args[3] == db_params["host"]  # Original host preserved
+    assert call_args[4] == TUNNEL_LOCAL_PORT
     assert call_kwargs.get("hostaddr") == "127.0.0.1"
-    mock_ssh_tunnel_forwarder.reset_mock()
+
+    mock_cls.reset_mock()
+    mock_mgr.reset_mock()
     mock_pgexecute.reset_mock()
 
     # Test with a full url and with a specific db port
-    tunnel_user = "tunnel_user"
-    tunnel_passwd = "tunnel_pass"
-    tunnel_host = "some.other.host"
-    tunnel_port = 1022
-    tunnel_url = f"ssh://{tunnel_user}:{tunnel_passwd}@{tunnel_host}:{tunnel_port}"
+    tunnel_url = "ssh://tunnel_user:tunnel_pass@some.other.host:1022"
     db_params["port"] = 1234
-
-    expected_tunnel_params["remote_bind_address"] = (
-        db_params["host"],
-        db_params["port"],
-    )
-    expected_tunnel_params["ssh_address_or_host"] = (tunnel_host, tunnel_port)
-    expected_tunnel_params["ssh_username"] = tunnel_user
-    expected_tunnel_params["ssh_password"] = tunnel_passwd
 
     pgcli = PGCli(ssh_tunnel_url=tunnel_url)
     pgcli.connect(**db_params)
 
-    mock_ssh_tunnel_forwarder.assert_called_once_with(**expected_tunnel_params)
-    mock_ssh_tunnel_forwarder.return_value.start.assert_called_once()
-    mock_pgexecute.assert_called_once()
+    init_kwargs = mock_cls.call_args[1]
+    assert init_kwargs["ssh_tunnel_url"] == tunnel_url
+
+    mock_mgr.start_tunnel.assert_called_once_with(
+        host="db.host", port=1234, dsn_alias=None,
+    )
 
     call_args, call_kwargs = mock_pgexecute.call_args
-    # With SSH tunnel, host should be preserved for .pgpass lookup
-    # and hostaddr should be set to 127.0.0.1 for actual connection
-    assert call_args == (
-        db_params["database"],
-        db_params["user"],
-        db_params["passwd"],
-        db_params["host"],  # Original host preserved
-        pgcli.ssh_tunnel.local_bind_ports[0],
-        "",
-        notify_callback,
-    )
-    # Verify hostaddr is passed in kwargs
+    assert call_args[3] == db_params["host"]  # Original host preserved
+    assert call_args[4] == TUNNEL_LOCAL_PORT
     assert call_kwargs.get("hostaddr") == "127.0.0.1"
-    mock_ssh_tunnel_forwarder.reset_mock()
+
+    mock_cls.reset_mock()
+    mock_mgr.reset_mock()
     mock_pgexecute.reset_mock()
 
     # Test with DSN
@@ -117,17 +144,12 @@ def test_ssh_tunnel(mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicM
     pgcli = PGCli(ssh_tunnel_url=tunnel_url)
     pgcli.connect(dsn=dsn)
 
-    # With SSH tunnel + DSN, host is preserved and hostaddr is added
-    # This allows .pgpass to work with the original hostname
-    mock_ssh_tunnel_forwarder.assert_called_once_with(**expected_tunnel_params)
     mock_pgexecute.assert_called_once()
-
     call_args, call_kwargs = mock_pgexecute.call_args
-    # The DSN should contain the original host, the tunnel port, and hostaddr
     dsn_arg = call_args[5]  # DSN is the 6th positional argument
     assert f"host={db_params['host']}" in dsn_arg
-    assert f"hostaddr=127.0.0.1" in dsn_arg
-    assert f"port={pgcli.ssh_tunnel.local_bind_ports[0]}" in dsn_arg
+    assert "hostaddr=127.0.0.1" in dsn_arg
+    assert f"port={TUNNEL_LOCAL_PORT}" in dsn_arg
 
 
 def test_cli_with_tunnel() -> None:
@@ -140,7 +162,8 @@ def test_cli_with_tunnel() -> None:
         assert call_kwargs["ssh_tunnel_url"] == tunnel_url
 
 
-def test_config(tmpdir: os.PathLike, mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicMock) -> None:
+def test_config(tmpdir: os.PathLike, mock_tunnel_manager, mock_pgexecute: MagicMock) -> None:
+    mock_cls, mock_mgr = mock_tunnel_manager
     pgclirc = str(tmpdir.join("rcfile"))
 
     tunnel_user = "tunnel_user"
@@ -158,71 +181,57 @@ def test_config(tmpdir: os.PathLike, mock_ssh_tunnel_forwarder: MagicMock, mock_
     config["ssh tunnels"][r"hello-.*"] = tunnel2_url
     config.write()
 
-    # Unmatched host
+    # Unmatched host: start_tunnel returns unchanged host/port
+    mock_mgr.start_tunnel.return_value = ("unmatched.host", 5432)
     pgcli = PGCli(pgclirc_file=pgclirc)
     pgcli.connect(host="unmatched.host")
-    mock_ssh_tunnel_forwarder.assert_not_called()
+    # SSHTunnelManager should have been created with the config
+    init_kwargs = mock_cls.call_args[1]
+    assert r".*\.com" in init_kwargs["ssh_tunnel_config"]
+    assert r"hello-.*" in init_kwargs["ssh_tunnel_config"]
+    mock_cls.reset_mock()
+    mock_mgr.reset_mock()
+    mock_pgexecute.reset_mock()
 
-    # Host matching first tunnel
+    # Matched host: start_tunnel returns tunnel address
+    mock_mgr.start_tunnel.return_value = ("127.0.0.1", TUNNEL_LOCAL_PORT)
     pgcli = PGCli(pgclirc_file=pgclirc)
     pgcli.connect(host="matched.host.com")
-    mock_ssh_tunnel_forwarder.assert_called_once()
-    call_args, call_kwargs = mock_ssh_tunnel_forwarder.call_args
-    assert call_kwargs["ssh_address_or_host"] == (tunnel_host, tunnel_port)
-    assert call_kwargs["ssh_username"] == tunnel_user
-    assert call_kwargs["ssh_password"] == tunnel_passwd
-    mock_ssh_tunnel_forwarder.reset_mock()
-
-    # Host matching second tunnel
-    pgcli = PGCli(pgclirc_file=pgclirc)
-    pgcli.connect(host="hello-i-am-matched")
-    mock_ssh_tunnel_forwarder.assert_called_once()
-
-    call_args, call_kwargs = mock_ssh_tunnel_forwarder.call_args
-    assert call_kwargs["ssh_address_or_host"] == (tunnel2_url, 22)
-    mock_ssh_tunnel_forwarder.reset_mock()
-
-    # Host matching both tunnels (will use the first one matched)
-    pgcli = PGCli(pgclirc_file=pgclirc)
-    pgcli.connect(host="hello-i-am-matched.com")
-    mock_ssh_tunnel_forwarder.assert_called_once()
-
-    call_args, call_kwargs = mock_ssh_tunnel_forwarder.call_args
-    assert call_kwargs["ssh_address_or_host"] == (tunnel_host, tunnel_port)
-    assert call_kwargs["ssh_username"] == tunnel_user
-    assert call_kwargs["ssh_password"] == tunnel_passwd
+    mock_mgr.start_tunnel.assert_called_once_with(
+        host="matched.host.com", port=5432, dsn_alias=None,
+    )
+    mock_pgexecute.assert_called_once()
+    call_args, call_kwargs = mock_pgexecute.call_args
+    assert call_kwargs.get("hostaddr") == "127.0.0.1"
 
 
-def test_ssh_tunnel_with_uri(mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicMock) -> None:
+def test_ssh_tunnel_with_uri(mock_tunnel_manager, mock_pgexecute: MagicMock) -> None:
     """Test that connect_uri passes DSN for .pgpass compatibility"""
+    mock_cls, mock_mgr = mock_tunnel_manager
     tunnel_url = "tunnel.host"
     uri = "postgresql://testuser@db.example.com:5432/testdb"
 
     pgcli = PGCli(ssh_tunnel_url=tunnel_url)
     pgcli.connect_uri(uri)
 
-    # Verify SSH tunnel was created
-    mock_ssh_tunnel_forwarder.assert_called_once()
-    mock_ssh_tunnel_forwarder.return_value.start.assert_called_once()
-
-    # Verify PGExecute was called
+    mock_mgr.start_tunnel.assert_called_once()
     mock_pgexecute.assert_called_once()
     call_args, call_kwargs = mock_pgexecute.call_args
 
-    # The DSN should be passed (6th positional argument)
     dsn_arg = call_args[5]
-    assert dsn_arg  # DSN should not be empty
+    assert dsn_arg
     assert "host=db.example.com" in dsn_arg
     assert "hostaddr=127.0.0.1" in dsn_arg
-    assert f"port={pgcli.ssh_tunnel.local_bind_ports[0]}" in dsn_arg
+    assert f"port={TUNNEL_LOCAL_PORT}" in dsn_arg
     assert "user=testuser" in dsn_arg
     assert "dbname=testdb" in dsn_arg
 
 
 def test_ssh_tunnel_preserves_original_host_for_pgpass(
-    mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicMock
+    mock_tunnel_manager, mock_pgexecute: MagicMock
 ) -> None:
     """Test that original hostname is preserved for .pgpass lookup"""
+    mock_cls, mock_mgr = mock_tunnel_manager
     tunnel_url = "tunnel.host"
     original_host = "production-db.aws.amazonaws.com"
 
@@ -231,35 +240,27 @@ def test_ssh_tunnel_preserves_original_host_for_pgpass(
 
     mock_pgexecute.assert_called_once()
     call_args, call_kwargs = mock_pgexecute.call_args
-
-    # Host argument should be the original hostname, not 127.0.0.1
     assert call_args[3] == original_host
-
-    # hostaddr should be 127.0.0.1 for actual connection
     assert call_kwargs.get("hostaddr") == "127.0.0.1"
 
 
 def test_ssh_tunnel_with_dsn_string(
-    mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicMock
+    mock_tunnel_manager, mock_pgexecute: MagicMock
 ) -> None:
     """Test SSH tunnel with DSN connection string"""
+    mock_cls, mock_mgr = mock_tunnel_manager
     tunnel_url = "tunnel.host"
     dsn = "host=db.prod.com port=5432 dbname=myapp user=appuser"
 
     pgcli = PGCli(ssh_tunnel_url=tunnel_url)
     pgcli.connect(dsn=dsn)
 
-    mock_ssh_tunnel_forwarder.assert_called_once()
     mock_pgexecute.assert_called_once()
-
     call_args, call_kwargs = mock_pgexecute.call_args
     dsn_arg = call_args[5]
-
-    # DSN should preserve original host and add hostaddr
     assert "host=db.prod.com" in dsn_arg
     assert "hostaddr=127.0.0.1" in dsn_arg
-    # Port should be changed to tunnel port
-    assert f"port={pgcli.ssh_tunnel.local_bind_ports[0]}" in dsn_arg
+    assert f"port={TUNNEL_LOCAL_PORT}" in dsn_arg
 
 
 def test_no_ssh_tunnel_does_not_set_hostaddr(mock_pgexecute: MagicMock) -> None:
@@ -269,50 +270,29 @@ def test_no_ssh_tunnel_does_not_set_hostaddr(mock_pgexecute: MagicMock) -> None:
 
     mock_pgexecute.assert_called_once()
     call_args, call_kwargs = mock_pgexecute.call_args
-
-    # hostaddr should not be in kwargs when no SSH tunnel
     assert "hostaddr" not in call_kwargs
 
 
 def test_ssh_tunnel_with_port_in_dsn(
-    mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicMock
+    mock_tunnel_manager, mock_pgexecute: MagicMock
 ) -> None:
     """Test that custom port in DSN is handled correctly with SSH tunnel"""
+    mock_cls, mock_mgr = mock_tunnel_manager
     tunnel_url = "tunnel.host"
     dsn = "postgresql://user@db.example.com:6543/testdb"
 
     pgcli = PGCli(ssh_tunnel_url=tunnel_url)
     pgcli.connect_uri(dsn)
 
-    # Verify tunnel remote_bind_address uses the original port
-    call_args, call_kwargs = mock_ssh_tunnel_forwarder.call_args
-    assert call_kwargs["remote_bind_address"] == ("db.example.com", 6543)
+    # Verify start_tunnel was called with the original port from DSN
+    mock_mgr.start_tunnel.assert_called_once_with(
+        host="db.example.com", port=6543, dsn_alias=None,
+    )
 
-    # Verify connection uses tunnel local port
     mock_pgexecute.assert_called_once()
     call_args, call_kwargs = mock_pgexecute.call_args
     dsn_arg = call_args[5]
-    assert f"port={pgcli.ssh_tunnel.local_bind_ports[0]}" in dsn_arg
-
-
-def test_ssh_tunnel_reads_config_without_identity_file(
-    mock_ssh_tunnel_forwarder: MagicMock, mock_pgexecute: MagicMock
-) -> None:
-    """Test that SSH tunnel reads SSH config for user/port/proxy but does NOT
-    pass ssh_config_file to sshtunnel (to avoid IdentityFile passphrase prompts)."""
-    tunnel_url = "tunnel.host"
-
-    pgcli = PGCli(ssh_tunnel_url=tunnel_url)
-    pgcli.connect(database="db", host="remote.host", user="user")
-
-    # Verify SSHTunnelForwarder was called with ssh_config_file=None
-    # (we read the config ourselves to avoid sshtunnel picking up IdentityFile)
-    call_args, call_kwargs = mock_ssh_tunnel_forwarder.call_args
-    assert call_kwargs["ssh_config_file"] is None
-    assert call_kwargs["host_pkey_directories"] == []
-    assert call_kwargs["allow_agent"] is True
-    assert call_kwargs["compression"] is False
-    assert "ssh_username" in call_kwargs
+    assert f"port={TUNNEL_LOCAL_PORT}" in dsn_arg
 
 
 def test_connect_uri_without_ssh_tunnel(mock_pgexecute: MagicMock) -> None:
@@ -324,25 +304,14 @@ def test_connect_uri_without_ssh_tunnel(mock_pgexecute: MagicMock) -> None:
 
     mock_pgexecute.assert_called_once()
     call_args, call_kwargs = mock_pgexecute.call_args
-
-    # DSN should be passed
     dsn_arg = call_args[5]
     assert uri == dsn_arg
-
-    # hostaddr should not be set without SSH tunnel
     assert "hostaddr" not in call_kwargs
 
 
 # =============================================================================
-# Tests for the standalone SSHTunnelManager class (pgcli/ssh_tunnel.py)
+# Layer 2: SSHTunnelManager unit tests (mock paramiko + socketserver)
 # =============================================================================
-
-import logging
-from pgcli.ssh_tunnel import (
-    SSHTunnelManager,
-    get_tunnel_manager_from_config,
-    SSH_TUNNEL_SUPPORT,
-)
 
 
 class TestSSHTunnelManager:
@@ -410,10 +379,8 @@ class TestSSHTunnelManager:
         manager = SSHTunnelManager(
             ssh_tunnel_config={"prod": "ssh://bastion:22"}
         )
-        # "prod" should NOT match "nonprod" or "prod.extra.com"
         assert manager.find_tunnel_url(host="nonprod") is None
         assert manager.find_tunnel_url(host="prod.extra.com") is None
-        # But should match exactly "prod"
         assert manager.find_tunnel_url(host="prod") == "ssh://bastion:22"
 
     def test_find_tunnel_url_no_partial_dsn_match(self):
@@ -421,10 +388,8 @@ class TestSSHTunnelManager:
         manager = SSHTunnelManager(
             dsn_ssh_tunnel_config={"prod": "ssh://bastion:22"}
         )
-        # "prod" should NOT match "nonprod" or "prod-extra"
         assert manager.find_tunnel_url(dsn_alias="nonprod") is None
         assert manager.find_tunnel_url(dsn_alias="prod-extra") is None
-        # But should match exactly "prod"
         assert manager.find_tunnel_url(dsn_alias="prod") == "ssh://bastion:22"
 
     def test_find_tunnel_url_dsn_takes_precedence(self):
@@ -444,32 +409,57 @@ class TestSSHTunnelManager:
         assert port == 5432
         assert manager.tunnel is None
 
-    @pytest.mark.skipif(not SSH_TUNNEL_SUPPORT, reason="sshtunnel not installed")
-    def test_start_tunnel_with_config(self, mock_ssh_tunnel_forwarder):
-        """Test start_tunnel creates and starts tunnel."""
-        mock_ssh_tunnel_forwarder.return_value.is_active = True
-        mock_ssh_tunnel_forwarder.return_value.local_bind_ports = [12345]
-
+    def test_start_tunnel_with_config(self, mock_native_tunnel):
+        """Test start_tunnel creates and starts native tunnel."""
         manager = SSHTunnelManager(
             ssh_tunnel_url="ssh://user@bastion.example.com:22",
             logger=logging.getLogger("test"),
         )
 
-        with patch("pgcli.ssh_tunnel.sshtunnel.SSHTunnelForwarder", mock_ssh_tunnel_forwarder):
-            host, port = manager.start_tunnel(host="db.internal", port=5432)
+        host, port = manager.start_tunnel(host="db.internal", port=5432)
 
         assert host == "127.0.0.1"
-        assert port == 12345
+        assert port == 12345  # from mock server_address
+        assert manager.tunnel is not None
+        assert manager.tunnel.is_active
+
+        # Verify SSH connection params
+        mock_native_tunnel["client"].connect.assert_called_once()
+        connect_kwargs = mock_native_tunnel["client"].connect.call_args[1]
+        assert connect_kwargs["hostname"] == "bastion.example.com"
+        assert connect_kwargs["port"] == 22
+        assert connect_kwargs["username"] == "user"
+        assert connect_kwargs["allow_agent"] is True
+        assert connect_kwargs["look_for_keys"] is False
+
+        # Verify ThreadingTCPServer created on port 0 (auto-assign)
+        mock_native_tunnel["server_cls"].assert_called_once()
+        srv_args = mock_native_tunnel["server_cls"].call_args[0]
+        assert srv_args[0] == ("127.0.0.1", 0)
+
+        # Verify background thread started
+        mock_native_tunnel["thread"].start.assert_called_once()
+
+    def test_start_tunnel_with_password(self, mock_native_tunnel):
+        """Test start_tunnel passes SSH password from URL."""
+        manager = SSHTunnelManager(
+            ssh_tunnel_url="ssh://user:s3cret@bastion:22",
+            logger=logging.getLogger("test"),
+        )
+
+        host, port = manager.start_tunnel(host="db.internal", port=5432)
+
+        connect_kwargs = mock_native_tunnel["client"].connect.call_args[1]
+        assert connect_kwargs["password"] == "s3cret"
 
     def test_stop_tunnel_no_tunnel(self):
         """Test stop_tunnel when no tunnel exists."""
         manager = SSHTunnelManager()
         manager.stop_tunnel()  # Should not raise
 
-    @pytest.mark.skipif(not SSH_TUNNEL_SUPPORT, reason="sshtunnel not installed")
     def test_stop_tunnel_active(self):
         """Test stop_tunnel when tunnel is active."""
-        mock_tunnel = MagicMock()
+        mock_tunnel = MagicMock(spec=_NativeSSHTunnel)
         mock_tunnel.is_active = True
 
         manager = SSHTunnelManager()
@@ -478,6 +468,81 @@ class TestSSHTunnelManager:
 
         mock_tunnel.stop.assert_called_once()
         assert manager.tunnel is None
+
+
+class TestNativeSSHTunnel:
+    """Tests for _NativeSSHTunnel class."""
+
+    def test_start_and_stop(self, mock_native_tunnel):
+        """Test tunnel start/stop lifecycle."""
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
+            ssh_username="testuser",
+            allow_agent=True,
+            logger=logging.getLogger("test"),
+        )
+
+        assert not tunnel.is_active
+        assert tunnel.local_bind_port is None
+
+        tunnel.start()
+
+        assert tunnel.is_active
+        assert tunnel.local_bind_port == 12345
+        mock_native_tunnel["client"].load_system_host_keys.assert_called_once()
+        mock_native_tunnel["client"].set_missing_host_key_policy.assert_called_once()
+
+        tunnel.stop()
+
+        assert not tunnel.is_active
+        mock_native_tunnel["server"].shutdown.assert_called_once()
+        mock_native_tunnel["client"].close.assert_called_once()
+
+    def test_look_for_keys_disabled(self, mock_native_tunnel):
+        """Test that look_for_keys=False prevents scanning ~/.ssh/ for keys."""
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
+            ssh_username="testuser",
+        )
+        tunnel.start()
+
+        connect_kwargs = mock_native_tunnel["client"].connect.call_args[1]
+        assert connect_kwargs["look_for_keys"] is False
+
+    def test_allow_agent_configurable(self, mock_native_tunnel):
+        """Test that allow_agent is passed through."""
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
+            allow_agent=False,
+        )
+        tunnel.start()
+
+        connect_kwargs = mock_native_tunnel["client"].connect.call_args[1]
+        assert connect_kwargs["allow_agent"] is False
+
+    def test_proxy_command_passed(self, mock_native_tunnel):
+        """Test that ssh_proxy is passed as sock parameter."""
+        mock_proxy = MagicMock()
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
+            ssh_proxy=mock_proxy,
+        )
+        tunnel.start()
+
+        connect_kwargs = mock_native_tunnel["client"].connect.call_args[1]
+        assert connect_kwargs["sock"] is mock_proxy
 
 
 class TestGetTunnelManagerFromConfig:
@@ -525,3 +590,9 @@ class TestGetTunnelManagerFromConfig:
         logger = logging.getLogger("custom")
         manager = get_tunnel_manager_from_config({}, logger=logger)
         assert manager.logger == logger
+
+    def test_allow_agent_from_config(self):
+        """Test allow_agent is read from config."""
+        config = {"ssh tunnels": {"allow_agent": "False"}}
+        manager = get_tunnel_manager_from_config(config)
+        assert manager.allow_agent is False

@@ -88,12 +88,7 @@ from psycopg.errors import Diagnostic
 
 from collections import namedtuple
 
-try:
-    import sshtunnel
-
-    SSH_TUNNEL_SUPPORT = True
-except ImportError:
-    SSH_TUNNEL_SUPPORT = False
+from .ssh_tunnel import SSHTunnelManager, SSH_TUNNEL_SUPPORT
 
 
 # Ref: https://stackoverflow.com/questions/30425105/filter-special-chars-such-as-color-codes-from-shell-output
@@ -307,9 +302,14 @@ class PGCli:
 
         self.prompt_app = None
 
-        self.dsn_ssh_tunnel_config = c.get("dsn ssh tunnels")
-        self.ssh_tunnel_config = c.get("ssh tunnels")
-        self.ssh_tunnel_url = ssh_tunnel_url
+        ssh_tunnels_config = c.get("ssh tunnels") or {}
+        self._tunnel_manager = SSHTunnelManager(
+            ssh_tunnel_url=ssh_tunnel_url,
+            ssh_tunnel_config=ssh_tunnels_config,
+            dsn_ssh_tunnel_config=c.get("dsn ssh tunnels"),
+            logger=self.logger,
+            allow_agent=str(ssh_tunnels_config.get("allow_agent", "True")).lower() == "true",
+        )
         self.ssh_tunnel = None
 
         if log_file:
@@ -808,122 +808,23 @@ class PGCli:
             if "port" in parsed_dsn:
                 port = parsed_dsn["port"]
 
-        if self.dsn_alias and self.dsn_ssh_tunnel_config and not self.ssh_tunnel_url:
-            for dsn_regex, tunnel_url in self.dsn_ssh_tunnel_config.items():
-                if re.fullmatch(dsn_regex, self.dsn_alias):
-                    self.ssh_tunnel_url = tunnel_url
-                    break
+        tunnel_host, tunnel_port = self._tunnel_manager.start_tunnel(
+            host=host or "localhost",
+            port=int(port or 5432),
+            dsn_alias=self.dsn_alias,
+        )
 
-        if self.ssh_tunnel_config and not self.ssh_tunnel_url:
-            for db_host_regex, tunnel_url in self.ssh_tunnel_config.items():
-                if re.fullmatch(db_host_regex, host):
-                    self.ssh_tunnel_url = tunnel_url
-                    break
-
-        if self.ssh_tunnel_url:
-            # Verify sshtunnel is available
-            if not SSH_TUNNEL_SUPPORT:
-                click.secho(
-                    'Cannot open SSH tunnel, "sshtunnel" package was not found. '
-                    "Please install pgcli with `pip install pgcli[sshtunnel]` if you want SSH tunnel support.",
-                    err=True,
-                    fg="red",
-                )
-                sys.exit(1)
-
-            # We add the protocol as urlparse doesn't find it by itself
-            if "://" not in self.ssh_tunnel_url:
-                self.ssh_tunnel_url = f"ssh://{self.ssh_tunnel_url}"
-
-            tunnel_info = urlparse(self.ssh_tunnel_url)
-
-            # Read allow_agent from config (default True to use SSH agent)
-            ssh_tunnels_config = self.config.get("ssh tunnels", {})
-            allow_agent = ssh_tunnels_config.get("allow_agent", "True").lower() == "true"
-
-            import paramiko
-
-            ssh_hostname = tunnel_info.hostname
-            ssh_port = tunnel_info.port or 22
-            ssh_username = tunnel_info.username
-            ssh_proxy = None
-
-            # Read SSH config manually to get username/port/proxycommand
-            # but NOT IdentityFile (which would cause passphrase prompts).
-            # We rely on ssh-agent for key authentication instead.
-            ssh_config_path = os.path.expanduser("~/.ssh/config")
-            if ssh_hostname and os.path.isfile(ssh_config_path):
-                try:
-                    ssh_config = paramiko.SSHConfig()
-                    with open(ssh_config_path) as f:
-                        ssh_config.parse(f)
-                    host_config = ssh_config.lookup(ssh_hostname)
-                    ssh_hostname = host_config.get("hostname", ssh_hostname)
-                    if not ssh_username:
-                        ssh_username = host_config.get("user")
-                    if not tunnel_info.port and "port" in host_config:
-                        ssh_port = int(host_config["port"])
-                    proxycommand = host_config.get("proxycommand")
-                    if proxycommand:
-                        ssh_proxy = paramiko.ProxyCommand(proxycommand)
-                except Exception as e:
-                    self.logger.warning("Could not read SSH config: %s", e)
-
-            params = {
-                "local_bind_address": ("127.0.0.1",),
-                "remote_bind_address": (host, int(port or 5432)),
-                "ssh_address_or_host": (ssh_hostname, ssh_port),
-                "logger": self.logger,
-                "ssh_config_file": None,  # Don't let sshtunnel read config (it picks up IdentityFile)
-                "allow_agent": allow_agent,
-                "host_pkey_directories": [],  # Don't scan ~/.ssh/ for keys, use ssh-agent only
-                "compression": False,
-            }
-            if ssh_username:
-                params["ssh_username"] = ssh_username
-            else:
-                params["ssh_username"] = getuser()
-            if tunnel_info.password:
-                params["ssh_password"] = tunnel_info.password
-            if ssh_proxy:
-                params["ssh_proxy"] = ssh_proxy
-
-            # Hack: sshtunnel adds a console handler to the logger, so we revert handlers.
-            # We can remove this when https://github.com/pahaz/sshtunnel/pull/250 is merged.
-            logger_handlers = self.logger.handlers.copy()
-            try:
-                log_params = {k: ("***" if k == "ssh_password" else v) for k, v in params.items()}
-                self.logger.debug("Creating SSH tunnel with params: %r", log_params)
-                ssh_tunnel = sshtunnel.SSHTunnelForwarder(**params)
-                self.ssh_tunnel = ssh_tunnel
-                self.logger.debug("SSH tunnel created, calling start()...")
-                ssh_tunnel.start()
-                self.logger.debug("SSH tunnel start() returned, is_active: %s", ssh_tunnel.is_active)
-
-                # Verify tunnel is actually active
-                if not ssh_tunnel.is_active:
-                    raise Exception(f"SSH tunnel failed to start (is_active={ssh_tunnel.is_active})")
-
-                self.logger.debug("SSH tunnel verified active")
-            except Exception as e:
-                self.logger.handlers = logger_handlers
-                self.logger.error("SSH tunnel failed: %s", str(e))
-                self.logger.error("traceback: %r", traceback.format_exc())
-                click.secho(str(e), err=True, fg="red")
-                sys.exit(1)
-            self.logger.handlers = logger_handlers
-
-            atexit.register(ssh_tunnel.stop)
+        if tunnel_host != (host or "localhost") or tunnel_port != int(port or 5432):
+            self.ssh_tunnel = self._tunnel_manager.tunnel
             # Preserve original host for .pgpass lookup and SSL certificate verification
             # Use hostaddr to specify the actual connection endpoint (SSH tunnel)
             hostaddr = "127.0.0.1"
-            port = ssh_tunnel.local_bind_ports[0]
+            port = tunnel_port
             self.logger.debug("SSH tunnel ready, local port: %d, hostaddr: %s", port, hostaddr)
 
             if dsn:
                 dsn = make_conninfo(dsn, host=host, hostaddr=hostaddr, port=port)
             else:
-                # For non-DSN connections, pass hostaddr via kwargs
                 kwargs["hostaddr"] = hostaddr
 
         # Attempt to connect to the database.
@@ -1818,7 +1719,7 @@ def cli(
 
     if ssh_tunnel and not SSH_TUNNEL_SUPPORT:
         click.secho(
-            'Cannot open SSH tunnel, "sshtunnel" package was not found. '
+            'Cannot open SSH tunnel, "paramiko" package was not found. '
             "Please install pgcli with `pip install pgcli[sshtunnel]` if you want SSH tunnel support.",
             err=True,
             fg="red",
