@@ -17,6 +17,16 @@ Features:
     * Allows ``paramiko >= 3.0`` without upper version bound (paramiko 4.x compatible)
     * Refactored ``main.py`` to use ``SSHTunnelManager`` (eliminated ~115 lines of duplicate code)
     * No changes to SSH tunnel configuration format or user-facing behavior
+* Read ``IdentityFile`` from ``~/.ssh/config`` for SSH tunnel authentication.
+    * Paramiko now receives key files from SSH config instead of relying solely on ssh-agent
+    * Host-specific keys are tried first, then wildcard (``Host *``) keys
+    * Non-existent key files are silently skipped
+    * ``look_for_keys=False`` is maintained to prevent blind scanning of ``~/.ssh/``
+    * Auth order: key_filename (specific→wildcard) → agent → password
+* Configurable SSH host key verification policy.
+    * New ``host_key_policy`` setting in ``[ssh tunnels]`` config section
+    * Options: ``auto-add`` (default, TOFU), ``warn`` (log warning), ``reject`` (known hosts only)
+    * ``reject`` mode only connects to hosts already in ``~/.ssh/known_hosts``
 
 Bug Fixes:
 ----------

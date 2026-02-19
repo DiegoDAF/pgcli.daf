@@ -44,10 +44,31 @@
       - Eliminated ~115 lines of duplicate inline tunnel code from main.py
       - paramiko >= 3.0 without upper bound (paramiko 4.x compatible)
       - sshtunnel package no longer required
-* [ ] Security: Configure explicit SSH host key verification policy
-      - Currently uses AutoAddPolicy (accepts any host key)
-      - Should use RejectPolicy or configurable policy
-      - Vulnerable to MITM attacks on SSH tunnels
+* [X] ssh_tunnel.py: Leer IdentityFile del SSH config en vez de depender solo del agent - v4.3.18
+      - Problema: connect() usa look_for_keys=False y allow_agent=True, pero NO lee
+        IdentityFile de ~/.ssh/config. Si la llave no esta en el agent, falla.
+      - paramiko.SSHConfig.lookup(hostname) ya devuelve identityfile en orden correcto:
+        host especifico primero, Host * despues. Ejemplo para 192.168.122.134:
+        ['~/.ssh/id_ed25519_pgcli', '~/.ssh/daf2026'] (lm2 primero, wildcard despues)
+      - Implementacion:
+        1. En SSHTunnelManager.start_tunnel(), donde ya se parsea SSH config, agregar:
+           identity_files = host_config.get("identityfile", [])
+           key_filenames = [os.path.expanduser(f) for f in identity_files
+                           if os.path.isfile(os.path.expanduser(f))]
+        2. Pasar key_filenames al constructor de _NativeSSHTunnel (nuevo parametro)
+        3. En _NativeSSHTunnel.start(), agregar key_filename al connect():
+           connect(..., key_filename=self.key_filenames if self.key_filenames else None,
+                   look_for_keys=False, allow_agent=True)
+      - MANTENER look_for_keys=False para evitar escaneo ciego de id_* en ~/.ssh/
+      - Orden de auth resultante: key_filename (especifico->wildcard) -> agent -> password
+      - Paramiko prueba cada key en orden, si una falla (passphrase) salta a la siguiente
+      - Archivos: pgcli/ssh_tunnel.py (_NativeSSHTunnel + SSHTunnelManager.start_tunnel)
+      - Test: conectar sin agent cargado, verificar que usa llave del config
+      - Test: verificar fallback de llave especifica a wildcard a agent
+      - Test: verificar que NO pide passphrase de llaves no relacionadas
+* [X] Security: Configure explicit SSH host key verification policy - v4.3.18
+      - Configurable via host_key_policy in [ssh tunnels] config
+      - Options: auto-add (default/TOFU), warn, reject (known hosts only)
 * [X] Security: Use re.fullmatch() for SSH tunnel regex matching - v4.3.18
       - Currently re.search() can match partial hostnames (e.g. "prod" matches "nonprod")
 * [X] Security: \i command opens user-specified file paths without sanitization - v4.3.18
@@ -59,9 +80,24 @@
 * [X] Security: SQL statements with passwords may be logged - v4.3.18
       - pgexecute.py:439 - CREATE USER/ALTER USER with PASSWORD gets logged at DEBUG
       - Could detect and redact password clauses before logging
-* [ ] Cambiar versionado a CalVer YY.DDD (año.dia_juliano)
+* [ ] Cambiar versionado a CalVer YY.DDD (año.dia_juliano) - DIFERIDO
       - Formato: 26.44 = 2026, día 44 (13 de febrero) - SIN zero-pad
       - Release diario (un release por día)
       - 3er número para excepciones: 26.44.1 si hay 2 releases el mismo día
       - Reemplaza semver x.y.z actual
       - Afecta: pgcli/__init__.py, pyproject.toml, changelog.rst, CLAUDE.md
+* [ ] PR #1545: Ajustar -t/--tuples-only para upstream
+      - Feedback de j-bennet: -t solo debe setear formato tabla (como \T), no suprimir headers/status
+      - Rework: -t [FORMAT] = shortcut de \T al inicio de sesión, default csv-noheader
+      - En pgcli.daf mantenemos nuestra versión completa (suprime todo)
+* [ ] --no-timings / --no-status flags (convergencia con upstream)
+      - Sugerido por j-bennet en PR #1545
+      - --no-timings: suprime "Time: X.XXXs" después de cada query
+      - --no-status: suprime "SELECT 1" / "X rows" status line
+      - PR separado al repo padre cuando estén listos
+* [ ] PR #1546: Agregar tests y simplificar preserved_params
+      - j-bennet pidió CHANGES_REQUESTED: test coverage + simplificar preserved_params en pgexecute.py
+* [ ] Traer feature named query quiet mode (#1551) de upstream
+      - \nq toggle + hide_named_query_text config
+      - Mergeado en upstream 2026-01-17
+* [ ] Bump click >= 8.3.1 (PR #1556 upstream, ya aplicado en pgcli.daf)
