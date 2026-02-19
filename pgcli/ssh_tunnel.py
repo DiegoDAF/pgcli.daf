@@ -79,6 +79,12 @@ class _NativeSSHTunnel:
     Binds a local TCP port and forwards connections through an SSH channel.
     """
 
+    HOST_KEY_POLICIES = {
+        "auto-add": paramiko.AutoAddPolicy,
+        "warn": paramiko.WarningPolicy,
+        "reject": paramiko.RejectPolicy,
+    }
+
     def __init__(
         self,
         ssh_hostname: str,
@@ -89,6 +95,8 @@ class _NativeSSHTunnel:
         ssh_password: Optional[str] = None,
         ssh_proxy: Optional[Any] = None,
         allow_agent: bool = True,
+        key_filenames: Optional[list] = None,
+        host_key_policy: str = "auto-add",
         logger: Optional[logging.Logger] = None,
     ):
         self.ssh_hostname = ssh_hostname
@@ -99,6 +107,8 @@ class _NativeSSHTunnel:
         self.ssh_password = ssh_password
         self.ssh_proxy = ssh_proxy
         self.allow_agent = allow_agent
+        self.key_filenames = key_filenames
+        self.host_key_policy = host_key_policy
         self.logger = logger or logging.getLogger(__name__)
 
         self._ssh_client: Optional[paramiko.SSHClient] = None
@@ -120,7 +130,8 @@ class _NativeSSHTunnel:
         """Start SSH connection and local forwarding server."""
         self._ssh_client = paramiko.SSHClient()
         self._ssh_client.load_system_host_keys()
-        self._ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        policy_cls = self.HOST_KEY_POLICIES.get(self.host_key_policy, paramiko.AutoAddPolicy)
+        self._ssh_client.set_missing_host_key_policy(policy_cls())
 
         connect_kwargs: dict[str, Any] = {
             "hostname": self.ssh_hostname,
@@ -131,6 +142,8 @@ class _NativeSSHTunnel:
             "compress": False,
             "timeout": 10,
         }
+        if self.key_filenames:
+            connect_kwargs["key_filename"] = self.key_filenames
         if self.ssh_password:
             connect_kwargs["password"] = self.ssh_password
         if self.ssh_proxy:
@@ -189,6 +202,7 @@ class SSHTunnelManager:
         dsn_ssh_tunnel_config: Optional[dict] = None,
         logger: Optional[logging.Logger] = None,
         allow_agent: bool = True,
+        host_key_policy: str = "auto-add",
     ):
         """
         Initialize SSH tunnel manager.
@@ -199,6 +213,7 @@ class SSHTunnelManager:
             dsn_ssh_tunnel_config: Dict of dsn_regex -> tunnel_url mappings
             logger: Logger instance for debug output
             allow_agent: Whether to allow SSH agent for key authentication (default True)
+            host_key_policy: SSH host key policy: 'auto-add', 'warn', or 'reject' (default 'auto-add')
         """
         self.ssh_tunnel_url = ssh_tunnel_url
         self.ssh_tunnel_config = ssh_tunnel_config or {}
@@ -206,6 +221,7 @@ class SSHTunnelManager:
         self.logger = logger or logging.getLogger(__name__)
         self.tunnel: Optional[_NativeSSHTunnel] = None
         self.allow_agent = allow_agent
+        self.host_key_policy = host_key_policy
 
     def find_tunnel_url(
         self,
@@ -289,10 +305,14 @@ class SSHTunnelManager:
         ssh_username = tunnel_info.username
         ssh_proxy = None
 
-        # Read SSH config manually to get username/port/proxycommand
-        # but NOT IdentityFile (which would cause passphrase prompts).
-        # We rely on ssh-agent for key authentication instead.
+        # Read SSH config for username/port/proxycommand/identityfile.
+        # IdentityFile entries are read in order (host-specific first, wildcard after)
+        # and passed as key_filename to paramiko. Paramiko tries each key in order,
+        # skipping any that fail (e.g. passphrase-protected without agent).
+        # look_for_keys remains False to prevent blind scanning of ~/.ssh/.
+        # Auth order: key_filename (specific->wildcard) -> agent -> password
         ssh_config_path = os.path.expanduser("~/.ssh/config")
+        key_filenames = []
         if ssh_hostname and os.path.isfile(ssh_config_path):
             try:
                 ssh_config = paramiko.SSHConfig()
@@ -307,6 +327,11 @@ class SSHTunnelManager:
                 proxycommand = host_config.get("proxycommand")
                 if proxycommand:
                     ssh_proxy = paramiko.ProxyCommand(proxycommand)
+                identity_files = host_config.get("identityfile", [])
+                key_filenames = [os.path.expanduser(f) for f in identity_files
+                                 if os.path.isfile(os.path.expanduser(f))]
+                if key_filenames:
+                    self.logger.debug("SSH identity files from config: %s", key_filenames)
             except Exception as e:
                 self.logger.warning("Could not read SSH config: %s", e)
 
@@ -314,9 +339,9 @@ class SSHTunnelManager:
             ssh_username = getpass.getuser()
 
         self.logger.debug(
-            "Creating SSH tunnel: %s@%s:%d -> %s:%d (allow_agent=%s)",
+            "Creating SSH tunnel: %s@%s:%d -> %s:%d (allow_agent=%s, key_files=%d)",
             ssh_username, ssh_hostname, ssh_port, host, int(port),
-            self.allow_agent,
+            self.allow_agent, len(key_filenames),
         )
 
         try:
@@ -329,6 +354,8 @@ class SSHTunnelManager:
                 ssh_password=tunnel_info.password,
                 ssh_proxy=ssh_proxy,
                 allow_agent=self.allow_agent,
+                key_filenames=key_filenames or None,
+                host_key_policy=self.host_key_policy,
                 logger=self.logger,
             )
             tunnel.start()
@@ -377,6 +404,7 @@ def get_tunnel_manager_from_config(
     # Extract allow_agent from ssh tunnels config (default True)
     ssh_tunnels_config = config.get("ssh tunnels", {})
     allow_agent = str(ssh_tunnels_config.get("allow_agent", "True")).lower() == "true"
+    host_key_policy = str(ssh_tunnels_config.get("host_key_policy", "auto-add")).lower()
 
     return SSHTunnelManager(
         ssh_tunnel_url=ssh_tunnel_url,
@@ -384,4 +412,5 @@ def get_tunnel_manager_from_config(
         dsn_ssh_tunnel_config=config.get("dsn ssh tunnels"),
         logger=logger,
         allow_agent=allow_agent,
+        host_key_policy=host_key_policy,
     )

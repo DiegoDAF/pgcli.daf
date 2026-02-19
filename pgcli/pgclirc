@@ -311,6 +311,11 @@ float = ""
 # Use SSH agent for key authentication (default: True)
 # Set to False if you want to use only keys specified in ~/.ssh/config
 allow_agent = True
+# SSH host key verification policy (default: auto-add)
+# auto-add = accept unknown host keys and add to known_hosts (TOFU)
+# warn     = accept unknown host keys but log a warning
+# reject   = only connect to hosts already in ~/.ssh/known_hosts
+host_key_policy = auto-add
 
 # ^example.*\.host$ = myuser:mypasswd@my.tunnel.com:4000
 # .*\.net = another.tunnel.com

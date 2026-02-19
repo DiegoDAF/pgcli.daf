@@ -1,7 +1,8 @@
 import logging
 import os
-from unittest.mock import patch, MagicMock, ANY, call
+from unittest.mock import patch, MagicMock, ANY, call, mock_open
 
+import paramiko
 import pytest
 from configobj import ConfigObj
 from click.testing import CliRunner
@@ -544,6 +545,176 @@ class TestNativeSSHTunnel:
         connect_kwargs = mock_native_tunnel["client"].connect.call_args[1]
         assert connect_kwargs["sock"] is mock_proxy
 
+    def test_key_filenames_passed_to_connect(self, mock_native_tunnel):
+        """Test that key_filenames are passed as key_filename to connect()."""
+        key_files = ["/home/user/.ssh/id_ed25519", "/home/user/.ssh/id_rsa"]
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
+            ssh_username="testuser",
+            key_filenames=key_files,
+        )
+        tunnel.start()
+
+        connect_kwargs = mock_native_tunnel["client"].connect.call_args[1]
+        assert connect_kwargs["key_filename"] == key_files
+        assert connect_kwargs["look_for_keys"] is False  # Still disabled
+
+    def test_no_key_filenames_omits_key_filename(self, mock_native_tunnel):
+        """Test that key_filename is NOT passed when key_filenames is None."""
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
+            ssh_username="testuser",
+        )
+        tunnel.start()
+
+        connect_kwargs = mock_native_tunnel["client"].connect.call_args[1]
+        assert "key_filename" not in connect_kwargs
+
+    def test_host_key_policy_auto_add(self, mock_native_tunnel):
+        """Test that auto-add policy sets AutoAddPolicy."""
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion", ssh_port=22,
+            remote_host="db.internal", remote_port=5432,
+            host_key_policy="auto-add",
+        )
+        tunnel.start()
+        policy_arg = mock_native_tunnel["client"].set_missing_host_key_policy.call_args[0][0]
+        assert isinstance(policy_arg, paramiko.AutoAddPolicy)
+
+    def test_host_key_policy_warn(self, mock_native_tunnel):
+        """Test that warn policy sets WarningPolicy."""
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion", ssh_port=22,
+            remote_host="db.internal", remote_port=5432,
+            host_key_policy="warn",
+        )
+        tunnel.start()
+        policy_arg = mock_native_tunnel["client"].set_missing_host_key_policy.call_args[0][0]
+        assert isinstance(policy_arg, paramiko.WarningPolicy)
+
+    def test_host_key_policy_reject(self, mock_native_tunnel):
+        """Test that reject policy sets RejectPolicy."""
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion", ssh_port=22,
+            remote_host="db.internal", remote_port=5432,
+            host_key_policy="reject",
+        )
+        tunnel.start()
+        policy_arg = mock_native_tunnel["client"].set_missing_host_key_policy.call_args[0][0]
+        assert isinstance(policy_arg, paramiko.RejectPolicy)
+
+    def test_host_key_policy_default_is_auto_add(self, mock_native_tunnel):
+        """Test that default policy is auto-add."""
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion", ssh_port=22,
+            remote_host="db.internal", remote_port=5432,
+        )
+        tunnel.start()
+        policy_arg = mock_native_tunnel["client"].set_missing_host_key_policy.call_args[0][0]
+        assert isinstance(policy_arg, paramiko.AutoAddPolicy)
+
+    def test_host_key_policy_invalid_falls_back_to_auto_add(self, mock_native_tunnel):
+        """Test that invalid policy name falls back to AutoAddPolicy."""
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion", ssh_port=22,
+            remote_host="db.internal", remote_port=5432,
+            host_key_policy="nonsense",
+        )
+        tunnel.start()
+        policy_arg = mock_native_tunnel["client"].set_missing_host_key_policy.call_args[0][0]
+        assert isinstance(policy_arg, paramiko.AutoAddPolicy)
+
+
+class TestSSHTunnelIdentityFile:
+    """Tests for IdentityFile reading from SSH config."""
+
+    def _make_manager_with_ssh_config(self, mock_native_tunnel, host_config, tunnel_url="ssh://bastion.example.com"):
+        """Helper: create manager, mock SSH config lookup, run start_tunnel."""
+        mock_ssh_config = MagicMock()
+        mock_ssh_config.lookup.return_value = host_config
+
+        # Determine which identity files "exist" on disk
+        existing_files = set(host_config.get("_existing_files", host_config.get("identityfile", [])))
+        existing_files.add("~/.ssh/config")  # SSH config always exists
+
+        manager = SSHTunnelManager(
+            ssh_tunnel_url=tunnel_url,
+            logger=logging.getLogger("test"),
+        )
+
+        with patch("pgcli.ssh_tunnel.os.path.expanduser", side_effect=lambda p: p), \
+             patch("pgcli.ssh_tunnel.os.path.isfile", side_effect=lambda p: p in existing_files), \
+             patch("pgcli.ssh_tunnel.paramiko.SSHConfig") as mock_config_cls, \
+             patch("builtins.open", mock_open(read_data="")):
+            mock_config_cls.return_value = mock_ssh_config
+            host, port = manager.start_tunnel(host="db.internal", port=5432)
+
+        return mock_native_tunnel["client"].connect.call_args[1]
+
+    def test_start_tunnel_reads_identity_files(self, mock_native_tunnel):
+        """Test that start_tunnel reads IdentityFile from SSH config and passes to connect."""
+        host_config = {
+            "hostname": "bastion.example.com",
+            "user": "tunneluser",
+            "identityfile": ["/home/user/.ssh/id_ed25519_specific", "/home/user/.ssh/id_rsa_wildcard"],
+        }
+
+        connect_kwargs = self._make_manager_with_ssh_config(mock_native_tunnel, host_config)
+
+        assert "key_filename" in connect_kwargs
+        assert connect_kwargs["key_filename"] == [
+            "/home/user/.ssh/id_ed25519_specific",
+            "/home/user/.ssh/id_rsa_wildcard",
+        ]
+        assert connect_kwargs["look_for_keys"] is False
+
+    def test_start_tunnel_skips_nonexistent_identity_files(self, mock_native_tunnel):
+        """Test that nonexistent IdentityFile entries are filtered out."""
+        host_config = {
+            "hostname": "bastion.example.com",
+            "identityfile": ["/home/user/.ssh/id_ed25519_exists", "/home/user/.ssh/id_rsa_missing"],
+            "_existing_files": ["/home/user/.ssh/id_ed25519_exists"],  # only this one exists
+        }
+
+        connect_kwargs = self._make_manager_with_ssh_config(mock_native_tunnel, host_config)
+
+        assert "key_filename" in connect_kwargs
+        assert connect_kwargs["key_filename"] == ["/home/user/.ssh/id_ed25519_exists"]
+
+    def test_start_tunnel_no_identity_files_omits_key_filename(self, mock_native_tunnel):
+        """Test that key_filename is omitted when SSH config has no IdentityFile."""
+        host_config = {
+            "hostname": "bastion.example.com",
+            "user": "tunneluser",
+        }
+
+        connect_kwargs = self._make_manager_with_ssh_config(mock_native_tunnel, host_config)
+
+        assert "key_filename" not in connect_kwargs
+
+    def test_identity_file_order_preserved(self, mock_native_tunnel):
+        """Test that IdentityFile order is preserved (host-specific first, wildcard after)."""
+        host_config = {
+            "hostname": "bastion.example.com",
+            "identityfile": [
+                "/home/user/.ssh/id_ed25519_host",   # host-specific (first)
+                "/home/user/.ssh/id_ed25519_global",  # wildcard (second)
+            ],
+        }
+
+        connect_kwargs = self._make_manager_with_ssh_config(mock_native_tunnel, host_config)
+
+        assert connect_kwargs["key_filename"] == [
+            "/home/user/.ssh/id_ed25519_host",
+            "/home/user/.ssh/id_ed25519_global",
+        ]
+
 
 class TestGetTunnelManagerFromConfig:
     """Tests for get_tunnel_manager_from_config function."""
@@ -596,3 +767,14 @@ class TestGetTunnelManagerFromConfig:
         config = {"ssh tunnels": {"allow_agent": "False"}}
         manager = get_tunnel_manager_from_config(config)
         assert manager.allow_agent is False
+
+    def test_host_key_policy_from_config(self):
+        """Test host_key_policy is read from config."""
+        config = {"ssh tunnels": {"host_key_policy": "reject"}}
+        manager = get_tunnel_manager_from_config(config)
+        assert manager.host_key_policy == "reject"
+
+    def test_host_key_policy_default(self):
+        """Test host_key_policy defaults to auto-add."""
+        manager = get_tunnel_manager_from_config({})
+        assert manager.host_key_policy == "auto-add"
