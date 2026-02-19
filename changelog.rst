@@ -7,6 +7,10 @@ Features:
 * Add cursor shape support for vi mode. When ``vi = True``, the terminal cursor now
   reflects the current editing mode: beam in INSERT, block in NORMAL, underline in REPLACE.
   Uses prompt_toolkit's ``ModalCursorShapeConfig``.
+* Add ``-t``/``--tuples-only`` CLI option to set table format at startup.
+    * Sets table format to ``csv-noheader`` (rows only, no headers)
+    * CLI shortcut equivalent to ``\T csv-noheader``
+    * Does not suppress timing or status messages (use ``\pset`` for that)
 
 Bug fixes:
 ----------
