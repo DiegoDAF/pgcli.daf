@@ -120,6 +120,7 @@ class OutputSettings(NamedTuple):
     style_output: Optional[Any] = None
     max_field_width: int = DEFAULT_MAX_FIELD_WIDTH
     tuples_only: bool = False
+    show_status: bool = True
 
 
 class PgCliQuitError(Exception):
@@ -179,6 +180,8 @@ class PGCli:
         output_file: Optional[str] = None,
         force_destructive: bool = False,
         tuples_only=None,
+        no_timings=False,
+        no_status=False,
     ):
         self.force_passwd_prompt = force_passwd_prompt
         self.never_passwd_prompt = never_passwd_prompt
@@ -246,6 +249,14 @@ class PGCli:
         else:
             self.table_format = c["main"]["table_format"]
             self.tuples_only = False
+
+        # Timing and status display flags (independent of tuples_only)
+        # tuples_only suppresses both, but --no-timings/--no-status can be used independently
+        self.show_timings = not no_timings
+        self.show_status = not no_status
+        if self.tuples_only:
+            self.show_timings = False
+            self.show_status = False
 
         self.syntax_style = c["main"]["syntax_style"]
         self.cli_style = c["colors"]
@@ -988,7 +999,7 @@ class PGCli:
             except KeyboardInterrupt:
                 pass
 
-            if self.pgspecial.timing_enabled and not self.tuples_only:
+            if self.pgspecial.timing_enabled and self.show_timings:
                 # Only add humanized time display if > 1 second
                 if query.total_time > 1:
                     print(
@@ -1316,6 +1327,7 @@ class PGCli:
                 style_output=self.style_output,
                 max_field_width=self.max_field_width,
                 tuples_only=self.tuples_only,
+                show_status=self.show_status,
             )
             execution = time() - start
             formatted = format_output(title, cur, headers, status, settings, self.explain_mode)
@@ -1642,6 +1654,20 @@ class PGCli:
     help="Print rows only (default: csv-noheader). Optionally specify a format (e.g., -t minimal).",
 )
 @click.option(
+    "--no-timings",
+    "no_timings",
+    is_flag=True,
+    default=False,
+    help="Suppress query execution time display.",
+)
+@click.option(
+    "--no-status",
+    "no_status",
+    is_flag=True,
+    default=False,
+    help="Suppress query status line (e.g., SELECT 1).",
+)
+@click.option(
     "-o",
     "--output",
     "output_file",
@@ -1680,6 +1706,8 @@ def cli(
     commands,
     input_files,
     tuples_only,
+    no_timings: bool,
+    no_status: bool,
     output_file: str,
 ):
     if version:
@@ -1744,6 +1772,8 @@ def cli(
         output_file=output_file,
         force_destructive=force_destructive,
         tuples_only=tuples_only,
+        no_timings=no_timings,
+        no_status=no_status,
     )
 
     # Assign command and file options
@@ -2130,8 +2160,8 @@ def format_output(title, cur, headers, status, settings, explain_mode=False):
 
         output = itertools.chain(output, formatted)
 
-    # Only print the status if it's not None and tuples_only is not enabled
-    if status and not settings.tuples_only:
+    # Only print the status if it's not None and not suppressed
+    if status and settings.show_status and not settings.tuples_only:
         output = itertools.chain(output, [format_status(cur, status)])
 
     return output

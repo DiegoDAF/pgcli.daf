@@ -17,6 +17,11 @@ Features:
     * Allows ``paramiko >= 3.0`` without upper version bound (paramiko 4.x compatible)
     * Refactored ``main.py`` to use ``SSHTunnelManager`` (eliminated ~115 lines of duplicate code)
     * No changes to SSH tunnel configuration format or user-facing behavior
+* Add ``--no-timings`` and ``--no-status`` CLI flags.
+    * ``--no-timings``: Suppress query execution time display
+    * ``--no-status``: Suppress query status line (e.g., ``SELECT 1``)
+    * Independent of each other and of ``-t/--tuples-only``
+    * ``-t`` continues to suppress both (backward compatible)
 * Read ``IdentityFile`` from ``~/.ssh/config`` for SSH tunnel authentication.
     * Paramiko now receives key files from SSH config instead of relying solely on ssh-agent
     * Host-specific keys are tried first, then wildcard (``Host *``) keys

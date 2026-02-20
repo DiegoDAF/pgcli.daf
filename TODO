@@ -90,10 +90,12 @@
       - Feedback de j-bennet: -t solo debe setear formato tabla (como \T), no suprimir headers/status
       - Rework: -t [FORMAT] = shortcut de \T al inicio de sesión, default csv-noheader
       - En pgcli.daf mantenemos nuestra versión completa (suprime todo)
-* [ ] --no-timings / --no-status flags (convergencia con upstream)
+* [X] --no-timings / --no-status flags (convergencia con upstream) - v4.3.18
       - Sugerido por j-bennet en PR #1545
       - --no-timings: suprime "Time: X.XXXs" después de cada query
       - --no-status: suprime "SELECT 1" / "X rows" status line
+      - Independientes entre sí y de -t/--tuples-only
+      - -t sigue suprimiendo ambos (backward compat)
       - PR separado al repo padre cuando estén listos
 * [ ] PR #1546: Agregar tests y simplificar preserved_params
       - j-bennet pidió CHANGES_REQUESTED: test coverage + simplificar preserved_params en pgexecute.py

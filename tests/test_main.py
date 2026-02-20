@@ -4,8 +4,10 @@ import re
 import tempfile
 import datetime
 from unittest import mock
+from unittest.mock import patch
 
 import pytest
+from click.testing import CliRunner
 
 try:
     import setproctitle
@@ -13,6 +15,7 @@ except ImportError:
     setproctitle = None
 
 from pgcli.main import (
+    cli,
     obfuscate_process_password,
     duration_in_words,
     format_output,
@@ -1105,3 +1108,71 @@ class TestSanitizePath:
         _, err = PGCli._sanitize_path(str(link))
         assert err is not None
         assert "restricted" in err.lower()
+
+
+class TestNoTimingsNoStatus:
+    """Tests for --no-timings and --no-status CLI flags."""
+
+    def test_no_timings_flag_suppresses_timing(self):
+        settings = OutputSettings(table_format="psql", dcmlfmt="d", floatfmt="g")
+        pgcli = PGCli(no_timings=True)
+        assert pgcli.show_timings is False
+        assert pgcli.show_status is True
+
+    def test_no_status_flag_suppresses_status(self):
+        settings = OutputSettings(table_format="psql", dcmlfmt="d", floatfmt="g")
+        pgcli = PGCli(no_status=True)
+        assert pgcli.show_timings is True
+        assert pgcli.show_status is False
+
+    def test_both_flags_suppress_both(self):
+        pgcli = PGCli(no_timings=True, no_status=True)
+        assert pgcli.show_timings is False
+        assert pgcli.show_status is False
+
+    def test_defaults_show_both(self):
+        pgcli = PGCli()
+        assert pgcli.show_timings is True
+        assert pgcli.show_status is True
+
+    def test_tuples_only_suppresses_both(self):
+        pgcli = PGCli(tuples_only="csv-noheader")
+        assert pgcli.show_timings is False
+        assert pgcli.show_status is False
+        assert pgcli.tuples_only is True
+
+    def test_format_output_no_status(self):
+        settings = OutputSettings(
+            table_format="psql", dcmlfmt="d", floatfmt="g", show_status=False
+        )
+        results = format_output(
+            "Title", [("abc", "def")], ["head1", "head2"], "test status", settings
+        )
+        result_list = list(results)
+        assert "test status" not in result_list
+
+    def test_format_output_with_status(self):
+        settings = OutputSettings(
+            table_format="psql", dcmlfmt="d", floatfmt="g", show_status=True
+        )
+        results = format_output(
+            "Title", [("abc", "def")], ["head1", "head2"], "test status", settings
+        )
+        result_list = list(results)
+        assert "test status" in result_list
+
+    def test_cli_no_timings_passed_to_pgcli(self):
+        runner = CliRunner()
+        with patch.object(PGCli, "__init__", autospec=True, return_value=None) as mock_pgcli:
+            runner.invoke(cli, ["--no-timings", "mydb"])
+            call_kwargs = mock_pgcli.call_args[1]
+            assert call_kwargs["no_timings"] is True
+            assert call_kwargs["no_status"] is False
+
+    def test_cli_no_status_passed_to_pgcli(self):
+        runner = CliRunner()
+        with patch.object(PGCli, "__init__", autospec=True, return_value=None) as mock_pgcli:
+            runner.invoke(cli, ["--no-status", "mydb"])
+            call_kwargs = mock_pgcli.call_args[1]
+            assert call_kwargs["no_timings"] is False
+            assert call_kwargs["no_status"] is True
