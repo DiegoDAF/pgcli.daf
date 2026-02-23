@@ -7,6 +7,10 @@ Features:
 * Add cursor shape support for vi mode. When ``vi = True``, the terminal cursor now
   reflects the current editing mode: beam in INSERT, block in NORMAL, underline in REPLACE.
   Uses prompt_toolkit's ``ModalCursorShapeConfig``.
+* Enable ``.pgpass`` support for SSH tunnel connections.
+    * Preserve original hostname for ``.pgpass`` lookup using PostgreSQL's ``hostaddr`` parameter
+    * SSH tunnel endpoint (``127.0.0.1``) is passed via ``hostaddr``, keeping ``host`` for ``.pgpass``
+    * Works with both DSN and host/port connection styles
 
 4.4.0 (2025-12-24)
 ==================
