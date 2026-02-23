@@ -86,10 +86,12 @@
       - 3er número para excepciones: 26.44.1 si hay 2 releases el mismo día
       - Reemplaza semver x.y.z actual
       - Afecta: pgcli/__init__.py, pyproject.toml, changelog.rst, CLAUDE.md
-* [ ] PR #1545: Ajustar -t/--tuples-only para upstream
+* [X] PR #1545: Ajustar -t/--tuples-only para upstream - rebased 2026-02-20
       - Feedback de j-bennet: -t solo debe setear formato tabla (como \T), no suprimir headers/status
-      - Rework: -t [FORMAT] = shortcut de \T al inicio de sesión, default csv-noheader
+      - Rework: -t como flag puro (is_flag=True), default csv-noheader
+      - Rebased sobre original/main (a0c2ee4), force-pushed
       - En pgcli.daf mantenemos nuestra versión completa (suprime todo)
+      - Pendiente: actualizar cuando --no-timings/--no-status estén como PR separado
 * [X] --no-timings / --no-status flags (convergencia con upstream) - v4.3.18
       - Sugerido por j-bennet en PR #1545
       - --no-timings: suprime "Time: X.XXXs" después de cada query
@@ -97,8 +99,10 @@
       - Independientes entre sí y de -t/--tuples-only
       - -t sigue suprimiendo ambos (backward compat)
       - PR separado al repo padre cuando estén listos
-* [ ] PR #1546: Agregar tests y simplificar preserved_params
-      - j-bennet pidió CHANGES_REQUESTED: test coverage + simplificar preserved_params en pgexecute.py
+* [X] PR #1546: Agregar tests y simplificar preserved_params - rebased 2026-02-20
+      - Simplificado: dict comprehension en vez de preserved_params
+      - 4 tests nuevos + tests existentes actualizados
+      - Rebased sobre original/main (a0c2ee4), respondido a j-bennet
 * [ ] Traer feature named query quiet mode (#1551) de upstream
       - \nq toggle + hide_named_query_text config
       - Mergeado en upstream 2026-01-17
