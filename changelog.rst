@@ -1,5 +1,5 @@
-Upcoming (TBD)
-==============
+4.4.1 (2026-02-24)
+==================
 
 Features:
 ---------
@@ -36,6 +36,13 @@ Features:
     * New ``host_key_policy`` setting in ``[ssh tunnels]`` config section
     * Options: ``auto-add`` (default, TOFU), ``warn`` (log warning), ``reject`` (known hosts only)
     * ``reject`` mode only connects to hosts already in ``~/.ssh/known_hosts``
+* Add named query quiet mode to hide query text during execution (upstream #1551).
+    * New ``\nq`` command to save queries that execute without printing the query text
+    * ``quiet`` flag stored in named query metadata
+    * Useful for utility queries where only the result matters
+* Add ``\T`` prompt escape sequence to display transaction status (upstream #1553).
+    * Shows transaction state in prompt: empty (idle), ``*`` (in transaction), ``!`` (failed transaction)
+    * Similar to psql's ``%x`` prompt escape
 
 Bug Fixes:
 ----------

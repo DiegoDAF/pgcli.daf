@@ -318,7 +318,7 @@ def suggest_special(text):
                 return (Schema(), Function(schema=None, usage="special"))
             return (Schema(), rel_type(schema=None))
 
-    if cmd in ["\\n", "\\nd", "\\np", "\\ns"]:
+    if cmd in ["\\n", "\\nd", "\\np", "\\nq", "\\ns"]:
         return (NamedQuery(),)
 
     return (Keyword(), Special())
