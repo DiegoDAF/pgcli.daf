@@ -103,7 +103,15 @@
       - Simplificado: dict comprehension en vez de preserved_params
       - 4 tests nuevos + tests existentes actualizados
       - Rebased sobre original/main (a0c2ee4), respondido a j-bennet
-* [ ] Traer feature named query quiet mode (#1551) de upstream
+* [X] Traer feature named query quiet mode (#1551) de upstream - v4.4.1
       - \nq toggle + hide_named_query_text config
-      - Mergeado en upstream 2026-01-17
-* [ ] Bump click >= 8.3.1 (PR #1556 upstream, ya aplicado en pgcli.daf)
+      - Cherry-picked de upstream, conflicto en sqlcompletion.py resuelto (agregamos \np + \nq)
+* [X] Traer \T prompt transaction status (#1553) de upstream - v4.4.1
+      - Muestra estado de transacción: * (in transaction), ! (failed), vacío (idle)
+      - Similar a %x de psql
+* [X] Bump click >= 8.3.1 (PR #1556 upstream, ya aplicado en pgcli.daf)
+* [X] Cambiar -t/--tuples-only a flag booleano puro - v4.4.1
+      - Bug: -t consumía el siguiente argumento CLI como valor de formato
+      - Fix: is_flag=True, ya no toma argumento opcional
+      - Alineado con upstream
+* [X] Bump versión a 4.4.1 (alineado con upstream 4.4.0) - v4.4.1
