@@ -22,6 +22,10 @@ Features:
     * ``--no-status``: Suppress query status line (e.g., ``SELECT 1``)
     * Independent of each other and of ``-t/--tuples-only``
     * ``-t`` continues to suppress both (backward compatible)
+* Change ``-t/--tuples-only`` to a pure boolean flag.
+    * Fixes bug where ``-t`` consumed the next CLI argument as a format value
+    * ``-t`` now only suppresses headers, status, and timing (uses configured table format)
+    * Aligns with upstream pgcli behavior
 * Read ``IdentityFile`` from ``~/.ssh/config`` for SSH tunnel authentication.
     * Paramiko now receives key files from SSH config instead of relying solely on ssh-agent
     * Host-specific keys are tried first, then wildcard (``Host *``) keys

@@ -1136,7 +1136,7 @@ class TestNoTimingsNoStatus:
         assert pgcli.show_status is True
 
     def test_tuples_only_suppresses_both(self):
-        pgcli = PGCli(tuples_only="csv-noheader")
+        pgcli = PGCli(tuples_only=True)
         assert pgcli.show_timings is False
         assert pgcli.show_status is False
         assert pgcli.tuples_only is True
@@ -1176,3 +1176,13 @@ class TestNoTimingsNoStatus:
             call_kwargs = mock_pgcli.call_args[1]
             assert call_kwargs["no_timings"] is False
             assert call_kwargs["no_status"] is True
+
+    def test_tuples_only_is_pure_flag(self):
+        """Regression: -t must be a pure flag, not consume the next argument."""
+        runner = CliRunner()
+        with patch.object(PGCli, "__init__", autospec=True, return_value=None) as mock_pgcli:
+            result = runner.invoke(cli, ["--tuples-only", "--no-timings", "mydb"])
+            assert result.exit_code != 2, f"Click parse error: {result.output}"
+            call_kwargs = mock_pgcli.call_args[1]
+            assert call_kwargs["tuples_only"] is True
+            assert call_kwargs["no_timings"] is True

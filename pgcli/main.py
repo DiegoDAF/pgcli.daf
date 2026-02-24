@@ -242,13 +242,8 @@ class PGCli:
         self.min_num_menu_lines = c["main"].as_int("min_num_menu_lines")
         self.multiline_continuation_char = c["main"]["multiline_continuation_char"]
 
-        # Override table_format if tuples_only is specified
-        if tuples_only:
-            self.table_format = tuples_only
-            self.tuples_only = True
-        else:
-            self.table_format = c["main"]["table_format"]
-            self.tuples_only = False
+        self.table_format = c["main"]["table_format"]
+        self.tuples_only = bool(tuples_only)
 
         # Timing and status display flags (independent of tuples_only)
         # tuples_only suppresses both, but --no-timings/--no-status can be used independently
@@ -1648,10 +1643,9 @@ class PGCli:
     "-t",
     "--tuples-only",
     "tuples_only",
-    is_flag=False,
-    flag_value="csv-noheader",
-    default=None,
-    help="Print rows only (default: csv-noheader). Optionally specify a format (e.g., -t minimal).",
+    is_flag=True,
+    default=False,
+    help="Print rows only, suppress headers, status, and timing.",
 )
 @click.option(
     "--no-timings",
