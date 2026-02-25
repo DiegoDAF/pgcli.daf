@@ -2107,7 +2107,12 @@ def exception_formatter(e, verbose_errors: bool = False):
 def format_output(title, cur, headers, status, settings, explain_mode=False):
     output: Any = []
     expanded = settings.expanded or settings.table_format == "vertical"
-    table_format = "vertical" if settings.expanded else settings.table_format
+    if settings.tuples_only:
+        table_format = "plain"
+    elif settings.expanded:
+        table_format = "vertical"
+    else:
+        table_format = settings.table_format
     max_width = settings.max_width
     case_function = settings.case_function
     if explain_mode:
@@ -2165,11 +2170,11 @@ def format_output(title, cur, headers, status, settings, explain_mode=False):
         dialect = "excel" if platform.system() == "Windows" else "unix"
         output_kwargs["dialect"] = dialect
 
-    if title:  # Only print the title if it's not None.
+    if title and not settings.tuples_only:  # Only print the title if it's not None.
         output.append(title)
 
     if cur:
-        headers = [case_function(x) for x in headers]
+        headers = [] if settings.tuples_only else [case_function(x) for x in headers]
         if max_width is not None:
             cur = list(cur)
         column_types: Optional[List[type]] = None

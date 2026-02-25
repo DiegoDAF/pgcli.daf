@@ -114,4 +114,9 @@
       - Bug: -t consumía el siguiente argumento CLI como valor de formato
       - Fix: is_flag=True, ya no toma argumento opcional
       - Alineado con upstream
+* [X] -t/--tuples-only: forzar formato plain sin bordes ni headers - v4.4.1
+      - Problema: -t suprimía status/timing pero el table_format (ascii) seguía dibujando bordes
+      - Fix en format_output(): table_format="plain", headers=[], title suprimido
+      - Ahora `pgcli -t -f query.sql` devuelve solo el valor crudo (ej: "16")
+      - 2 tests nuevos: single value y multi-column plain output
 * [X] Bump versión a 4.4.1 (alineado con upstream 4.4.0) - v4.4.1

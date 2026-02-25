@@ -24,8 +24,9 @@ Features:
     * ``-t`` continues to suppress both (backward compatible)
 * Change ``-t/--tuples-only`` to a pure boolean flag.
     * Fixes bug where ``-t`` consumed the next CLI argument as a format value
-    * ``-t`` now only suppresses headers, status, and timing (uses configured table format)
-    * Aligns with upstream pgcli behavior
+    * ``-t`` now suppresses headers, title, status, timing, and forces plain format (no borders)
+    * Single-value queries return just the raw value (e.g., ``16`` instead of an ASCII table)
+    * Aligns with psql ``-t`` behavior for scripting use cases
 * Read ``IdentityFile`` from ``~/.ssh/config`` for SSH tunnel authentication.
     * Paramiko now receives key files from SSH config instead of relying solely on ssh-agent
     * Host-specific keys are tried first, then wildcard (``Host *``) keys

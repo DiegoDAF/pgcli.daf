@@ -1218,6 +1218,31 @@ class TestNoTimingsNoStatus:
             assert call_kwargs["no_timings"] is False
             assert call_kwargs["no_status"] is True
 
+    def test_tuples_only_format_output_plain_no_headers(self):
+        """tuples_only produces plain output without headers, title, or status."""
+        settings = OutputSettings(
+            table_format="ascii", dcmlfmt="d", floatfmt="g",
+            tuples_only=True, show_status=False,
+        )
+        results = format_output(
+            "Title", [("abc", "def"), ("ghi", "jkl")],
+            ["head1", "head2"], "test status", settings,
+        )
+        result_list = list(results)
+        assert result_list == ["abc  def", "ghi  jkl"]
+
+    def test_tuples_only_single_value(self):
+        """tuples_only with a single value returns just that value."""
+        settings = OutputSettings(
+            table_format="ascii", dcmlfmt="d", floatfmt="g",
+            tuples_only=True, show_status=False,
+        )
+        results = format_output(
+            None, [("16",)], ["major_version"], "SELECT 1", settings,
+        )
+        result_list = list(results)
+        assert result_list == ["16"]
+
     def test_tuples_only_is_pure_flag(self):
         """Regression: -t must be a pure flag, not consume the next argument."""
         runner = CliRunner()
