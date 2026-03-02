@@ -1,3 +1,17 @@
+4.4.2 (2026-03-02)
+==================
+
+Bug Fixes:
+----------
+* Fix trailing SQL comments causing query execution failure.
+    * ``vacuum freeze verbose t; -- 82% towards emergency`` now works correctly
+    * ``rstrip(";")`` failed when a comment followed the semicolon
+    * Comments are now stripped before semicolon removal in ``pgexecute.py``
+* Fix multiline mode not submitting queries with trailing comments.
+    * ``_is_complete()`` in ``pgbuffer.py`` now strips comments before checking
+      for a trailing semicolon
+    * Previously ``SELECT 1; -- note`` would never submit in multiline mode
+
 4.4.1 (2026-02-24)
 ==================
 
