@@ -99,14 +99,32 @@ For more details:
                                  section of pgclirc file.
       --row-limit INTEGER        Set threshold for row limit prompt. Use 0 to
                                  disable prompt.
+      --application-name TEXT    Application name for the connection.
       --less-chatty              Skip intro on startup and goodbye on exit.
       --prompt TEXT              Prompt format (Default: "\u@\h:\d> ").
       --prompt-dsn TEXT          Prompt format for connections using DSN aliases
                                  (Default: "\u@\h:\d> ").
       -l, --list                 list available databases, then exit.
+      --ping                     Check database connectivity, then exit.
       --auto-vertical-output     Automatically switch to vertical output mode if
                                  the result is wider than the terminal width.
-      --warn [all|moderate|off]  Warn before running a destructive query.
+      --warn TEXT                Warn before running a destructive query.
+      --ssh-tunnel TEXT          Open an SSH tunnel to the given address and
+                                 connect to the database from it.
+      --log-file TEXT            Write all queries & output into a file, in
+                                 addition to the normal output destination.
+      --init-command TEXT        SQL statement to execute after connecting.
+      -y, --yes                  Force destructive commands without confirmation
+                                 prompt.
+      -c, --command TEXT         Run command (SQL or internal) and exit. Multiple
+                                 -c options are allowed.
+      -f, --file FILE            Execute commands from file, then exit. Multiple
+                                 -f options are allowed.
+      -t, --tuples-only          Print rows only, suppress headers, status, and
+                                 timing.
+      --no-timings               Suppress query execution time display.
+      --no-status                Suppress query status line (e.g., SELECT 1).
+      -o, --output TEXT          Send query results to file (or |pipe).
       --help                     Show this message and exit.
 
 ``pgcli`` also supports many of the same `environment variables`_ as ``psql`` for login options (e.g. ``PGHOST``, ``PGPORT``, ``PGUSER``, ``PGPASSWORD``, ``PGDATABASE``).
@@ -147,6 +165,113 @@ Config
 ------
 A config file is automatically created at ``~/.config/pgcli/config`` at first launch.
 See the file itself for a description of all available options.
+
+pgcli.daf — Additional Features
+--------------------------------
+
+This fork extends pgcli with features not yet available in the official release.
+Compatible with upstream pgcli **4.4.0**.
+
+SSH Tunnel Support
+^^^^^^^^^^^^^^^^^^
+
+Connect to databases through SSH tunnels using native Paramiko (no ``sshtunnel`` dependency):
+
+::
+
+    $ pgcli --ssh-tunnel user@bastion-host -h db.internal mydb
+
+Configure per-DSN tunnels in ``~/.config/pgcli/config``:
+
+::
+
+    [ssh tunnels]
+    # Match by hostname
+    db.internal = ssh://user@bastion:22
+
+    # Per-DSN tunnel
+    [alias_dsn.ssh tunnels]
+    production = ssh://user@bastion:22
+
+SSH tunnel features:
+
+* Reads ``IdentityFile`` from ``~/.ssh/config`` (host-specific and wildcard)
+* Configurable host key verification: ``auto-add`` (default), ``warn``, ``reject``
+* ``.pgpass`` support works correctly through tunnels
+* ``allow_agent`` config option for passphrase-protected keys
+
+Companion Commands
+^^^^^^^^^^^^^^^^^^
+
+Three additional commands are installed alongside ``pgcli``:
+
+* ``pgcli_dump`` — ``pg_dump`` wrapper with SSH tunnel support
+* ``pgcli_dumpall`` — ``pg_dumpall`` wrapper with SSH tunnel support
+* ``pgcli_isready`` — ``pg_isready`` wrapper with SSH tunnel support
+
+All three support ``--ssh-tunnel``, ``--dsn``, and ``-v/--verbose`` options,
+and pass all other options through to the underlying PostgreSQL command.
+
+::
+
+    $ pgcli_dump --ssh-tunnel user@bastion -h db.internal mydb > backup.sql
+    $ pgcli_dump --dsn production mydb -F c -f backup.dump
+    $ pgcli_isready --dsn production
+
+CLI Execution Options
+^^^^^^^^^^^^^^^^^^^^^
+
+Run commands non-interactively, useful for scripting:
+
+::
+
+    # Execute SQL and exit
+    $ pgcli -c "SELECT count(*) FROM users" mydb
+
+    # Multiple commands
+    $ pgcli -c "SELECT 1" -c "SELECT 2" mydb
+
+    # Execute from file
+    $ pgcli -f setup.sql -f data.sql mydb
+
+    # Tuples-only output (no headers, no status — like psql -t)
+    $ pgcli -t -c "SELECT name FROM users" mydb
+
+    # Suppress timings or status independently
+    $ pgcli --no-timings -c "SELECT 1" mydb
+    $ pgcli --no-status -c "SELECT 1" mydb
+
+    # Skip destructive query confirmation
+    $ pgcli -y -f cleanup.sql mydb
+
+    # Output to file
+    $ pgcli -o results.csv -t -c "SELECT * FROM users" mydb
+
+Named Queries
+^^^^^^^^^^^^^
+
+* ``namedqueries.d/`` directory support for organizing queries in separate files
+* ``dsn.d/`` directory support for organizing DSN aliases
+* ``\nq`` — quiet mode: execute named query without printing the query text
+* ``\nr`` — reload named queries without restarting pgcli
+* Alphabetically sorted ``\n`` output
+
+Prompt and Display
+^^^^^^^^^^^^^^^^^^
+
+* ``\T`` escape sequence — shows transaction status in prompt (idle, in transaction, failed)
+* ``--init-command`` — execute SQL after connecting (also configurable per-DSN in config)
+* Log rotation with multiple modes: ``day-of-week``, ``day-of-month``, ``date``
+
+Security
+^^^^^^^^
+
+* ``\restrict`` / ``\unrestrict`` — meta-command blocking for safe dump restoration (CVE-2025-8714)
+* SSH passwords sanitized from debug logs
+* Passwords masked in ``--list-dsn`` output
+* ``re.fullmatch()`` for SSH tunnel hostname matching (prevents partial matches)
+* SQL passwords redacted from debug logs (``CREATE/ALTER USER/ROLE``)
+* File path sanitization in ``\i``, ``\o``, ``\log-file`` (symlink resolution, system path blocking)
 
 Contributions:
 --------------
