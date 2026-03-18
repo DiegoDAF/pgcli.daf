@@ -1,3 +1,10 @@
+Upcoming
+========
+
+Features:
+---------
+* Sort ``--help`` options alphabetically for easier navigation.
+
 4.4.2 (2026-03-02) - upstream: 4.4.0
 =====================================
 

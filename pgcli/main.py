@@ -1532,6 +1532,41 @@ class PGCli:
 
 
 @click.command()
+# Options sorted alphabetically by long option name for clean --help output
+@click.option(
+    "--application-name",
+    default="pgcli",
+    envvar="PGAPPNAME",
+    help="Application name for the connection.",
+)
+@click.option(
+    "--auto-vertical-output",
+    is_flag=True,
+    help="Automatically switch to vertical output mode if the result is wider than the terminal width.",
+)
+@click.option(
+    "-c",
+    "--command",
+    "commands",
+    multiple=True,
+    help="Run command (SQL or internal) and exit. Multiple -c options are allowed.",
+)
+@click.option("-d", "--dbname", "dbname_opt", help="Database name to connect to.")
+@click.option(
+    "-D",
+    "--dsn",
+    default="",
+    envvar="DSN",
+    help="Use DSN configured into the [alias_dsn] section of pgclirc file.",
+)
+@click.option(
+    "-f",
+    "--file",
+    "input_files",
+    multiple=True,
+    type=click.Path(exists=True, readable=True, dir_okay=False),
+    help="Execute commands from file, then exit. Multiple -f options are allowed.",
+)
 # Default host is '' so psycopg can default to either localhost or unix socket
 @click.option(
     "-h",
@@ -1541,27 +1576,35 @@ class PGCli:
     help="Host address of the postgres database.",
 )
 @click.option(
-    "-p",
-    "--port",
-    default=5432,
-    help="Port number at which the postgres instance is listening.",
-    envvar="PGPORT",
-    type=click.INT,
+    "--init-command",
+    "init_command",
+    type=str,
+    help="SQL statement to execute after connecting.",
 )
 @click.option(
-    "-U",
-    "--username",
-    "username_opt",
-    help="Username to connect to the postgres database.",
-)
-@click.option("-u", "--user", "username_opt", help="Username to connect to the postgres database.")
-@click.option(
-    "-W",
-    "--password",
-    "prompt_passwd",
+    "--less-chatty",
+    "less_chatty",
     is_flag=True,
     default=False,
-    help="Force password prompt.",
+    help="Skip intro on startup and goodbye on exit.",
+)
+@click.option(
+    "-l",
+    "--list",
+    "list_databases",
+    is_flag=True,
+    help="List available databases, then exit.",
+)
+@click.option(
+    "--list-dsn",
+    "list_dsn",
+    is_flag=True,
+    help="List of DSN configured into the [alias_dsn] section of pgclirc file.",
+)
+@click.option(
+    "--log-file",
+    default=None,
+    help="Write all queries & output into a file, in addition to the normal output destination.",
 )
 @click.option(
     "-w",
@@ -1572,65 +1615,40 @@ class PGCli:
     help="Never prompt for password.",
 )
 @click.option(
-    "--single-connection",
-    "single_connection",
+    "--no-status",
+    "no_status",
     is_flag=True,
     default=False,
-    help="Do not use a separate connection for completions.",
+    help="Suppress query status line (e.g., SELECT 1).",
 )
-@click.option("-v", "--version", is_flag=True, help="Version of pgcli.")
-@click.option("-d", "--dbname", "dbname_opt", help="database name to connect to.")
+@click.option(
+    "--no-timings",
+    "no_timings",
+    is_flag=True,
+    default=False,
+    help="Suppress query execution time display.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_file",
+    default=None,
+    help="Send query results to file (or |pipe).",
+)
+@click.option(
+    "-W",
+    "--password",
+    "prompt_passwd",
+    is_flag=True,
+    default=False,
+    help="Force password prompt.",
+)
 @click.option(
     "--pgclirc",
     default=config_location() + "config",
     envvar="PGCLIRC",
     help="Location of pgclirc file.",
     type=click.Path(dir_okay=False),
-)
-@click.option(
-    "-D",
-    "--dsn",
-    default="",
-    envvar="DSN",
-    help="Use DSN configured into the [alias_dsn] section of pgclirc file.",
-)
-@click.option(
-    "--list-dsn",
-    "list_dsn",
-    is_flag=True,
-    help="list of DSN configured into the [alias_dsn] section of pgclirc file.",
-)
-@click.option(
-    "--row-limit",
-    default=None,
-    envvar="PGROWLIMIT",
-    type=click.INT,
-    help="Set threshold for row limit prompt. Use 0 to disable prompt.",
-)
-@click.option(
-    "--application-name",
-    default="pgcli",
-    envvar="PGAPPNAME",
-    help="Application name for the connection.",
-)
-@click.option(
-    "--less-chatty",
-    "less_chatty",
-    is_flag=True,
-    default=False,
-    help="Skip intro on startup and goodbye on exit.",
-)
-@click.option("--prompt", help='Prompt format (Default: "\\u@\\h:\\d> ").')
-@click.option(
-    "--prompt-dsn",
-    help='Prompt format for connections using DSN aliases (Default: "\\u@\\h:\\d> ").',
-)
-@click.option(
-    "-l",
-    "--list",
-    "list_databases",
-    is_flag=True,
-    help="list available databases, then exit.",
 )
 @click.option(
     "--ping",
@@ -1640,53 +1658,36 @@ class PGCli:
     help="Check database connectivity, then exit.",
 )
 @click.option(
-    "--auto-vertical-output",
-    is_flag=True,
-    help="Automatically switch to vertical output mode if the result is wider than the terminal width.",
+    "-p",
+    "--port",
+    default=5432,
+    help="Port number at which the postgres instance is listening.",
+    envvar="PGPORT",
+    type=click.INT,
+)
+@click.option("--prompt", help='Prompt format (Default: "\\u@\\h:\\d> ").')
+@click.option(
+    "--prompt-dsn",
+    help='Prompt format for connections using DSN aliases (Default: "\\u@\\h:\\d> ").',
 )
 @click.option(
-    "--warn",
+    "--row-limit",
     default=None,
-    help="Warn before running a destructive query.",
+    envvar="PGROWLIMIT",
+    type=click.INT,
+    help="Set threshold for row limit prompt. Use 0 to disable prompt.",
+)
+@click.option(
+    "--single-connection",
+    "single_connection",
+    is_flag=True,
+    default=False,
+    help="Do not use a separate connection for completions.",
 )
 @click.option(
     "--ssh-tunnel",
     default=None,
     help="Open an SSH tunnel to the given address and connect to the database from it.",
-)
-@click.option(
-    "--log-file",
-    default=None,
-    help="Write all queries & output into a file, in addition to the normal output destination.",
-)
-@click.option(
-    "--init-command",
-    "init_command",
-    type=str,
-    help="SQL statement to execute after connecting.",
-)
-@click.option(
-    "-y",
-    "--yes",
-    "force_destructive",
-    is_flag=True,
-    default=False,
-    help="Force destructive commands without confirmation prompt.",
-)
-@click.option(
-    "-c",
-    "--command",
-    "commands",
-    multiple=True,
-    help="run command (SQL or internal) and exit. Multiple -c options are allowed.",
-)
-@click.option(
-    "-f",
-    "--file",
-    "input_files",
-    multiple=True,
-    type=click.Path(exists=True, readable=True, dir_okay=False),
-    help="execute commands from file, then exit. Multiple -f options are allowed.",
 )
 @click.option(
     "-t",
@@ -1697,25 +1698,25 @@ class PGCli:
     help="Print rows only, suppress headers, status, and timing.",
 )
 @click.option(
-    "--no-timings",
-    "no_timings",
-    is_flag=True,
-    default=False,
-    help="Suppress query execution time display.",
+    "-U",
+    "--username",
+    "username_opt",
+    help="Username to connect to the postgres database.",
 )
+@click.option("-u", "--user", "username_opt", help="Username to connect to the postgres database.")
+@click.option("-v", "--version", is_flag=True, help="Version of pgcli.")
 @click.option(
-    "--no-status",
-    "no_status",
-    is_flag=True,
-    default=False,
-    help="Suppress query status line (e.g., SELECT 1).",
-)
-@click.option(
-    "-o",
-    "--output",
-    "output_file",
+    "--warn",
     default=None,
-    help="Send query results to file (or |pipe).",
+    help="Warn before running a destructive query.",
+)
+@click.option(
+    "-y",
+    "--yes",
+    "force_destructive",
+    is_flag=True,
+    default=False,
+    help="Force destructive commands without confirmation prompt.",
 )
 @click.argument("dbname", default=lambda: None, envvar="PGDATABASE", nargs=1)
 @click.argument("username", default=lambda: None, envvar="PGUSER", nargs=1)
