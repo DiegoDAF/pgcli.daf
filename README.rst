@@ -1,21 +1,16 @@
-A REPL for Postgres
--------------------
+pgcli.daf — A REPL for Postgres
+================================
 
-|Build Status| |CodeCov| |PyPI| |netlify|
+Fork of `pgcli <https://github.com/dbcli/pgcli>`_ with additional features.
+Compatible with upstream pgcli **4.4.0**.
 
 This is a postgres client that does auto-completion and syntax highlighting.
-
-Home Page: http://pgcli.com
-
-MySQL Equivalent: http://mycli.net
 
 .. image:: screenshots/pgcli.gif
 .. image:: screenshots/image01.png
 
 Quick Start
 -----------
-
-If you already know how to install python packages, then you can simply do:
 
 ::
 
@@ -25,11 +20,6 @@ If you already know how to install python packages, then you can simply do:
 
     $ sudo apt-get install pgcli # Only on Debian based Linux (e.g. Ubuntu, Mint, etc)
     $ brew install pgcli  # Only on macOS
-
-If you don't know how to install python packages, please check the
-`detailed instructions`_.
-
-.. _`detailed instructions`: https://github.com/dbcli/pgcli#detailed-installation-instructions
 
 Usage
 -----
@@ -136,18 +126,15 @@ The `pgcli` is written using prompt_toolkit_.
 * Pretty prints tabular data.
 
 .. _prompt_toolkit: https://github.com/jonathanslenders/python-prompt-toolkit
-.. _tabulate: https://pypi.python.org/pypi/tabulate
 
 Config
 ------
+
 A config file is automatically created at ``~/.config/pgcli/config`` at first launch.
 See the file itself for a description of all available options.
 
-pgcli.daf — Additional Features
---------------------------------
-
-This fork extends pgcli with features not yet available in the official release.
-Compatible with upstream pgcli **4.4.0**.
+pgcli.daf Features
+------------------
 
 SSH Tunnel Support
 ^^^^^^^^^^^^^^^^^^
@@ -250,233 +237,13 @@ Security
 * SQL passwords redacted from debug logs (``CREATE/ALTER USER/ROLE``)
 * File path sanitization in ``\i``, ``\o``, ``\log-file`` (symlink resolution, system path blocking)
 
-Contributions:
---------------
-
-If you're interested in contributing to this project, first of all I would like
-to extend my heartfelt gratitude. I've written a small doc to describe how to
-get this running in a development setup.
-
-https://github.com/dbcli/pgcli/blob/main/CONTRIBUTING.rst
-
-Please feel free to reach out to us if you need help.
-
-* Amjith, pgcli author: amjith.r@gmail.com, Twitter: `@amjithr <http://twitter.com/amjithr>`_
-* Irina, pgcli maintainer: i.chernyavska@gmail.com, Twitter: `@irinatruong <http://twitter.com/irinatruong>`_
-
-Detailed Installation Instructions:
------------------------------------
-
-macOS:
-======
-
-The easiest way to install pgcli is using Homebrew.
-
-::
-
-    $ brew install pgcli
-
-Done!
-
-Alternatively, you can install ``pgcli`` as a python package using a package
-manager called called ``pip``. You will need postgres installed on your system
-for this to work.
-
-In depth getting started guide for ``pip`` - https://pip.pypa.io/en/latest/installation/
-
-::
-
-    $ which pip
-
-If it is installed then you can do:
-
-::
-
-    $ pip install pgcli
-
-If that fails due to permission issues, you might need to run the command with
-sudo permissions.
-
-::
-
-    $ sudo pip install pgcli
-
-If pip is not installed check if easy_install is available on the system.
-
-::
-
-    $ which easy_install
-
-    $ sudo easy_install pgcli
-
-Linux:
-======
-
-Many distributions have ``pgcli`` packages.
-Refer to https://repology.org/project/pgcli/versions or your distribution to check the available versions.
-
-Alternatively, you can use tools such as `pipx`_ or `uvx`_ to install the latest published package to an isolated virtual environment.
-
-.. _pipx: https://pipx.pypa.io/
-.. _uvx: https://docs.astral.sh/uv/guides/tools/
-
-Run:
-
-::
-
-    $ pipx install pgcli
-
-to install ``pgcli`` with ``pipx``, or run:
-
-::
-
-    $ uvx pgcli
-
-to run ``pgcli`` by installing on the fly with ``uvx``.
-
-Docker
-======
-
-Pgcli can be run from within Docker. This can be useful to try pgcli without
-installing it, or any dependencies, system-wide.
-
-To build the image:
-
-::
-
-    $ docker build -t pgcli .
-
-To create a container from the image:
-
-::
-
-    $ docker run --rm -ti pgcli pgcli <ARGS>
-
-To access postgresql databases listening on localhost, make sure to run the
-docker in "host net mode". E.g. to access a database called "foo" on the
-postgresql server running on localhost:5432 (the standard port):
-
-::
-
-    $ docker run --rm -ti --net host pgcli pgcli -h localhost foo
-
-To connect to a locally running instance over a unix socket, bind the socket to
-the docker container:
-
-::
-
-    $ docker run --rm -ti -v /var/run/postgres:/var/run/postgres pgcli pgcli foo
-
-
-IPython
-=======
-
-Pgcli can be run from within `IPython <https://ipython.org>`_ console. When working on a query,
-it may be useful to drop into a pgcli session without leaving the IPython console, iterate on a
-query, then quit pgcli to find the query results in your IPython workspace.
-
-Assuming you have IPython installed:
-
-::
-
-    $ pip install ipython-sql
-
-After that, run ipython and load the ``pgcli.magic`` extension:
-
-::
-
-    $ ipython
-
-    In [1]: %load_ext pgcli.magic
-
-
-Connect to a database and construct a query:
-
-::
-
-    In [2]: %pgcli postgres://someone@localhost:5432/world
-    Connected: someone@world
-    someone@localhost:world> select * from city c where countrycode = 'USA' and population > 1000000;
-    +------+--------------+---------------+--------------+--------------+
-    | id   | name         | countrycode   | district     | population   |
-    |------+--------------+---------------+--------------+--------------|
-    | 3793 | New York     | USA           | New York     | 8008278      |
-    | 3794 | Los Angeles  | USA           | California   | 3694820      |
-    | 3795 | Chicago      | USA           | Illinois     | 2896016      |
-    | 3796 | Houston      | USA           | Texas        | 1953631      |
-    | 3797 | Philadelphia | USA           | Pennsylvania | 1517550      |
-    | 3798 | Phoenix      | USA           | Arizona      | 1321045      |
-    | 3799 | San Diego    | USA           | California   | 1223400      |
-    | 3800 | Dallas       | USA           | Texas        | 1188580      |
-    | 3801 | San Antonio  | USA           | Texas        | 1144646      |
-    +------+--------------+---------------+--------------+--------------+
-    SELECT 9
-    Time: 0.003s
-
-
-Exit out of pgcli session with ``Ctrl + D`` and find the query results:
-
-::
-
-    someone@localhost:world>
-    Goodbye!
-    9 rows affected.
-    Out[2]:
-    [(3793, u'New York', u'USA', u'New York', 8008278),
-     (3794, u'Los Angeles', u'USA', u'California', 3694820),
-     (3795, u'Chicago', u'USA', u'Illinois', 2896016),
-     (3796, u'Houston', u'USA', u'Texas', 1953631),
-     (3797, u'Philadelphia', u'USA', u'Pennsylvania', 1517550),
-     (3798, u'Phoenix', u'USA', u'Arizona', 1321045),
-     (3799, u'San Diego', u'USA', u'California', 1223400),
-     (3800, u'Dallas', u'USA', u'Texas', 1188580),
-     (3801, u'San Antonio', u'USA', u'Texas', 1144646)]
-
-The results are available in special local variable ``_``, and can be assigned to a variable of your
-choice:
-
-::
-
-    In [3]: my_result = _
-
-Pgcli dropped support for:
-
-* Python<3.8 as of 4.0.0.
-* Python<3.9 as of 4.2.0.
-
-Thanks:
--------
-
-A special thanks to `Jonathan Slenders <https://twitter.com/jonathan_s>`_ for
-creating `Python Prompt Toolkit <http://github.com/jonathanslenders/python-prompt-toolkit>`_,
-which is quite literally the backbone library, that made this app possible.
-Jonathan has also provided valuable feedback and support during the development
-of this app.
-
-`Click <http://click.pocoo.org/>`_ is used for command line option parsing
-and printing error messages.
-
-Thanks to `psycopg <https://www.psycopg.org/>`_ for providing a rock solid
-interface to Postgres database.
-
-Thanks to all the beta testers and contributors for your time and patience. :)
-
-
-.. |Build Status| image:: https://github.com/dbcli/pgcli/actions/workflows/ci.yml/badge.svg?branch=main
-    :target: https://github.com/dbcli/pgcli/actions/workflows/ci.yml
-
-.. |CodeCov| image:: https://codecov.io/gh/dbcli/pgcli/branch/main/graph/badge.svg
-   :target: https://codecov.io/gh/dbcli/pgcli
-   :alt: Code coverage report
-
-.. |Landscape| image:: https://landscape.io/github/dbcli/pgcli/main/landscape.svg?style=flat
-   :target: https://landscape.io/github/dbcli/pgcli/main
-   :alt: Code Health
-
-.. |PyPI| image:: https://img.shields.io/pypi/v/pgcli.svg
-    :target: https://pypi.python.org/pypi/pgcli/
-    :alt: Latest Version
-
-.. |netlify| image:: https://api.netlify.com/api/v1/badges/3a0a14dd-776d-445d-804c-3dd74fe31c4e/deploy-status
-     :target: https://app.netlify.com/sites/pgcli/deploys
-     :alt: Netlify
+Thanks
+------
+
+Based on the work of `Amjith Ramanujam <https://github.com/amjith>`_ and
+`Irina Truong <https://github.com/j-bennet>`_ on the original
+`pgcli <https://github.com/dbcli/pgcli>`_.
+
+Built with `Python Prompt Toolkit <https://github.com/jonathanslenders/python-prompt-toolkit>`_,
+`Click <https://click.palletsprojects.com/>`_, and
+`psycopg <https://www.psycopg.org/>`_.
