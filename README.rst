@@ -49,50 +49,50 @@ For more details:
     Usage: pgcli [OPTIONS] [DBNAME] [USERNAME]
 
     Options:
-      -h, --host TEXT            Host address of the postgres database.
-      -p, --port INTEGER         Port number at which the postgres instance is
-                                 listening.
-      -U, --username TEXT        Username to connect to the postgres database.
-      -u, --user TEXT            Username to connect to the postgres database.
-      -W, --password             Force password prompt.
-      -w, --no-password          Never prompt for password.
-      --single-connection        Do not use a separate connection for completions.
-      -v, --version              Version of pgcli.
-      -d, --dbname TEXT          database name to connect to.
-      --pgclirc FILE             Location of pgclirc file.
-      -D, --dsn TEXT             Use DSN configured into the [alias_dsn] section
-                                 of pgclirc file.
-      --list-dsn                 list of DSN configured into the [alias_dsn]
-                                 section of pgclirc file.
-      --row-limit INTEGER        Set threshold for row limit prompt. Use 0 to
-                                 disable prompt.
-      --application-name TEXT    Application name for the connection.
-      --less-chatty              Skip intro on startup and goodbye on exit.
-      --prompt TEXT              Prompt format (Default: "\u@\h:\d> ").
-      --prompt-dsn TEXT          Prompt format for connections using DSN aliases
-                                 (Default: "\u@\h:\d> ").
-      -l, --list                 list available databases, then exit.
-      --ping                     Check database connectivity, then exit.
-      --auto-vertical-output     Automatically switch to vertical output mode if
-                                 the result is wider than the terminal width.
-      --warn TEXT                Warn before running a destructive query.
-      --ssh-tunnel TEXT          Open an SSH tunnel to the given address and
-                                 connect to the database from it.
-      --log-file TEXT            Write all queries & output into a file, in
-                                 addition to the normal output destination.
-      --init-command TEXT        SQL statement to execute after connecting.
-      -y, --yes                  Force destructive commands without confirmation
-                                 prompt.
-      -c, --command TEXT         Run command (SQL or internal) and exit. Multiple
-                                 -c options are allowed.
-      -f, --file FILE            Execute commands from file, then exit. Multiple
-                                 -f options are allowed.
-      -t, --tuples-only          Print rows only, suppress headers, status, and
-                                 timing.
-      --no-timings               Suppress query execution time display.
-      --no-status                Suppress query status line (e.g., SELECT 1).
-      -o, --output TEXT          Send query results to file (or |pipe).
-      --help                     Show this message and exit.
+      --application-name TEXT  Application name for the connection.
+      --auto-vertical-output   Automatically switch to vertical output mode if
+                               the result is wider than the terminal width.
+      -c, --command TEXT       Run command (SQL or internal) and exit. Multiple
+                               -c options are allowed.
+      -d, --dbname TEXT        Database name to connect to.
+      -D, --dsn TEXT           Use DSN configured into the [alias_dsn] section
+                               of pgclirc file.
+      -f, --file FILE          Execute commands from file, then exit. Multiple
+                               -f options are allowed.
+      -h, --host TEXT          Host address of the postgres database.
+      --init-command TEXT      SQL statement to execute after connecting.
+      --less-chatty            Skip intro on startup and goodbye on exit.
+      -l, --list               List available databases, then exit.
+      --list-dsn               List of DSN configured into the [alias_dsn]
+                               section of pgclirc file.
+      --log-file TEXT          Write all queries & output into a file, in
+                               addition to the normal output destination.
+      -w, --no-password        Never prompt for password.
+      --no-status              Suppress query status line (e.g., SELECT 1).
+      --no-timings             Suppress query execution time display.
+      -o, --output TEXT        Send query results to file (or |pipe).
+      -W, --password           Force password prompt.
+      --pgclirc FILE           Location of pgclirc file.
+      --ping                   Check database connectivity, then exit.
+      -p, --port INTEGER       Port number at which the postgres instance is
+                               listening.
+      --prompt TEXT            Prompt format (Default: "\u@\h:\d> ").
+      --prompt-dsn TEXT        Prompt format for connections using DSN aliases
+                               (Default: "\u@\h:\d> ").
+      --row-limit INTEGER      Set threshold for row limit prompt. Use 0 to
+                               disable prompt.
+      --single-connection      Do not use a separate connection for completions.
+      --ssh-tunnel TEXT        Open an SSH tunnel to the given address and
+                               connect to the database from it.
+      -t, --tuples-only        Print rows only, suppress headers, status, and
+                               timing.
+      -U, --username TEXT      Username to connect to the postgres database.
+      -u, --user TEXT          Username to connect to the postgres database.
+      -v, --version            Version of pgcli.
+      --warn TEXT              Warn before running a destructive query.
+      -y, --yes                Force destructive commands without confirmation
+                               prompt.
+      --help                   Show this message and exit.
 
 ``pgcli`` also supports many of the same `environment variables`_ as ``psql`` for login options (e.g. ``PGHOST``, ``PGPORT``, ``PGUSER``, ``PGPASSWORD``, ``PGDATABASE``).
 
