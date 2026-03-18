@@ -1,5 +1,85 @@
 # vi: ft=vimwiki
 
+Upcoming
+==============
+
+### v4.4.3
+* [ ] Ordenar output de --help alfabeticamente
+* [ ] Add coverage
+* [ ] PR \restrict/\unrestrict al repo upstream
+
+### Backlog
+* [ ] Refactor to sqlcompletion to consume the text from left to right and use a state machine to suggest cols or tables instead of relying on hacks.
+* [ ] Add a few more special commands. (\l pattern, \dp, \ds, \dy, \z etc)
+* [ ] Refactor pgspecial.py to a class.
+* [ ] Show/hide docs for a statement using a keybinding.
+* [ ] Check how to add the name of the table before printing the table.
+* [ ] Add a new trigger for M-/ that does naive completion.
+* [ ] New Feature List - Write the current version to config file. At launch if the version has changed, display the changelog between the two versions.
+* [ ] Add a test for 'select * from custom.abc where custom.abc.' should suggest columns from abc.
+* [ ] pgexecute columns(), tables() etc can be just cursors instead of fetchall()
+* [ ] Add colorschemes in config file.
+* [ ] Cambiar versionado a CalVer YY.DDD (año.dia_juliano) - DIFERIDO
+
+### PRs upstream pendientes de review
+* [ ] PR #1545 (-t/--tuples-only) - rebased 2026-02-20, esperando j-bennet
+* [ ] PR #1546 (.pgpass SSH) - CI fix 2026-02-23, esperando j-bennet
+* [ ] PR #1559 (fix trailing SQL comments) - abierto 2026-03-02
+
+### PRs upstream interesantes a seguir
+* [ ] #1562 - Fix DSN password precedence over PGPASSWORD env var (BillionClaw)
+* [ ] #1558 - Cursor shape indicator for vi mode (joryeugene)
+* [ ] #1536 - Port en keyring para no sobreescribir entre servidores (bechampion)
+
+2026-03-18
+===================
+
+[x] Agregar upstream version tracking al changelog
+[x] Crear GitHub release v4.4.2 con changelog completo
+[x] Reescribir README con features de pgcli.daf y --help actualizado
+
+2026-03-02
+===================
+
+[x] Fix trailing SQL comments breaking multiline submit and query execution
+
+2026-02-24
+===================
+
+[x] Merge upstream features (v4.4.0) y bump a v4.4.1
+[x] Cambiar -t/--tuples-only a flag booleano puro
+[x] -t/--tuples-only: forzar formato plain sin bordes ni headers
+[x] Traer \nq named query quiet mode (#1551) de upstream
+[x] Traer \T prompt transaction status (#1553) de upstream
+[x] Bump click >= 8.3.1 (#1556)
+
+2026-02-13
+===================
+
+[x] Migrar SSH tunnel de sshtunnel a Paramiko nativo
+[x] Leer IdentityFile del SSH config
+[x] Host key verification configurable (auto-add, warn, reject)
+[x] pgcli_isready wrapper con soporte SSH tunnel
+[x] Security: sanitize passwords en logs, \restrict blocking, path sanitization
+[x] --no-timings / --no-status flags
+[x] \restrict/\unrestrict completo (CVE-2025-8714)
+[x] \np autocomplete fix
+[x] PR #1545 y #1546 rebased
+
+2026-01-20
+===================
+
+[x] allow_agent config, \nr reload, SET ROLE autocomplete
+[x] Fix mypy errors (136 total)
+[x] Restore .pgpass support en connect_uri()
+
+2026-01-19
+===================
+
+[x] namedqueries.d directory support
+[x] dsn.d directory support
+[x] Sort \n alphabetically
+
 * [X] Autocomplete \n with loaded named queries
 * [X] Reload named queries without restarting (\nr) - v4.3.14
 * [X] autocomplete set role command with roles. - v4.3.15
