@@ -1,5 +1,5 @@
-4.4.2 (2026-03-02)
-==================
+4.4.2 (2026-03-02) - upstream: 4.4.0
+=====================================
 
 Bug Fixes:
 ----------
@@ -12,8 +12,8 @@ Bug Fixes:
       for a trailing semicolon
     * Previously ``SELECT 1; -- note`` would never submit in multiline mode
 
-4.4.1 (2026-02-24)
-==================
+4.4.1 (2026-02-24) - upstream: 4.4.0
+=====================================
 
 Features:
 ---------
@@ -81,8 +81,8 @@ Security:
     * Rejects non-regular files (directories, pipes, sockets)
 
 
-4.3.17 (2026-02-13)
-===================
+4.3.17 (2026-02-13) - upstream: 4.1.0
+======================================
 
 Features:
 ---------
@@ -100,8 +100,8 @@ Bug Fixes:
     * Autocomplete now works for all named query commands: `\n`, `\nd`, `\np`, `\ns`
 
 
-4.3.16 (2026-01-20)
-===================
+4.3.16 (2026-01-20) - upstream: 4.1.0
+======================================
 
 Bug Fixes:
 ----------
@@ -120,8 +120,8 @@ Internal:
     * Use `os.makedirs()` instead of `ensure_dir_exists()` for log directories
 
 
-4.3.15 (2026-01-20)
-===================
+4.3.15 (2026-01-20) - upstream: 4.1.0
+======================================
 
 Features:
 ---------
@@ -151,8 +151,8 @@ Bug Fixes:
     * Fixes "password authentication failed" when using SSH tunnels with `.pgpass`
 
 
-4.3.13 (2026-01-19)
-==================
+4.3.13 (2026-01-19) - upstream: 4.1.0
+======================================
 
 Features:
 ---------
@@ -170,8 +170,8 @@ Bug Fixes:
 * Sort named queries alphabetically in `\n` output for easier navigation.
 
 
-4.3.12 (2026-01-19)
-==================
+4.3.12 (2026-01-19) - upstream: 4.1.0
+======================================
 
 Features:
 ---------
@@ -215,8 +215,8 @@ Bug Fixes:
     * Particularly useful when using SSH tunnels where host is always localhost
     * Key format changed from `user@host` to `user@host@port`
 
-4.3.9 (2025-12-17)
-==================
+4.3.9 (2025-12-17) - upstream: 4.1.0
+=====================================
 
 Features:
 ---------
