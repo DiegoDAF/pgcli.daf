@@ -10,7 +10,6 @@ classifiers = [
     "Operating System :: Unix",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -88,7 +87,7 @@ find = { namespaces = false }
 pgcli = ["pgclirc", "packages/pgliterals/pgliterals.json"]
 
 [tool.ruff]
-target-version = 'py39'
+target-version = 'py310'
 line-length = 140
 
 [tool.ruff.lint]
@@ -140,7 +139,7 @@ addopts = "--capture=sys --showlocals -rxs"
 testpaths = ["tests"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 warn_redundant_casts = true
