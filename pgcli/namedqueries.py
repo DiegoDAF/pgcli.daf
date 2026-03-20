@@ -111,11 +111,7 @@ class ExtendedNamedQueries(NamedQueries):
 
         # Get all .conf files in the directory, sorted for consistent ordering
         try:
-            files = sorted(
-                f
-                for f in os.listdir(include_dir)
-                if f.endswith(".conf") and os.path.isfile(os.path.join(include_dir, f))
-            )
+            files = sorted(f for f in os.listdir(include_dir) if f.endswith(".conf") and os.path.isfile(os.path.join(include_dir, f)))
         except OSError as e:
             logger.warning(f"Error reading named queries include directory: {e}")
             return
@@ -143,13 +139,10 @@ class ExtendedNamedQueries(NamedQueries):
             # If no section found, treat entire file as queries
             # (excluding any sections that might exist)
             if not queries:
-                queries = {k: v for k, v in file_config.items()
-                          if not isinstance(v, dict)}
+                queries = {k: v for k, v in file_config.items() if not isinstance(v, dict)}
 
             if queries:
-                logger.debug(
-                    f"Loaded {len(queries)} named queries from {os.path.basename(filepath)}"
-                )
+                logger.debug(f"Loaded {len(queries)} named queries from {os.path.basename(filepath)}")
                 # Merge queries, later files override earlier ones
                 self._included_queries.update(queries)
             else:
@@ -168,8 +161,7 @@ class ExtendedNamedQueries(NamedQueries):
             List of query names (combined from main config and includes)
         """
         # Get queries from main config (excluding directives)
-        main_queries = {k: v for k, v in self.config.get(self.section_name, {}).items()
-                        if k not in self.DIRECTIVES}
+        main_queries = {k: v for k, v in self.config.get(self.section_name, {}).items() if k not in self.DIRECTIVES}
 
         # Combine with included queries (main config takes precedence)
         all_queries = dict(self._included_queries)
@@ -209,8 +201,7 @@ class ExtendedNamedQueries(NamedQueries):
         # Combine included queries with main config (main takes precedence)
         # Exclude directives
         all_queries = dict(self._included_queries)
-        main_queries = {k: v for k, v in self.config.get(self.section_name, {}).items()
-                        if k not in self.DIRECTIVES}
+        main_queries = {k: v for k, v in self.config.get(self.section_name, {}).items() if k not in self.DIRECTIVES}
         all_queries.update(main_queries)
         return all_queries
 

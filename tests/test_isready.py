@@ -1,8 +1,6 @@
 """Tests for pgcli_isready wrapper."""
 
-import os
 import subprocess
-import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
@@ -13,7 +11,6 @@ from pgcli.isready import (
     build_tunneled_args,
     setup_logging,
 )
-from pgcli.ssh_tunnel import SSHTunnelManager
 
 
 class TestParseConnectionArgs:
@@ -137,7 +134,7 @@ class TestIsreadyCli:
         mock_tunnel_mgr.return_value = mock_manager
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["-h", "myhost", "-p", "5432", "-t", "5"])
+        runner.invoke(cli, ["-h", "myhost", "-p", "5432", "-t", "5"])
 
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
@@ -155,9 +152,7 @@ class TestIsreadyCli:
         mock_tunnel_mgr.return_value = mock_manager
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["--ssh-tunnel", "user@bastion", "-h", "db.internal"]
-        )
+        runner.invoke(cli, ["--ssh-tunnel", "user@bastion", "-h", "db.internal"])
 
         mock_manager.start_tunnel.assert_called_once()
         mock_manager.stop_tunnel.assert_called_once()
@@ -244,9 +239,7 @@ class TestSSHTunnelBehavior:
         runner = CliRunner()
         runner.invoke(cli, ["--dsn", "production", "-h", "db.internal"])
 
-        mock_manager.start_tunnel.assert_called_once_with(
-            host="db.internal", port=5432, dsn_alias="production"
-        )
+        mock_manager.start_tunnel.assert_called_once_with(host="db.internal", port=5432, dsn_alias="production")
 
 
 class TestVerboseMode:
@@ -254,11 +247,13 @@ class TestVerboseMode:
 
     def test_setup_logging_verbose(self):
         import logging
+
         logger = setup_logging(verbose=True)
         assert logger.level == logging.DEBUG
 
     def test_setup_logging_non_verbose(self):
         import logging
+
         logger = setup_logging(verbose=False)
         assert logger.level == logging.WARNING
 
@@ -267,9 +262,7 @@ class TestIntegrationWithRealPgIsready:
     """Integration tests using the real pg_isready binary."""
 
     def test_pg_isready_version(self):
-        result = subprocess.run(
-            [find_pg_isready(), "--version"], capture_output=True, text=True
-        )
+        result = subprocess.run([find_pg_isready(), "--version"], capture_output=True, text=True)
         assert result.returncode == 0
         assert "pg_isready" in result.stdout
 

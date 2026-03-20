@@ -116,6 +116,7 @@ def test_get_role_matches():
 
     # Test matching - using "adm" which should match "admin" but not others
     from pgcli.packages.sqlcompletion import Role
+
     matches = list(completer.get_role_matches(Role(), "adm"))
     role_names = [m.completion.text for m in matches]
     assert "admin" in role_names

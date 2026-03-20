@@ -11,29 +11,29 @@ def step_run_pgcli_with_options(context, options):
     """Run pgcli with specified options."""
     # Split options into individual arguments, handling quoted strings
     import shlex
+
     args = shlex.split(options)
 
     cmd = [
         "pgcli",
-        "-h", context.conf["host"],
-        "-p", str(context.conf["port"]),
-        "-U", context.conf["user"],
-        "-d", context.conf["dbname"],
-        "--less-chatty"  # Suppress intro/goodbye messages
+        "-h",
+        context.conf["host"],
+        "-p",
+        str(context.conf["port"]),
+        "-U",
+        context.conf["user"],
+        "-d",
+        context.conf["dbname"],
+        "--less-chatty",  # Suppress intro/goodbye messages
     ] + args
 
     try:
-        context.cmd_output = subprocess.check_output(
-            cmd,
-            cwd=context.package_root,
-            stderr=subprocess.STDOUT,
-            timeout=10
-        )
+        context.cmd_output = subprocess.check_output(cmd, cwd=context.package_root, stderr=subprocess.STDOUT, timeout=10)
         context.exit_code = 0
     except subprocess.CalledProcessError as e:
         context.cmd_output = e.output
         context.exit_code = e.returncode
-    except subprocess.TimeoutExpired as e:
+    except subprocess.TimeoutExpired:
         context.cmd_output = b"Command timed out"
         context.exit_code = -1
 

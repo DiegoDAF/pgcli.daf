@@ -61,10 +61,9 @@ class TestDsnAliases:
     def test_load_from_include_dir(self):
         """Test loading DSN aliases from dsn.d."""
         config = self._create_config()
-        self._create_include_file("production.conf", {
-            "prod-db": "postgresql://prod.example.com/app",
-            "prod-ro": "postgresql://prod-ro.example.com/app"
-        })
+        self._create_include_file(
+            "production.conf", {"prod-db": "postgresql://prod.example.com/app", "prod-ro": "postgresql://prod-ro.example.com/app"}
+        )
 
         dsn = DsnAliases.from_config(config)
 
@@ -75,12 +74,8 @@ class TestDsnAliases:
     def test_multiple_include_files(self):
         """Test loading from multiple .conf files."""
         config = self._create_config()
-        self._create_include_file("production.conf", {
-            "prod-db": "postgresql://prod.example.com/app"
-        })
-        self._create_include_file("staging.conf", {
-            "staging-db": "postgresql://staging.example.com/app"
-        })
+        self._create_include_file("production.conf", {"prod-db": "postgresql://prod.example.com/app"})
+        self._create_include_file("staging.conf", {"staging-db": "postgresql://staging.example.com/app"})
 
         dsn = DsnAliases.from_config(config)
 
@@ -88,12 +83,8 @@ class TestDsnAliases:
 
     def test_main_config_precedence(self):
         """Test that main config aliases take precedence over includes."""
-        config = self._create_config({
-            "mydb": "postgresql://main.example.com/app"
-        })
-        self._create_include_file("override.conf", {
-            "mydb": "postgresql://include.example.com/app"
-        })
+        config = self._create_config({"mydb": "postgresql://main.example.com/app"})
+        self._create_include_file("override.conf", {"mydb": "postgresql://include.example.com/app"})
 
         dsn = DsnAliases.from_config(config)
 
@@ -101,12 +92,8 @@ class TestDsnAliases:
 
     def test_get_source(self):
         """Test get_source returns correct location."""
-        config = self._create_config({
-            "main-db": "postgresql://main.example.com/app"
-        })
-        self._create_include_file("include.conf", {
-            "include-db": "postgresql://include.example.com/app"
-        })
+        config = self._create_config({"main-db": "postgresql://main.example.com/app"})
+        self._create_include_file("include.conf", {"include-db": "postgresql://include.example.com/app"})
 
         dsn = DsnAliases.from_config(config)
 
@@ -116,12 +103,8 @@ class TestDsnAliases:
 
     def test_get_all(self):
         """Test get_all returns all aliases."""
-        config = self._create_config({
-            "main-db": "postgresql://main.example.com/app"
-        })
-        self._create_include_file("include.conf", {
-            "include-db": "postgresql://include.example.com/app"
-        })
+        config = self._create_config({"main-db": "postgresql://main.example.com/app"})
+        self._create_include_file("include.conf", {"include-db": "postgresql://include.example.com/app"})
 
         dsn = DsnAliases.from_config(config)
         all_aliases = dsn.get_all()
@@ -133,17 +116,13 @@ class TestDsnAliases:
     def test_reload_includes(self):
         """Test reloading include files."""
         config = self._create_config()
-        self._create_include_file("test1.conf", {
-            "db1": "postgresql://db1.example.com/app"
-        })
+        self._create_include_file("test1.conf", {"db1": "postgresql://db1.example.com/app"})
 
         dsn = DsnAliases.from_config(config)
         assert dsn.list() == ["db1"]
 
         # Add another file
-        self._create_include_file("test2.conf", {
-            "db2": "postgresql://db2.example.com/app"
-        })
+        self._create_include_file("test2.conf", {"db2": "postgresql://db2.example.com/app"})
 
         # Before reload, db2 shouldn't be visible
         assert "db2" not in dsn.list()
@@ -155,9 +134,7 @@ class TestDsnAliases:
     def test_only_conf_files_loaded(self):
         """Test that only .conf files are loaded from include dir."""
         config = self._create_config()
-        self._create_include_file("valid.conf", {
-            "valid-db": "postgresql://valid.example.com/app"
-        })
+        self._create_include_file("valid.conf", {"valid-db": "postgresql://valid.example.com/app"})
 
         # Create non-.conf files
         os.makedirs(self.include_dir, exist_ok=True)
@@ -173,9 +150,7 @@ class TestDsnAliases:
     def test_invalid_include_file_handled(self):
         """Test that invalid config files don't crash loading."""
         config = self._create_config()
-        self._create_include_file("valid.conf", {
-            "valid-db": "postgresql://valid.example.com/app"
-        })
+        self._create_include_file("valid.conf", {"valid-db": "postgresql://valid.example.com/app"})
 
         # Create an invalid config file
         os.makedirs(self.include_dir, exist_ok=True)
@@ -191,12 +166,8 @@ class TestDsnAliases:
         """Test that files are loaded in alphabetical order."""
         config = self._create_config()
         # Create files that override each other
-        self._create_include_file("b_second.conf", {
-            "mydb": "postgresql://second.example.com/app"
-        })
-        self._create_include_file("a_first.conf", {
-            "mydb": "postgresql://first.example.com/app"
-        })
+        self._create_include_file("b_second.conf", {"mydb": "postgresql://second.example.com/app"})
+        self._create_include_file("a_first.conf", {"mydb": "postgresql://first.example.com/app"})
 
         dsn = DsnAliases.from_config(config)
 
@@ -247,9 +218,7 @@ class TestDsnAliases:
     def test_load_with_section_header(self):
         """Test loading files with [alias_dsn] section header."""
         config = self._create_config()
-        self._create_include_file("sectioned.conf", {
-            "section-db": "postgresql://section.example.com/app"
-        }, with_section=True)
+        self._create_include_file("sectioned.conf", {"section-db": "postgresql://section.example.com/app"}, with_section=True)
 
         dsn = DsnAliases.from_config(config)
 
@@ -261,9 +230,7 @@ class TestDsnAliases:
         config = self._create_config()
 
         # File with section header
-        self._create_include_file("with_section.conf", {
-            "db-a": "postgresql://a.example.com/app"
-        }, with_section=True)
+        self._create_include_file("with_section.conf", {"db-a": "postgresql://a.example.com/app"}, with_section=True)
 
         # File without section header (simple format)
         os.makedirs(self.include_dir, exist_ok=True)
@@ -283,10 +250,7 @@ class TestDsnAliases:
 
         # Create main config with includedir directive
         config = ConfigObj(self.config_path, encoding="utf-8")
-        config["alias_dsn"] = {
-            "main-db": "postgresql://main.example.com/app",
-            "includedir": "./my_dsn"
-        }
+        config["alias_dsn"] = {"main-db": "postgresql://main.example.com/app", "includedir": "./my_dsn"}
         config.write()
         config = ConfigObj(self.config_path, encoding="utf-8")
 
@@ -311,9 +275,7 @@ class TestDsnAliases:
 
         # Create main config with absolute includedir
         config = ConfigObj(self.config_path, encoding="utf-8")
-        config["alias_dsn"] = {
-            "includedir": custom_dir
-        }
+        config["alias_dsn"] = {"includedir": custom_dir}
         config.write()
         config = ConfigObj(self.config_path, encoding="utf-8")
 
@@ -347,10 +309,7 @@ class TestDsnAliases:
 
     def test_iteration(self):
         """Test iterating over aliases."""
-        config = self._create_config({
-            "db1": "postgresql://db1.example.com/app",
-            "db2": "postgresql://db2.example.com/app"
-        })
+        config = self._create_config({"db1": "postgresql://db1.example.com/app", "db2": "postgresql://db2.example.com/app"})
         dsn = DsnAliases.from_config(config)
 
         aliases = list(dsn)
@@ -361,7 +320,7 @@ class TestDsnAliases:
         config = self._create_config({
             "zebra-db": "postgresql://zebra.example.com/app",
             "alpha-db": "postgresql://alpha.example.com/app",
-            "mike-db": "postgresql://mike.example.com/app"
+            "mike-db": "postgresql://mike.example.com/app",
         })
         dsn = DsnAliases.from_config(config)
 

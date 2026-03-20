@@ -54,7 +54,6 @@ def step_tee_ouptut(context):
     wrappers.expect_exact(context, "Time", timeout=5)
 
 
-
 @when("we stop teeing output")
 def step_notee_output(context):
     context.cli.sendline(r"\o")

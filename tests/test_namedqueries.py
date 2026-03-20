@@ -4,7 +4,6 @@
 import os
 import tempfile
 import shutil
-import pytest
 from configobj import ConfigObj
 
 from pgcli.namedqueries import ExtendedNamedQueries
@@ -58,10 +57,7 @@ class TestExtendedNamedQueries:
     def test_load_from_include_dir(self):
         """Test loading queries from namedqueries.d."""
         config = self._create_config()
-        self._create_include_file("activity.conf", {
-            "ps": "SELECT * FROM pg_stat_activity",
-            "locks": "SELECT * FROM pg_locks"
-        })
+        self._create_include_file("activity.conf", {"ps": "SELECT * FROM pg_stat_activity", "locks": "SELECT * FROM pg_locks"})
 
         nq = ExtendedNamedQueries.from_config(config)
 
@@ -72,12 +68,8 @@ class TestExtendedNamedQueries:
     def test_multiple_include_files(self):
         """Test loading from multiple .conf files."""
         config = self._create_config()
-        self._create_include_file("activity.conf", {
-            "ps": "SELECT * FROM pg_stat_activity"
-        })
-        self._create_include_file("vacuum.conf", {
-            "vacuum_stats": "SELECT * FROM pg_stat_user_tables"
-        })
+        self._create_include_file("activity.conf", {"ps": "SELECT * FROM pg_stat_activity"})
+        self._create_include_file("vacuum.conf", {"vacuum_stats": "SELECT * FROM pg_stat_user_tables"})
 
         nq = ExtendedNamedQueries.from_config(config)
 
@@ -88,10 +80,13 @@ class TestExtendedNamedQueries:
         config = self._create_config({
             "ps": "SELECT pid FROM pg_stat_activity"  # override
         })
-        self._create_include_file("activity.conf", {
-            "ps": "SELECT * FROM pg_stat_activity",  # will be overridden
-            "locks": "SELECT * FROM pg_locks"
-        })
+        self._create_include_file(
+            "activity.conf",
+            {
+                "ps": "SELECT * FROM pg_stat_activity",  # will be overridden
+                "locks": "SELECT * FROM pg_locks",
+            },
+        )
 
         nq = ExtendedNamedQueries.from_config(config)
 
@@ -102,12 +97,8 @@ class TestExtendedNamedQueries:
 
     def test_get_source(self):
         """Test get_source method to identify query origin."""
-        config = self._create_config({
-            "main_query": "SELECT 1"
-        })
-        self._create_include_file("test.conf", {
-            "include_query": "SELECT 2"
-        })
+        config = self._create_config({"main_query": "SELECT 1"})
+        self._create_include_file("test.conf", {"include_query": "SELECT 2"})
 
         nq = ExtendedNamedQueries.from_config(config)
 
@@ -119,12 +110,9 @@ class TestExtendedNamedQueries:
         """Test get_all method returns combined dictionary."""
         config = self._create_config({
             "q1": "SELECT 1",
-            "q2": "SELECT 2"  # override included
+            "q2": "SELECT 2",  # override included
         })
-        self._create_include_file("test.conf", {
-            "q2": "SELECT override",
-            "q3": "SELECT 3"
-        })
+        self._create_include_file("test.conf", {"q2": "SELECT override", "q3": "SELECT 3"})
 
         nq = ExtendedNamedQueries.from_config(config)
         all_queries = nq.get_all()
@@ -132,23 +120,19 @@ class TestExtendedNamedQueries:
         assert all_queries == {
             "q1": "SELECT 1",
             "q2": "SELECT 2",  # main config wins
-            "q3": "SELECT 3"
+            "q3": "SELECT 3",
         }
 
     def test_reload_includes(self):
         """Test reload_includes refreshes from directory."""
         config = self._create_config()
-        self._create_include_file("test.conf", {
-            "q1": "SELECT 1"
-        })
+        self._create_include_file("test.conf", {"q1": "SELECT 1"})
 
         nq = ExtendedNamedQueries.from_config(config)
         assert nq.list() == ["q1"]
 
         # Add another file
-        self._create_include_file("test2.conf", {
-            "q2": "SELECT 2"
-        })
+        self._create_include_file("test2.conf", {"q2": "SELECT 2"})
 
         # Before reload, q2 shouldn't be visible
         assert "q2" not in nq.list()
@@ -160,9 +144,7 @@ class TestExtendedNamedQueries:
     def test_only_conf_files_loaded(self):
         """Test that only .conf files are loaded from include dir."""
         config = self._create_config()
-        self._create_include_file("valid.conf", {
-            "valid_query": "SELECT 1"
-        })
+        self._create_include_file("valid.conf", {"valid_query": "SELECT 1"})
         # Create a non-.conf file (should be ignored)
         os.makedirs(self.include_dir, exist_ok=True)
         with open(os.path.join(self.include_dir, "readme.txt"), "w") as f:
@@ -177,9 +159,7 @@ class TestExtendedNamedQueries:
     def test_invalid_include_file_handled(self):
         """Test that invalid config files don't crash loading."""
         config = self._create_config()
-        self._create_include_file("valid.conf", {
-            "valid_query": "SELECT 1"
-        })
+        self._create_include_file("valid.conf", {"valid_query": "SELECT 1"})
         # Create an invalid config file
         os.makedirs(self.include_dir, exist_ok=True)
         with open(os.path.join(self.include_dir, "invalid.conf"), "w") as f:
@@ -203,9 +183,7 @@ class TestExtendedNamedQueries:
 
     def test_delete_query_from_main_config(self):
         """Test that delete() removes from main config."""
-        config = self._create_config({
-            "to_delete": "SELECT 1"
-        })
+        config = self._create_config({"to_delete": "SELECT 1"})
         nq = ExtendedNamedQueries.from_config(config)
 
         result = nq.delete("to_delete")
@@ -219,12 +197,13 @@ class TestExtendedNamedQueries:
         """Test that include files are loaded in sorted order."""
         config = self._create_config()
         # Create files in non-alphabetical order
-        self._create_include_file("z_last.conf", {
-            "query": "z_version"
-        })
-        self._create_include_file("a_first.conf", {
-            "query": "a_version"  # This should be overridden by z_last.conf
-        })
+        self._create_include_file("z_last.conf", {"query": "z_version"})
+        self._create_include_file(
+            "a_first.conf",
+            {
+                "query": "a_version"  # This should be overridden by z_last.conf
+            },
+        )
 
         nq = ExtendedNamedQueries.from_config(config)
 
@@ -279,9 +258,7 @@ class TestExtendedNamedQueries:
         os.makedirs(self.include_dir, exist_ok=True)
 
         # File with section
-        self._create_include_file("with_section.conf", {
-            "query_a": "SELECT 'a'"
-        })
+        self._create_include_file("with_section.conf", {"query_a": "SELECT 'a'"})
 
         # File without section
         filepath = os.path.join(self.include_dir, "without_section.conf")
@@ -300,10 +277,7 @@ class TestExtendedNamedQueries:
 
         # Create config with includedir directive
         config = ConfigObj(self.config_file, encoding="utf-8")
-        config["named queries"] = {
-            "includedir": "./my_queries",
-            "main_query": "SELECT 'main'"
-        }
+        config["named queries"] = {"includedir": "./my_queries", "main_query": "SELECT 'main'"}
         config.write()
         config = ConfigObj(self.config_file, encoding="utf-8")
 

@@ -16,12 +16,10 @@ from typing import List, Optional
 import click
 
 from .config import get_config
-from .ssh_tunnel import get_tunnel_manager_from_config, SSH_TUNNEL_SUPPORT
+from .ssh_tunnel import get_tunnel_manager_from_config
 
 
-def get_password_from_pgpass(
-    host: str, port: int, database: str, user: str
-) -> Optional[str]:
+def get_password_from_pgpass(host: str, port: int, database: str, user: str) -> Optional[str]:
     """
     Read password from ~/.pgpass file.
 
@@ -107,7 +105,21 @@ def parse_user_and_database(args: List[str]) -> tuple:
         # Positional database argument (last non-option arg)
         if not arg.startswith("-") and i == len(args) - 1:
             # Check if it's not a value for a previous option
-            if i > 0 and args[i-1] in ("-h", "--host", "-p", "--port", "-U", "--username", "-d", "--dbname", "-f", "--file", "-F", "--format"):
+            option_flags = (
+                "-h",
+                "--host",
+                "-p",
+                "--port",
+                "-U",
+                "--username",
+                "-d",
+                "--dbname",
+                "-f",
+                "--file",
+                "-F",
+                "--format",
+            )
+            if i > 0 and args[i - 1] in option_flags:
                 pass
             else:
                 database = arg
@@ -332,18 +344,17 @@ def build_tunneled_args(
 
 
 @click.command(
-    context_settings=dict(
-        ignore_unknown_options=True,
-        allow_extra_args=True,
-        allow_interspersed_args=True,
-    )
+    context_settings={
+        "ignore_unknown_options": True,
+        "allow_extra_args": True,
+        "allow_interspersed_args": True,
+    }
 )
 @click.option(
     "--ssh-tunnel",
     "ssh_tunnel",
     default=None,
-    help="SSH tunnel URL (e.g., ssh://user@host:port). "
-    "If not provided, uses pgcli config.",
+    help="SSH tunnel URL (e.g., ssh://user@host:port). If not provided, uses pgcli config.",
 )
 @click.option(
     "--dsn",
@@ -448,8 +459,7 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         sys.exit(result.returncode)
     except FileNotFoundError:
         click.secho(
-            f"Error: pg_dump not found at '{pg_dump_path}'. "
-            "Please ensure PostgreSQL client tools are installed.",
+            f"Error: pg_dump not found at '{pg_dump_path}'. Please ensure PostgreSQL client tools are installed.",
             err=True,
             fg="red",
         )

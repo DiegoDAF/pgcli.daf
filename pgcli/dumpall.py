@@ -14,7 +14,7 @@ from typing import List, Optional
 import click
 
 from .config import get_config
-from .ssh_tunnel import get_tunnel_manager_from_config, SSH_TUNNEL_SUPPORT
+from .ssh_tunnel import get_tunnel_manager_from_config
 from .dump import get_password_from_pgpass, parse_user_and_database
 
 
@@ -233,18 +233,17 @@ def build_tunneled_args(
 
 
 @click.command(
-    context_settings=dict(
-        ignore_unknown_options=True,
-        allow_extra_args=True,
-        allow_interspersed_args=True,
-    )
+    context_settings={
+        "ignore_unknown_options": True,
+        "allow_extra_args": True,
+        "allow_interspersed_args": True,
+    }
 )
 @click.option(
     "--ssh-tunnel",
     "ssh_tunnel",
     default=None,
-    help="SSH tunnel URL (e.g., ssh://user@host:port). "
-    "If not provided, uses pgcli config.",
+    help="SSH tunnel URL (e.g., ssh://user@host:port). If not provided, uses pgcli config.",
 )
 @click.option(
     "--dsn",
@@ -350,8 +349,7 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         sys.exit(result.returncode)
     except FileNotFoundError:
         click.secho(
-            f"Error: pg_dumpall not found at '{pg_dumpall_path}'. "
-            "Please ensure PostgreSQL client tools are installed.",
+            f"Error: pg_dumpall not found at '{pg_dumpall_path}'. Please ensure PostgreSQL client tools are installed.",
             err=True,
             fg="red",
         )

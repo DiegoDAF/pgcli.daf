@@ -1,10 +1,7 @@
 """Tests for pgcli_dump and pgcli_dumpall wrappers."""
 
 import os
-import subprocess
-import tempfile
-import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
 from pgcli.dump import (
@@ -17,11 +14,8 @@ from pgcli.dump import (
 from pgcli.dumpall import (
     cli as dumpall_cli,
     find_pg_dumpall,
-    parse_connection_args as parse_connection_args_dumpall,
-    build_tunneled_args as build_tunneled_args_dumpall,
-    setup_logging as setup_logging_dumpall,
 )
-from pgcli.ssh_tunnel import SSHTunnelManager, get_tunnel_manager_from_config
+from pgcli.ssh_tunnel import get_tunnel_manager_from_config
 
 
 class TestParseConnectionArgs:
@@ -152,7 +146,7 @@ class TestDumpCli:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "-F", "c"])
+        runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "-F", "c"])
 
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
@@ -171,7 +165,7 @@ class TestDumpCli:
         mock_tunnel_manager.return_value = mock_manager
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             dump_cli,
             ["--ssh-tunnel", "user@bastion", "-h", "db.internal", "-d", "mydb"],
         )
@@ -211,7 +205,7 @@ class TestDumpallCli:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dumpall_cli, ["-h", "localhost", "-g", "-f", "globals.sql"])
+        runner.invoke(dumpall_cli, ["-h", "localhost", "-g", "-f", "globals.sql"])
 
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
@@ -231,7 +225,7 @@ class TestDumpallCli:
         mock_tunnel_manager.return_value = mock_manager
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             dumpall_cli,
             ["--ssh-tunnel", "user@bastion", "-h", "db.internal", "-g"],
         )
@@ -247,7 +241,7 @@ class TestDumpallCli:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dumpall_cli, ["-h", "localhost", "-g"])
+        runner.invoke(dumpall_cli, ["-h", "localhost", "-g"])
 
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
@@ -257,6 +251,7 @@ class TestDumpallCli:
 # =============================================================================
 # Extended tests for parse_connection_args edge cases
 # =============================================================================
+
 
 class TestParseConnectionArgsEdgeCases:
     """Extended tests for parse_connection_args edge cases."""
@@ -359,6 +354,7 @@ class TestParseConnectionArgsEdgeCases:
 # Extended tests for build_tunneled_args
 # =============================================================================
 
+
 class TestBuildTunneledArgsExtended:
     """Extended tests for build_tunneled_args function."""
 
@@ -406,12 +402,18 @@ class TestBuildTunneledArgsExtended:
     def test_preserves_all_other_options(self):
         """Test that all other pg_dump options are preserved."""
         args = [
-            "-h", "host",
-            "-p", "5432",
-            "-U", "user",
-            "-d", "mydb",
-            "-F", "c",
-            "-f", "output.dump",
+            "-h",
+            "host",
+            "-p",
+            "5432",
+            "-U",
+            "user",
+            "-d",
+            "mydb",
+            "-F",
+            "c",
+            "-f",
+            "output.dump",
             "--schema-only",
             "-v",
             "--no-owner",
@@ -432,6 +434,7 @@ class TestBuildTunneledArgsExtended:
 # Integration tests with real pg_dump/pg_dumpall
 # =============================================================================
 
+
 class TestIntegrationWithRealPgDump:
     """Integration tests that use real pg_dump/pg_dumpall."""
 
@@ -439,14 +442,14 @@ class TestIntegrationWithRealPgDump:
         """Test that pg_dump --version works through wrapper."""
         runner = CliRunner()
         # Use mix_stderr=False to capture stderr separately
-        result = runner.invoke(dump_cli, ["--version"], catch_exceptions=False)
+        runner.invoke(dump_cli, ["--version"], catch_exceptions=False)
         # pg_dump --version should return version info
         # Note: exit code 0 means success, version info goes to stdout
 
     def test_pg_dumpall_version(self):
         """Test that pg_dumpall --version works through wrapper."""
         runner = CliRunner()
-        result = runner.invoke(dumpall_cli, ["--version"], catch_exceptions=False)
+        runner.invoke(dumpall_cli, ["--version"], catch_exceptions=False)
 
     @patch("pgcli.dump.subprocess.run")
     @patch("pgcli.dump.get_config")
@@ -456,7 +459,7 @@ class TestIntegrationWithRealPgDump:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "--schema-only"])
+        runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "--schema-only"])
 
         cmd = mock_run.call_args[0][0]
         assert "--schema-only" in cmd
@@ -469,7 +472,7 @@ class TestIntegrationWithRealPgDump:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "-F", "c"])
+        runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "-F", "c"])
 
         cmd = mock_run.call_args[0][0]
         assert "-F" in cmd
@@ -484,7 +487,7 @@ class TestIntegrationWithRealPgDump:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "-f", "backup.sql"])
+        runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "-f", "backup.sql"])
 
         cmd = mock_run.call_args[0][0]
         assert "-f" in cmd
@@ -498,7 +501,7 @@ class TestIntegrationWithRealPgDump:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "-t", "users"])
+        runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "-t", "users"])
 
         cmd = mock_run.call_args[0][0]
         assert "-t" in cmd
@@ -512,7 +515,7 @@ class TestIntegrationWithRealPgDump:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "-n", "public"])
+        runner.invoke(dump_cli, ["-h", "localhost", "-d", "mydb", "-n", "public"])
 
         cmd = mock_run.call_args[0][0]
         assert "-n" in cmd
@@ -522,6 +525,7 @@ class TestIntegrationWithRealPgDump:
 # =============================================================================
 # Tests for SSH tunnel behavior
 # =============================================================================
+
 
 class TestSSHTunnelBehavior:
     """Tests for SSH tunnel integration."""
@@ -538,7 +542,7 @@ class TestSSHTunnelBehavior:
         mock_tunnel_manager.return_value = mock_manager
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             dump_cli,
             ["--ssh-tunnel", "user@bastion", "-h", "db.internal.com", "-p", "5432", "-d", "mydb"],
         )
@@ -567,7 +571,7 @@ class TestSSHTunnelBehavior:
         mock_tunnel_manager.return_value = mock_manager
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             dump_cli,
             ["--dsn", "production", "-h", "db.internal.com", "-d", "mydb"],
         )
@@ -590,7 +594,7 @@ class TestSSHTunnelBehavior:
         mock_tunnel_manager.return_value = mock_manager
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             dump_cli,
             ["-h", "db.example.com", "-p", "5432", "-d", "mydb"],
         )
@@ -611,7 +615,7 @@ class TestSSHTunnelBehavior:
         mock_tunnel_manager.return_value = mock_manager
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             dump_cli,
             ["--ssh-tunnel", "user@bastion", "-h", "db.internal", "-d", "mydb"],
         )
@@ -631,7 +635,7 @@ class TestSSHTunnelBehavior:
         mock_tunnel_manager.return_value = mock_manager
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             dump_cli,
             ["--ssh-tunnel", "user@bastion", "-h", "db.internal", "-d", "mydb"],
         )
@@ -643,6 +647,7 @@ class TestSSHTunnelBehavior:
 # =============================================================================
 # Tests for error handling
 # =============================================================================
+
 
 class TestErrorHandling:
     """Tests for error handling scenarios."""
@@ -687,18 +692,21 @@ class TestErrorHandling:
 # Tests for verbose mode
 # =============================================================================
 
+
 class TestVerboseMode:
     """Tests for verbose logging mode."""
 
     def test_setup_logging_verbose(self):
         """Test that verbose logging is configured correctly."""
         import logging
+
         logger = setup_logging(verbose=True)
         assert logger.level == logging.DEBUG
 
     def test_setup_logging_non_verbose(self):
         """Test that non-verbose logging is configured correctly."""
         import logging
+
         logger = setup_logging(verbose=False)
         assert logger.level == logging.WARNING
 
@@ -720,6 +728,7 @@ class TestVerboseMode:
 # Tests for config-based SSH tunnel
 # =============================================================================
 
+
 class TestConfigBasedSSHTunnel:
     """Tests for SSH tunnel configuration from pgcli config."""
 
@@ -735,7 +744,7 @@ class TestConfigBasedSSHTunnel:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dump_cli, ["-h", "db.prod.example.com", "-d", "mydb"])
+        runner.invoke(dump_cli, ["-h", "db.prod.example.com", "-d", "mydb"])
 
         # The tunnel should be set up based on config match
 
@@ -751,11 +760,10 @@ class TestConfigBasedSSHTunnel:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dump_cli, ["--dsn", "prod-main", "-h", "db.internal", "-d", "mydb"])
+        runner.invoke(dump_cli, ["--dsn", "prod-main", "-h", "db.internal", "-d", "mydb"])
 
     def test_allow_agent_config_option(self):
         """Test allow_agent config option is passed to SSHTunnelManager."""
-        from pgcli.ssh_tunnel import get_tunnel_manager_from_config
 
         # Test default (True when not specified)
         config = {"ssh tunnels": {}}
@@ -782,6 +790,7 @@ class TestConfigBasedSSHTunnel:
 # Tests for dumpall-specific options
 # =============================================================================
 
+
 class TestDumpallSpecificOptions:
     """Tests for pg_dumpall-specific options."""
 
@@ -793,7 +802,7 @@ class TestDumpallSpecificOptions:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dumpall_cli, ["-h", "localhost", "-r"])
+        runner.invoke(dumpall_cli, ["-h", "localhost", "-r"])
 
         cmd = mock_run.call_args[0][0]
         assert "-r" in cmd
@@ -806,7 +815,7 @@ class TestDumpallSpecificOptions:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dumpall_cli, ["-h", "localhost", "-t"])
+        runner.invoke(dumpall_cli, ["-h", "localhost", "-t"])
 
         cmd = mock_run.call_args[0][0]
         assert "-t" in cmd
@@ -819,7 +828,7 @@ class TestDumpallSpecificOptions:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dumpall_cli, ["-h", "localhost", "--exclude-database=template*"])
+        runner.invoke(dumpall_cli, ["-h", "localhost", "--exclude-database=template*"])
 
         cmd = mock_run.call_args[0][0]
         assert "--exclude-database=template*" in cmd
@@ -832,7 +841,7 @@ class TestDumpallSpecificOptions:
         mock_run.return_value = MagicMock(returncode=0)
 
         runner = CliRunner()
-        result = runner.invoke(dumpall_cli, ["-h", "localhost", "--no-role-passwords"])
+        runner.invoke(dumpall_cli, ["-h", "localhost", "--no-role-passwords"])
 
         cmd = mock_run.call_args[0][0]
         assert "--no-role-passwords" in cmd

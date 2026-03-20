@@ -328,8 +328,7 @@ class SSHTunnelManager:
                 if proxycommand:
                     ssh_proxy = paramiko.ProxyCommand(proxycommand)
                 identity_files = host_config.get("identityfile", [])
-                key_filenames = [os.path.expanduser(f) for f in identity_files
-                                 if os.path.isfile(os.path.expanduser(f))]
+                key_filenames = [os.path.expanduser(f) for f in identity_files if os.path.isfile(os.path.expanduser(f))]
                 if key_filenames:
                     self.logger.debug("SSH identity files from config: %s", key_filenames)
             except Exception as e:
@@ -340,8 +339,13 @@ class SSHTunnelManager:
 
         self.logger.debug(
             "Creating SSH tunnel: %s@%s:%d -> %s:%d (allow_agent=%s, key_files=%d)",
-            ssh_username, ssh_hostname, ssh_port, host, int(port),
-            self.allow_agent, len(key_filenames),
+            ssh_username,
+            ssh_hostname,
+            ssh_port,
+            host,
+            int(port),
+            self.allow_agent,
+            len(key_filenames),
         )
 
         try:

@@ -81,8 +81,7 @@ def step_see_pg_dump_version(context):
     """Verify pg_dump version output is shown."""
     output = context.stdout + context.stderr
     # pg_dump --version outputs something like "pg_dump (PostgreSQL) 16.1"
-    assert "pg_dump" in output.lower() or "postgresql" in output.lower(), \
-        f"Expected pg_dump version info not found in: {output}"
+    assert "pg_dump" in output.lower() or "postgresql" in output.lower(), f"Expected pg_dump version info not found in: {output}"
 
 
 @then("we see pg_dumpall version output")
@@ -90,8 +89,7 @@ def step_see_pg_dumpall_version(context):
     """Verify pg_dumpall version output is shown."""
     output = context.stdout + context.stderr
     # pg_dumpall --version outputs something like "pg_dumpall (PostgreSQL) 16.1"
-    assert "pg_dumpall" in output.lower() or "postgresql" in output.lower(), \
-        f"Expected pg_dumpall version info not found in: {output}"
+    assert "pg_dumpall" in output.lower() or "postgresql" in output.lower(), f"Expected pg_dumpall version info not found in: {output}"
 
 
 @then("pgcli_dump attempts database connection")
@@ -102,15 +100,14 @@ def step_pgcli_dump_attempts_connection(context):
     output = context.stdout + context.stderr
     # Accept either success or connection error (means pg_dump was invoked)
     connection_attempted = (
-        context.exit_code == 0 or
-        "connection" in output.lower() or
-        "password" in output.lower() or
-        "could not connect" in output.lower() or
-        "fe_sendauth" in output.lower() or
-        "ssl" in output.lower()
+        context.exit_code == 0
+        or "connection" in output.lower()
+        or "password" in output.lower()
+        or "could not connect" in output.lower()
+        or "fe_sendauth" in output.lower()
+        or "ssl" in output.lower()
     )
-    assert connection_attempted, \
-        f"Expected connection attempt, got exit_code={context.exit_code}, output: {output}"
+    assert connection_attempted, f"Expected connection attempt, got exit_code={context.exit_code}, output: {output}"
 
 
 @then("pgcli_dumpall attempts database connection")
@@ -118,15 +115,14 @@ def step_pgcli_dumpall_attempts_connection(context):
     """Verify pgcli_dumpall attempted to connect (may fail without valid DB)."""
     output = context.stdout + context.stderr
     connection_attempted = (
-        context.exit_code == 0 or
-        "connection" in output.lower() or
-        "password" in output.lower() or
-        "could not connect" in output.lower() or
-        "fe_sendauth" in output.lower() or
-        "ssl" in output.lower()
+        context.exit_code == 0
+        or "connection" in output.lower()
+        or "password" in output.lower()
+        or "could not connect" in output.lower()
+        or "fe_sendauth" in output.lower()
+        or "ssl" in output.lower()
     )
-    assert connection_attempted, \
-        f"Expected connection attempt, got exit_code={context.exit_code}, output: {output}"
+    assert connection_attempted, f"Expected connection attempt, got exit_code={context.exit_code}, output: {output}"
 
 
 @then("we see ssh-tunnel option in help")

@@ -1,18 +1,17 @@
 import logging
 import os
-from unittest.mock import patch, MagicMock, ANY, call, mock_open
+from unittest.mock import patch, MagicMock, mock_open
 
 import paramiko
 import pytest
 from configobj import ConfigObj
 from click.testing import CliRunner
 
-from pgcli.main import cli, notify_callback, PGCli
+from pgcli.main import cli, PGCli
 from pgcli.pgexecute import PGExecute
 from pgcli.ssh_tunnel import (
     SSHTunnelManager,
     get_tunnel_manager_from_config,
-    SSH_TUNNEL_SUPPORT,
     _NativeSSHTunnel,
 )
 
@@ -101,7 +100,9 @@ def test_ssh_tunnel(mock_tunnel_manager, mock_pgexecute: MagicMock) -> None:
 
     # start_tunnel should be called with the db host/port
     mock_mgr.start_tunnel.assert_called_once_with(
-        host="db.host", port=5432, dsn_alias=None,
+        host="db.host",
+        port=5432,
+        dsn_alias=None,
     )
 
     # PGExecute should get original host, tunnel port, and hostaddr
@@ -127,7 +128,9 @@ def test_ssh_tunnel(mock_tunnel_manager, mock_pgexecute: MagicMock) -> None:
     assert init_kwargs["ssh_tunnel_url"] == tunnel_url
 
     mock_mgr.start_tunnel.assert_called_once_with(
-        host="db.host", port=1234, dsn_alias=None,
+        host="db.host",
+        port=1234,
+        dsn_alias=None,
     )
 
     call_args, call_kwargs = mock_pgexecute.call_args
@@ -199,7 +202,9 @@ def test_config(tmpdir: os.PathLike, mock_tunnel_manager, mock_pgexecute: MagicM
     pgcli = PGCli(pgclirc_file=pgclirc)
     pgcli.connect(host="matched.host.com")
     mock_mgr.start_tunnel.assert_called_once_with(
-        host="matched.host.com", port=5432, dsn_alias=None,
+        host="matched.host.com",
+        port=5432,
+        dsn_alias=None,
     )
     mock_pgexecute.assert_called_once()
     call_args, call_kwargs = mock_pgexecute.call_args
@@ -228,9 +233,7 @@ def test_ssh_tunnel_with_uri(mock_tunnel_manager, mock_pgexecute: MagicMock) -> 
     assert "dbname=testdb" in dsn_arg
 
 
-def test_ssh_tunnel_preserves_original_host_for_pgpass(
-    mock_tunnel_manager, mock_pgexecute: MagicMock
-) -> None:
+def test_ssh_tunnel_preserves_original_host_for_pgpass(mock_tunnel_manager, mock_pgexecute: MagicMock) -> None:
     """Test that original hostname is preserved for .pgpass lookup"""
     mock_cls, mock_mgr = mock_tunnel_manager
     tunnel_url = "tunnel.host"
@@ -245,9 +248,7 @@ def test_ssh_tunnel_preserves_original_host_for_pgpass(
     assert call_kwargs.get("hostaddr") == "127.0.0.1"
 
 
-def test_ssh_tunnel_with_dsn_string(
-    mock_tunnel_manager, mock_pgexecute: MagicMock
-) -> None:
+def test_ssh_tunnel_with_dsn_string(mock_tunnel_manager, mock_pgexecute: MagicMock) -> None:
     """Test SSH tunnel with DSN connection string"""
     mock_cls, mock_mgr = mock_tunnel_manager
     tunnel_url = "tunnel.host"
@@ -274,9 +275,7 @@ def test_no_ssh_tunnel_does_not_set_hostaddr(mock_pgexecute: MagicMock) -> None:
     assert "hostaddr" not in call_kwargs
 
 
-def test_ssh_tunnel_with_port_in_dsn(
-    mock_tunnel_manager, mock_pgexecute: MagicMock
-) -> None:
+def test_ssh_tunnel_with_port_in_dsn(mock_tunnel_manager, mock_pgexecute: MagicMock) -> None:
     """Test that custom port in DSN is handled correctly with SSH tunnel"""
     mock_cls, mock_mgr = mock_tunnel_manager
     tunnel_url = "tunnel.host"
@@ -287,7 +286,9 @@ def test_ssh_tunnel_with_port_in_dsn(
 
     # Verify start_tunnel was called with the original port from DSN
     mock_mgr.start_tunnel.assert_called_once_with(
-        host="db.example.com", port=6543, dsn_alias=None,
+        host="db.example.com",
+        port=6543,
+        dsn_alias=None,
     )
 
     mock_pgexecute.assert_called_once()
@@ -369,26 +370,20 @@ class TestSSHTunnelManager:
 
     def test_find_tunnel_url_no_match(self):
         """Test when no tunnel matches."""
-        manager = SSHTunnelManager(
-            ssh_tunnel_config={".*\\.prod\\.example\\.com": "ssh://bastion:22"}
-        )
+        manager = SSHTunnelManager(ssh_tunnel_config={".*\\.prod\\.example\\.com": "ssh://bastion:22"})
         url = manager.find_tunnel_url(host="localhost")
         assert url is None
 
     def test_find_tunnel_url_no_partial_host_match(self):
         """Test that partial hostname matches are rejected (re.fullmatch)."""
-        manager = SSHTunnelManager(
-            ssh_tunnel_config={"prod": "ssh://bastion:22"}
-        )
+        manager = SSHTunnelManager(ssh_tunnel_config={"prod": "ssh://bastion:22"})
         assert manager.find_tunnel_url(host="nonprod") is None
         assert manager.find_tunnel_url(host="prod.extra.com") is None
         assert manager.find_tunnel_url(host="prod") == "ssh://bastion:22"
 
     def test_find_tunnel_url_no_partial_dsn_match(self):
         """Test that partial DSN matches are rejected (re.fullmatch)."""
-        manager = SSHTunnelManager(
-            dsn_ssh_tunnel_config={"prod": "ssh://bastion:22"}
-        )
+        manager = SSHTunnelManager(dsn_ssh_tunnel_config={"prod": "ssh://bastion:22"})
         assert manager.find_tunnel_url(dsn_alias="nonprod") is None
         assert manager.find_tunnel_url(dsn_alias="prod-extra") is None
         assert manager.find_tunnel_url(dsn_alias="prod") == "ssh://bastion:22"
@@ -579,8 +574,10 @@ class TestNativeSSHTunnel:
     def test_host_key_policy_auto_add(self, mock_native_tunnel):
         """Test that auto-add policy sets AutoAddPolicy."""
         tunnel = _NativeSSHTunnel(
-            ssh_hostname="bastion", ssh_port=22,
-            remote_host="db.internal", remote_port=5432,
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
             host_key_policy="auto-add",
         )
         tunnel.start()
@@ -590,8 +587,10 @@ class TestNativeSSHTunnel:
     def test_host_key_policy_warn(self, mock_native_tunnel):
         """Test that warn policy sets WarningPolicy."""
         tunnel = _NativeSSHTunnel(
-            ssh_hostname="bastion", ssh_port=22,
-            remote_host="db.internal", remote_port=5432,
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
             host_key_policy="warn",
         )
         tunnel.start()
@@ -601,8 +600,10 @@ class TestNativeSSHTunnel:
     def test_host_key_policy_reject(self, mock_native_tunnel):
         """Test that reject policy sets RejectPolicy."""
         tunnel = _NativeSSHTunnel(
-            ssh_hostname="bastion", ssh_port=22,
-            remote_host="db.internal", remote_port=5432,
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
             host_key_policy="reject",
         )
         tunnel.start()
@@ -612,8 +613,10 @@ class TestNativeSSHTunnel:
     def test_host_key_policy_default_is_auto_add(self, mock_native_tunnel):
         """Test that default policy is auto-add."""
         tunnel = _NativeSSHTunnel(
-            ssh_hostname="bastion", ssh_port=22,
-            remote_host="db.internal", remote_port=5432,
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
         )
         tunnel.start()
         policy_arg = mock_native_tunnel["client"].set_missing_host_key_policy.call_args[0][0]
@@ -622,8 +625,10 @@ class TestNativeSSHTunnel:
     def test_host_key_policy_invalid_falls_back_to_auto_add(self, mock_native_tunnel):
         """Test that invalid policy name falls back to AutoAddPolicy."""
         tunnel = _NativeSSHTunnel(
-            ssh_hostname="bastion", ssh_port=22,
-            remote_host="db.internal", remote_port=5432,
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
             host_key_policy="nonsense",
         )
         tunnel.start()
@@ -648,10 +653,12 @@ class TestSSHTunnelIdentityFile:
             logger=logging.getLogger("test"),
         )
 
-        with patch("pgcli.ssh_tunnel.os.path.expanduser", side_effect=lambda p: p), \
-             patch("pgcli.ssh_tunnel.os.path.isfile", side_effect=lambda p: p in existing_files), \
-             patch("pgcli.ssh_tunnel.paramiko.SSHConfig") as mock_config_cls, \
-             patch("builtins.open", mock_open(read_data="")):
+        with (
+            patch("pgcli.ssh_tunnel.os.path.expanduser", side_effect=lambda p: p),
+            patch("pgcli.ssh_tunnel.os.path.isfile", side_effect=lambda p: p in existing_files),
+            patch("pgcli.ssh_tunnel.paramiko.SSHConfig") as mock_config_cls,
+            patch("builtins.open", mock_open(read_data="")),
+        ):
             mock_config_cls.return_value = mock_ssh_config
             host, port = manager.start_tunnel(host="db.internal", port=5432)
 
@@ -703,7 +710,7 @@ class TestSSHTunnelIdentityFile:
         host_config = {
             "hostname": "bastion.example.com",
             "identityfile": [
-                "/home/user/.ssh/id_ed25519_host",   # host-specific (first)
+                "/home/user/.ssh/id_ed25519_host",  # host-specific (first)
                 "/home/user/.ssh/id_ed25519_global",  # wildcard (second)
             ],
         }
@@ -751,9 +758,7 @@ class TestGetTunnelManagerFromConfig:
         config = {
             "ssh tunnels": {".*": "ssh://config-bastion:22"},
         }
-        manager = get_tunnel_manager_from_config(
-            config, ssh_tunnel_url="ssh://explicit-bastion:22"
-        )
+        manager = get_tunnel_manager_from_config(config, ssh_tunnel_url="ssh://explicit-bastion:22")
         assert manager.ssh_tunnel_url == "ssh://explicit-bastion:22"
 
     def test_with_custom_logger(self):

@@ -508,9 +508,7 @@ def test_restrict_mode_blocks_meta_commands():
             executor.reset_expanded = False
             result = list(executor.run(cmd, pgspecial=pgspecial, restrict_token="secret_token"))
             statuses = [r[3] for r in result if r[3]]
-            assert any("Restricted mode active" in s for s in statuses), (
-                f"Expected '{cmd}' to be blocked in restricted mode"
-            )
+            assert any("Restricted mode active" in s for s in statuses), f"Expected '{cmd}' to be blocked in restricted mode"
 
 
 def test_restrict_mode_allows_unrestrict_through():
@@ -528,9 +526,7 @@ def test_restrict_mode_allows_unrestrict_through():
     result = list(executor.run("\\unrestrict my_token", pgspecial=pgspecial, restrict_token="secret"))
     # \unrestrict should NOT be blocked - it should reach pgspecial
     statuses = [r[3] for r in result if r[3]]
-    assert not any("Restricted mode active" in s for s in statuses), (
-        "\\unrestrict should not be blocked in restricted mode"
-    )
+    assert not any("Restricted mode active" in s for s in statuses), "\\unrestrict should not be blocked in restricted mode"
 
 
 def test_restrict_mode_allows_sql():
@@ -539,21 +535,18 @@ def test_restrict_mode_allows_sql():
 
     pgspecial = mock.MagicMock()
     from pgspecial.main import CommandNotFound
+
     pgspecial.execute.side_effect = CommandNotFound("not special")
 
     executor = mock.MagicMock(spec=PGExecute)
     executor.run = PGExecute.run.__get__(executor)
     executor.conn = mock.MagicMock()
     executor.reset_expanded = False
-    executor.execute_normal_sql = mock.MagicMock(
-        return_value=("title", [("1",)], ["?column?"], "SELECT 1")
-    )
+    executor.execute_normal_sql = mock.MagicMock(return_value=("title", [("1",)], ["?column?"], "SELECT 1"))
 
     result = list(executor.run("SELECT 1", pgspecial=pgspecial, restrict_token="secret"))
     statuses = [r[3] for r in result if r[3]]
-    assert not any("Restricted mode active" in s for s in statuses), (
-        "Regular SQL should not be blocked in restricted mode"
-    )
+    assert not any("Restricted mode active" in s for s in statuses), "Regular SQL should not be blocked in restricted mode"
     executor.execute_normal_sql.assert_called_once()
 
 
@@ -586,14 +579,7 @@ def test_log_rotation_day_of_week(executor):
     """Test log rotation by day of week (Mon-Sun)"""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Mock config with day-of-week rotation
-        config = {
-            "main": {
-                "log_file": "default",
-                "log_rotation_mode": "day-of-week",
-                "log_destination": tmpdir,
-                "log_level": "INFO"
-            }
-        }
+        config = {"main": {"log_file": "default", "log_rotation_mode": "day-of-week", "log_destination": tmpdir, "log_level": "INFO"}}
 
         with mock.patch("pgcli.main.config_location", return_value=tmpdir + "/"):
             cli = PGCli(pgexecute=executor)
@@ -612,14 +598,7 @@ def test_log_rotation_day_of_month(executor):
     """Test log rotation by day of month (01-31)"""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Mock config with day-of-month rotation
-        config = {
-            "main": {
-                "log_file": "default",
-                "log_rotation_mode": "day-of-month",
-                "log_destination": tmpdir,
-                "log_level": "INFO"
-            }
-        }
+        config = {"main": {"log_file": "default", "log_rotation_mode": "day-of-month", "log_destination": tmpdir, "log_level": "INFO"}}
 
         with mock.patch("pgcli.main.config_location", return_value=tmpdir + "/"):
             cli = PGCli(pgexecute=executor)
@@ -638,14 +617,7 @@ def test_log_rotation_date(executor):
     """Test log rotation by date (YYYYMMDD)"""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Mock config with date rotation
-        config = {
-            "main": {
-                "log_file": "default",
-                "log_rotation_mode": "date",
-                "log_destination": tmpdir,
-                "log_level": "INFO"
-            }
-        }
+        config = {"main": {"log_file": "default", "log_rotation_mode": "date", "log_destination": tmpdir, "log_level": "INFO"}}
 
         with mock.patch("pgcli.main.config_location", return_value=tmpdir + "/"):
             cli = PGCli(pgexecute=executor)
@@ -664,14 +636,7 @@ def test_log_rotation_none_backwards_compatible(executor):
     """Test that 'none' rotation mode maintains backwards compatibility"""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Mock config with no rotation (default)
-        config = {
-            "main": {
-                "log_file": "default",
-                "log_rotation_mode": "none",
-                "log_destination": tmpdir,
-                "log_level": "INFO"
-            }
-        }
+        config = {"main": {"log_file": "default", "log_rotation_mode": "none", "log_destination": tmpdir, "log_level": "INFO"}}
 
         with mock.patch("pgcli.main.config_location", return_value=tmpdir + "/"):
             cli = PGCli(pgexecute=executor)
@@ -691,14 +656,7 @@ def test_log_destination_custom(executor):
         custom_log_dir = os.path.join(tmpdir, "custom_logs")
         os.makedirs(custom_log_dir)
 
-        config = {
-            "main": {
-                "log_file": "default",
-                "log_rotation_mode": "none",
-                "log_destination": custom_log_dir,
-                "log_level": "INFO"
-            }
-        }
+        config = {"main": {"log_file": "default", "log_rotation_mode": "none", "log_destination": custom_log_dir, "log_level": "INFO"}}
 
         with mock.patch("pgcli.main.config_location", return_value=tmpdir + "/"):
             cli = PGCli(pgexecute=executor)
@@ -1017,11 +975,7 @@ def test_application_name_from_config(executor):
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         with open(config_file, "w") as f:
-            f.write(
-                "[main]\n"
-                "application_name = my-custom-app\n"
-                "log_file = default\n"
-            )
+            f.write("[main]\napplication_name = my-custom-app\nlog_file = default\n")
 
         with mock.patch("pgcli.main.config_location", return_value=tmpdir + "/"):
             cli = PGCli(pgexecute=executor, pgclirc_file=config_file)
@@ -1035,11 +989,7 @@ def test_application_name_cli_overrides_config(executor):
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         with open(config_file, "w") as f:
-            f.write(
-                "[main]\n"
-                "application_name = config-app\n"
-                "log_file = default\n"
-            )
+            f.write("[main]\napplication_name = config-app\nlog_file = default\n")
 
         with mock.patch("pgcli.main.config_location", return_value=tmpdir + "/"):
             cli = PGCli(pgexecute=executor, pgclirc_file=config_file, application_name="cli-app")
@@ -1053,10 +1003,7 @@ def test_application_name_default_when_not_in_config(executor):
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         with open(config_file, "w") as f:
-            f.write(
-                "[main]\n"
-                "log_file = default\n"
-            )
+            f.write("[main]\nlog_file = default\n")
 
         with mock.patch("pgcli.main.config_location", return_value=tmpdir + "/"):
             cli = PGCli(pgexecute=executor, pgclirc_file=config_file)
@@ -1155,13 +1102,13 @@ class TestNoTimingsNoStatus:
     """Tests for --no-timings and --no-status CLI flags."""
 
     def test_no_timings_flag_suppresses_timing(self):
-        settings = OutputSettings(table_format="psql", dcmlfmt="d", floatfmt="g")
+        OutputSettings(table_format="psql", dcmlfmt="d", floatfmt="g")
         pgcli = PGCli(no_timings=True)
         assert pgcli.show_timings is False
         assert pgcli.show_status is True
 
     def test_no_status_flag_suppresses_status(self):
-        settings = OutputSettings(table_format="psql", dcmlfmt="d", floatfmt="g")
+        OutputSettings(table_format="psql", dcmlfmt="d", floatfmt="g")
         pgcli = PGCli(no_status=True)
         assert pgcli.show_timings is True
         assert pgcli.show_status is False
@@ -1183,22 +1130,14 @@ class TestNoTimingsNoStatus:
         assert pgcli.tuples_only is True
 
     def test_format_output_no_status(self):
-        settings = OutputSettings(
-            table_format="psql", dcmlfmt="d", floatfmt="g", show_status=False
-        )
-        results = format_output(
-            "Title", [("abc", "def")], ["head1", "head2"], "test status", settings
-        )
+        settings = OutputSettings(table_format="psql", dcmlfmt="d", floatfmt="g", show_status=False)
+        results = format_output("Title", [("abc", "def")], ["head1", "head2"], "test status", settings)
         result_list = list(results)
         assert "test status" not in result_list
 
     def test_format_output_with_status(self):
-        settings = OutputSettings(
-            table_format="psql", dcmlfmt="d", floatfmt="g", show_status=True
-        )
-        results = format_output(
-            "Title", [("abc", "def")], ["head1", "head2"], "test status", settings
-        )
+        settings = OutputSettings(table_format="psql", dcmlfmt="d", floatfmt="g", show_status=True)
+        results = format_output("Title", [("abc", "def")], ["head1", "head2"], "test status", settings)
         result_list = list(results)
         assert "test status" in result_list
 
@@ -1221,12 +1160,18 @@ class TestNoTimingsNoStatus:
     def test_tuples_only_format_output_plain_no_headers(self):
         """tuples_only produces plain output without headers, title, or status."""
         settings = OutputSettings(
-            table_format="ascii", dcmlfmt="d", floatfmt="g",
-            tuples_only=True, show_status=False,
+            table_format="ascii",
+            dcmlfmt="d",
+            floatfmt="g",
+            tuples_only=True,
+            show_status=False,
         )
         results = format_output(
-            "Title", [("abc", "def"), ("ghi", "jkl")],
-            ["head1", "head2"], "test status", settings,
+            "Title",
+            [("abc", "def"), ("ghi", "jkl")],
+            ["head1", "head2"],
+            "test status",
+            settings,
         )
         result_list = list(results)
         assert result_list == ["abc  def", "ghi  jkl"]
@@ -1234,11 +1179,18 @@ class TestNoTimingsNoStatus:
     def test_tuples_only_single_value(self):
         """tuples_only with a single value returns just that value."""
         settings = OutputSettings(
-            table_format="ascii", dcmlfmt="d", floatfmt="g",
-            tuples_only=True, show_status=False,
+            table_format="ascii",
+            dcmlfmt="d",
+            floatfmt="g",
+            tuples_only=True,
+            show_status=False,
         )
         results = format_output(
-            None, [("16",)], ["major_version"], "SELECT 1", settings,
+            None,
+            [("16",)],
+            ["major_version"],
+            "SELECT 1",
+            settings,
         )
         result_list = list(results)
         assert result_list == ["16"]

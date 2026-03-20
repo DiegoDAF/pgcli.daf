@@ -71,4 +71,5 @@ def _cleanup_log_dir(context):
     """Clean up temporary log directory."""
     if hasattr(context, "log_temp_dir") and os.path.exists(context.log_temp_dir):
         import shutil
+
         shutil.rmtree(context.log_temp_dir)

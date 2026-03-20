@@ -110,11 +110,7 @@ class DsnAliases:
 
         # Get all .conf files in the directory, sorted for consistent ordering
         try:
-            files = sorted(
-                f
-                for f in os.listdir(include_dir)
-                if f.endswith(".conf") and os.path.isfile(os.path.join(include_dir, f))
-            )
+            files = sorted(f for f in os.listdir(include_dir) if f.endswith(".conf") and os.path.isfile(os.path.join(include_dir, f)))
         except OSError as e:
             logger.warning(f"Error reading DSN aliases include directory: {e}")
             return
@@ -142,13 +138,10 @@ class DsnAliases:
             # If no section found, treat entire file as aliases
             # (excluding any sections that might exist)
             if not aliases:
-                aliases = {k: v for k, v in file_config.items()
-                          if not isinstance(v, dict)}
+                aliases = {k: v for k, v in file_config.items() if not isinstance(v, dict)}
 
             if aliases:
-                logger.debug(
-                    f"Loaded {len(aliases)} DSN aliases from {os.path.basename(filepath)}"
-                )
+                logger.debug(f"Loaded {len(aliases)} DSN aliases from {os.path.basename(filepath)}")
                 # Merge aliases, later files override earlier ones
                 self._included_aliases.update(aliases)
             else:
@@ -164,8 +157,7 @@ class DsnAliases:
             List of alias names (combined from main config and includes), sorted
         """
         # Get aliases from main config (excluding directives)
-        main_aliases = {k: v for k, v in self.config.get(self.SECTION_NAME, {}).items()
-                        if k not in self.DIRECTIVES}
+        main_aliases = {k: v for k, v in self.config.get(self.SECTION_NAME, {}).items() if k not in self.DIRECTIVES}
 
         # Combine with included aliases (main config takes precedence)
         all_aliases = dict(self._included_aliases)
@@ -205,8 +197,7 @@ class DsnAliases:
         # Combine included aliases with main config (main takes precedence)
         # Exclude directives
         all_aliases = dict(self._included_aliases)
-        main_aliases = {k: v for k, v in self.config.get(self.SECTION_NAME, {}).items()
-                        if k not in self.DIRECTIVES}
+        main_aliases = {k: v for k, v in self.config.get(self.SECTION_NAME, {}).items() if k not in self.DIRECTIVES}
         all_aliases.update(main_aliases)
         return all_aliases
 

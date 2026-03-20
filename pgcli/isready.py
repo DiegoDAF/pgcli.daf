@@ -152,18 +152,17 @@ def build_tunneled_args(
 
 
 @click.command(
-    context_settings=dict(
-        ignore_unknown_options=True,
-        allow_extra_args=True,
-        allow_interspersed_args=True,
-    )
+    context_settings={
+        "ignore_unknown_options": True,
+        "allow_extra_args": True,
+        "allow_interspersed_args": True,
+    }
 )
 @click.option(
     "--ssh-tunnel",
     "ssh_tunnel",
     default=None,
-    help="SSH tunnel URL (e.g., ssh://user@host:port). "
-    "If not provided, uses pgcli config.",
+    help="SSH tunnel URL (e.g., ssh://user@host:port). If not provided, uses pgcli config.",
 )
 @click.option(
     "--dsn",
@@ -232,7 +231,11 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
     if tunnel_host != host or tunnel_port != port:
         logger.debug("SSH tunnel active: %s:%d -> %s:%d", host, port, tunnel_host, tunnel_port)
         final_args = build_tunneled_args(
-            remaining_args, tunnel_host, tunnel_port, has_host, has_port,
+            remaining_args,
+            tunnel_host,
+            tunnel_port,
+            has_host,
+            has_port,
         )
     else:
         final_args = pg_isready_args
@@ -245,8 +248,7 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         sys.exit(result.returncode)
     except FileNotFoundError:
         click.secho(
-            f"Error: pg_isready not found at '{pg_isready_path}'. "
-            "Please ensure PostgreSQL client tools are installed.",
+            f"Error: pg_isready not found at '{pg_isready_path}'. Please ensure PostgreSQL client tools are installed.",
             err=True,
             fg="red",
         )

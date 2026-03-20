@@ -5,7 +5,6 @@ from .namedqueries import ExtendedNamedQueries
 from .dsnaliases import DsnAliases
 from .config import skip_initial_comment
 
-import atexit
 import os
 import re
 import sys
@@ -16,7 +15,6 @@ import shutil
 import functools
 import datetime as dt
 import itertools
-import pathlib
 import platform
 from time import time, sleep
 from typing import Any, List, NamedTuple, Optional
@@ -65,7 +63,6 @@ from .config import (
     get_casing_file,
     load_config,
     config_location,
-    ensure_dir_exists,
     get_config,
     get_config_filename,
 )
@@ -78,7 +75,6 @@ from .__init__ import __version__
 
 click.disable_unicode_literals_warning = True
 
-from urllib.parse import urlparse
 
 from getpass import getuser
 
@@ -86,7 +82,6 @@ from psycopg import OperationalError, InterfaceError, Notify
 from psycopg.conninfo import make_conninfo, conninfo_to_dict
 from psycopg.errors import Diagnostic
 
-from collections import namedtuple
 
 from .ssh_tunnel import SSHTunnelManager, SSH_TUNNEL_SUPPORT
 
@@ -94,6 +89,7 @@ from .ssh_tunnel import SSHTunnelManager, SSH_TUNNEL_SUPPORT
 # Ref: https://stackoverflow.com/questions/30425105/filter-special-chars-such-as-color-codes-from-shell-output
 COLOR_CODE_REGEX = re.compile(r"\x1b(\[.*?[@-~]|\].*?(\x07|\x1b\\))")
 DEFAULT_MAX_FIELD_WIDTH = 500
+
 
 # Query tuples are used for maintaining history
 class MetaQuery(NamedTuple):
@@ -1873,9 +1869,7 @@ def cli(
         pgcli.connect(database, host, user, port)
 
     is_noninteractive = bool(commands) or bool(input_files)
-    if not is_noninteractive and (
-        "use_local_timezone" not in cfg["main"] or cfg["main"].as_bool("use_local_timezone")
-    ):
+    if not is_noninteractive and ("use_local_timezone" not in cfg["main"] or cfg["main"].as_bool("use_local_timezone")):
         server_tz = pgcli.pgexecute.get_timezone()
 
         def echo_error(msg: str):

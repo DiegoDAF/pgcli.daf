@@ -397,9 +397,7 @@ class PGExecute:
                     if restrict_token and sql.startswith("\\"):
                         cmd_name = sql.split()[0] if sql.split() else sql
                         if cmd_name != "\\unrestrict":
-                            yield (None, None, None,
-                                   "Restricted mode active: only \\unrestrict is allowed",
-                                   sql, False, True)
+                            yield (None, None, None, "Restricted mode active: only \\unrestrict is allowed", sql, False, True)
                             continue
 
                     # First try to run each query as special
@@ -537,7 +535,8 @@ class PGExecute:
             else:
                 template = "CREATE OR REPLACE VIEW {name} AS \n{stmt}"
             return (
-                psycopg.sql.SQL(template)
+                psycopg.sql
+                .SQL(template)
                 .format(
                     name=psycopg.sql.Identifier(result.nspname, result.relname),
                     stmt=psycopg.sql.SQL(result.viewdef),
