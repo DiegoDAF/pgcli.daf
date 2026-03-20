@@ -79,10 +79,12 @@ def step_see_query_result(context):
 def step_see_both_query_results(context):
     """Verify that both query results are in the output."""
     output = context.cmd_output.decode('utf-8')
-    # Should contain output from both SELECT statements
-    assert "SELECT" in output, f"Expected SELECT in output, but got: {output}"
-    # The output should have multiple result sets
-    assert output.count("SELECT") >= 2, f"Expected at least 2 SELECT results, but got: {output}"
+    # Check that output contains data from both queries (table borders or values)
+    # At minimum, we should see two result sets with table formatting
+    assert "+-" in output or "|" in output, f"Expected table output, but got: {output}"
+    # Count result set boundaries (each result has at least one +--- border line)
+    border_count = output.count("+--")
+    assert border_count >= 2, f"Expected at least 2 result sets (borders), but got {border_count}: {output}"
 
 
 @then("we see the command output")

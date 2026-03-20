@@ -12,6 +12,11 @@ Bug Fixes:
 ----------
 * Fix ``OSError`` not caught in ``_sanitize_path`` for ``\i`` command.
 * Fix fragile test assertions that depended on result index positions.
+* Fix behave integration tests for CI with PG 16:
+
+  * ``file_option.feature``: check table borders instead of counting "SELECT" strings.
+  * ``tuples_only.feature``: remove scenarios testing format argument (``-t`` is now a pure flag).
+  * ``log_rotation.feature``: add missing ``we query`` step definition.
 
 4.4.2 (2026-03-02) - upstream: 4.4.0
 =====================================

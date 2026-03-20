@@ -54,10 +54,6 @@ def step_tee_ouptut(context):
     wrappers.expect_exact(context, "Time", timeout=5)
 
 
-@when('we query "select 123456"')
-def step_query_select_123456(context):
-    context.cli.sendline("select 123456")
-
 
 @when("we stop teeing output")
 def step_notee_output(context):

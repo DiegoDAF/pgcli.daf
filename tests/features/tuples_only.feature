@@ -15,20 +15,6 @@ Feature: run the cli with -t/--tuples-only option,
       and we don't see "Time:"
       and pgcli exits successfully
 
-  Scenario: run pgcli with -t and minimal format
-     When we run pgcli with "-t minimal -c 'SELECT 1, 2'"
-      then we see only the data rows
-      and we don't see "SELECT"
-      and we don't see "Time:"
-      and pgcli exits successfully
-
-  Scenario: run pgcli with -t and tsv_noheader format
-     When we run pgcli with "-t tsv_noheader -c 'SELECT 1, 2'"
-      then we see tab-separated values
-      and we don't see "SELECT"
-      and we don't see "Time:"
-      and pgcli exits successfully
-
   Scenario: run pgcli without -t flag (normal output)
      When we run pgcli with "-c 'SELECT 1'"
       then we see "SELECT" in the output
