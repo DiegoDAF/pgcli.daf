@@ -1872,7 +1872,10 @@ def cli(
     else:
         pgcli.connect(database, host, user, port)
 
-    if "use_local_timezone" not in cfg["main"] or cfg["main"].as_bool("use_local_timezone"):
+    is_noninteractive = bool(commands) or bool(input_files)
+    if not is_noninteractive and (
+        "use_local_timezone" not in cfg["main"] or cfg["main"].as_bool("use_local_timezone")
+    ):
         server_tz = pgcli.pgexecute.get_timezone()
 
         def echo_error(msg: str):
