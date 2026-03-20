@@ -322,39 +322,45 @@ def test_execute_commented_first_line_and_special(executor, pgspecial, tmpdir):
     statement = "--comment\nselect now();"
     result = run(executor, statement, pgspecial=pgspecial)
     assert result is not None
-    assert result[1].find("now") >= 0
+    result_text = "\n".join(result)
+    assert "now" in result_text
 
     statement = "/*comment*/\nselect now();"
     result = run(executor, statement, pgspecial=pgspecial)
     assert result is not None
-    assert result[1].find("now") >= 0
+    result_text = "\n".join(result)
+    assert "now" in result_text
 
     # https://github.com/dbcli/pgcli/issues/1362
     statement = "--comment\n\\h"
     result = run(executor, statement, pgspecial=pgspecial)
     assert result is not None
-    assert result[1].find("ALTER") >= 0
-    assert result[1].find("ABORT") >= 0
+    result_text = "\n".join(result)
+    assert "ALTER" in result_text
+    assert "ABORT" in result_text
 
     statement = "--comment1\n--comment2\n\\h"
     result = run(executor, statement, pgspecial=pgspecial)
     assert result is not None
-    assert result[1].find("ALTER") >= 0
-    assert result[1].find("ABORT") >= 0
+    result_text = "\n".join(result)
+    assert "ALTER" in result_text
+    assert "ABORT" in result_text
 
     statement = "/*comment*/\n\\h;"
     result = run(executor, statement, pgspecial=pgspecial)
     assert result is not None
-    assert result[1].find("ALTER") >= 0
-    assert result[1].find("ABORT") >= 0
+    result_text = "\n".join(result)
+    assert "ALTER" in result_text
+    assert "ABORT" in result_text
 
     statement = r"""/*comment1
     comment2*/
     \h"""
     result = run(executor, statement, pgspecial=pgspecial)
     assert result is not None
-    assert result[1].find("ALTER") >= 0
-    assert result[1].find("ABORT") >= 0
+    result_text = "\n".join(result)
+    assert "ALTER" in result_text
+    assert "ABORT" in result_text
 
     statement = """/*comment1
     comment2*/

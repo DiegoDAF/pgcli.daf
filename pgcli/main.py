@@ -612,7 +612,10 @@ class PGCli:
         if not pattern:
             message = "\\i: missing required argument"
             return [(None, None, None, message, "", False, True)]
-        filepath, err = self._sanitize_path(pattern)
+        try:
+            filepath, err = self._sanitize_path(pattern)
+        except OSError as e:
+            return [(None, None, None, str(e), "", False, True)]
         if err:
             return [(None, None, None, err, "", False, True)]
         try:
