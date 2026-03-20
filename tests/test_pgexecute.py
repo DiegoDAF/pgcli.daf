@@ -320,47 +320,41 @@ def test_execute_from_commented_file_that_executes_another_file(executor, pgspec
 def test_execute_commented_first_line_and_special(executor, pgspecial, tmpdir):
     # just some base cases that should work also
     statement = "--comment\nselect now();"
-    result = run(executor, statement, pgspecial=pgspecial)
+    result = run(executor, statement, join=True, pgspecial=pgspecial)
     assert result is not None
-    result_text = "\n".join(result)
-    assert "now" in result_text
+    assert "now" in result
 
     statement = "/*comment*/\nselect now();"
-    result = run(executor, statement, pgspecial=pgspecial)
+    result = run(executor, statement, join=True, pgspecial=pgspecial)
     assert result is not None
-    result_text = "\n".join(result)
-    assert "now" in result_text
+    assert "now" in result
 
     # https://github.com/dbcli/pgcli/issues/1362
     statement = "--comment\n\\h"
-    result = run(executor, statement, pgspecial=pgspecial)
+    result = run(executor, statement, join=True, pgspecial=pgspecial)
     assert result is not None
-    result_text = "\n".join(result)
-    assert "ALTER" in result_text
-    assert "ABORT" in result_text
+    assert "ALTER" in result
+    assert "ABORT" in result
 
     statement = "--comment1\n--comment2\n\\h"
-    result = run(executor, statement, pgspecial=pgspecial)
+    result = run(executor, statement, join=True, pgspecial=pgspecial)
     assert result is not None
-    result_text = "\n".join(result)
-    assert "ALTER" in result_text
-    assert "ABORT" in result_text
+    assert "ALTER" in result
+    assert "ABORT" in result
 
     statement = "/*comment*/\n\\h;"
-    result = run(executor, statement, pgspecial=pgspecial)
+    result = run(executor, statement, join=True, pgspecial=pgspecial)
     assert result is not None
-    result_text = "\n".join(result)
-    assert "ALTER" in result_text
-    assert "ABORT" in result_text
+    assert "ALTER" in result
+    assert "ABORT" in result
 
     statement = r"""/*comment1
     comment2*/
     \h"""
-    result = run(executor, statement, pgspecial=pgspecial)
+    result = run(executor, statement, join=True, pgspecial=pgspecial)
     assert result is not None
-    result_text = "\n".join(result)
-    assert "ALTER" in result_text
-    assert "ABORT" in result_text
+    assert "ALTER" in result
+    assert "ABORT" in result
 
     statement = """/*comment1
     comment2*/
