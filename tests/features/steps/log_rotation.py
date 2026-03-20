@@ -33,6 +33,7 @@ def step_exit_pgcli(context):
     """Exit pgcli."""
     context.cli.sendline("\\q")
     context.cli.expect(pexpect.EOF, timeout=5)
+    context.exit_sent = True
 
 
 @then("we see a log file named with current day of week")
