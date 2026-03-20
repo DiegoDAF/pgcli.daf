@@ -6,6 +6,12 @@ Features:
 * Sort ``--help`` options alphabetically for easier navigation.
 * Drop Python 3.9 support (EOL October 2025). Minimum version is now 3.10.
 * Update CI: PostgreSQL 10 → 16, fix duplicate checkout step.
+* Suppress timezone message in non-interactive mode (``-c``, ``-f``).
+
+Bug Fixes:
+----------
+* Fix ``OSError`` not caught in ``_sanitize_path`` for ``\i`` command.
+* Fix fragile test assertions that depended on result index positions.
 
 4.4.2 (2026-03-02) - upstream: 4.4.0
 =====================================

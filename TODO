@@ -4,6 +4,10 @@ Upcoming
 ==============
 
 ### v4.4.3
+* [ ] Fix behave integration tests para CI con PG 16:
+  - [ ] file_option.feature: "Expected at least 2 SELECT results" — test parsea output incorrecto
+  - [ ] tuples_only.feature: "Expected tab-separated values, but got: 1  2" — formato cambió
+  - [ ] log_rotation.feature: StepNotImplementedError — steps de behave no implementados en CI
 * [ ] Add coverage
 * [ ] PR \restrict/\unrestrict al repo upstream
 
@@ -37,6 +41,10 @@ Upcoming
 * [x] Crear GitHub release v4.4.2 con changelog completo
 * [x] Reescribir README con features de pgcli.daf y --help actualizado
 * [x] Ordenar output de --help alfabeticamente
+* [x] Drop Python 3.9 (EOL), update CI a PG 16, fix duplicate checkout
+* [x] Fix test_execute_from_file_io_error (OSError en _sanitize_path)
+* [x] Fix test_execute_commented_first_line_and_special (assertions fragiles)
+* [x] Suppress timezone message en modo no-interactivo (-c, -f)
 
 2026-03-02
 ===================
