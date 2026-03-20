@@ -156,7 +156,7 @@ Features:
     * Useful when editing queries in external editor
 * Add `mypy` type checking to CI pipeline and pre-commit hooks.
 * Add autocomplete support for `SET ROLE` command.
-    * Suggests available PostgreSQL roles when typing `SET ROLE `
+    * Suggests available PostgreSQL roles when typing ``SET ROLE``
     * Works with fuzzy matching like other completions
     * Roles are refreshed with other database metadata
 
