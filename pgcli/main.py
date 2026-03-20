@@ -314,7 +314,7 @@ class PGCli:
             allow_agent=str(ssh_tunnels_config.get("allow_agent", "True")).lower() == "true",
             host_key_policy=str(ssh_tunnels_config.get("host_key_policy", "auto-add")).lower(),
         )
-        self.ssh_tunnel = None
+        self.ssh_tunnel: Optional[Any] = None
 
         if log_file:
             with open(log_file, "a+"):

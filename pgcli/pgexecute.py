@@ -312,7 +312,7 @@ class PGExecute:
         return status == psycopg.pq.TransactionStatus.ACTIVE or status == psycopg.pq.TransactionStatus.INTRANS
 
     def is_connection_closed(self):
-        return self.conn.info.transaction_status == psycopg.pq.TransactionStatus.UNKNOWN
+        return self.conn.info.transaction_status == psycopg.pq.TransactionStatus.UNKNOWN  # type: ignore[union-attr]
 
     @property
     def transaction_indicator(self):

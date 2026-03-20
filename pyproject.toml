@@ -149,6 +149,7 @@ extra_checks = true
 check_untyped_defs = true
 disallow_untyped_defs = false  # Start permissive, tighten later
 ignore_missing_imports = true  # For third-party libs without stubs
+disable_error_code = ["import-untyped"]  # paramiko and other libs without stubs
 follow_imports = "skip"  # Avoid module resolution issues with editable installs
 files = ["pgcli"]
 exclude = [

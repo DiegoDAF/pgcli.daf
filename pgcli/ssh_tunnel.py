@@ -337,6 +337,11 @@ class SSHTunnelManager:
         if not ssh_username:
             ssh_username = getpass.getuser()
 
+        if not ssh_hostname:
+            self.logger.error("SSH tunnel URL has no hostname: %s", tunnel_url)
+            click.secho(f"SSH tunnel error: no hostname in URL '{tunnel_url}'", err=True, fg="red")
+            sys.exit(1)
+
         self.logger.debug(
             "Creating SSH tunnel: %s@%s:%d -> %s:%d (allow_agent=%s, key_files=%d)",
             ssh_username,
@@ -377,6 +382,8 @@ class SSHTunnelManager:
         atexit.register(self.stop_tunnel)
 
         local_port = tunnel.local_bind_port
+        if local_port is None:
+            raise Exception("SSH tunnel started but local port is not available")
         self.logger.debug("SSH tunnel ready, local port: %d", local_port)
 
         return "127.0.0.1", local_port
