@@ -7,6 +7,8 @@ Features:
 * Drop Python 3.9 support (EOL October 2025). Minimum version is now 3.10.
 * Update CI: PostgreSQL 10 → 16, fix duplicate checkout step.
 * Suppress timezone message in non-interactive mode (``-c``, ``-f``).
+* Add cursor shape support for vi mode: beam in INSERT, block in NORMAL,
+  underline in REPLACE. Uses ``ModalCursorShapeConfig`` (upstream #1558).
 
 Bug Fixes:
 ----------
