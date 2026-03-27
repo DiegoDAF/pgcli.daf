@@ -782,10 +782,27 @@ class PGCli:
             passwd=service_config.get("password"),
         )
 
-    def connect_uri(self, uri):
-        kwargs = conninfo_to_dict(uri)
+    def connect_uri(self, uri, user="", host="", port=""):
+        # Detect JDBC URIs and give a friendly error
+        if uri.startswith("jdbc:"):
+            raise click.ClickException(f"JDBC connection strings are not supported.\nRemove the 'jdbc:' prefix and use: {uri[5:]}")
+
+        try:
+            kwargs = conninfo_to_dict(uri)
+        except Exception as e:
+            raise click.ClickException(f"Invalid connection URI: {e}")
+
         remap = {"dbname": "database", "password": "passwd"}
         kwargs = {remap.get(k, k): v for k, v in kwargs.items()}
+
+        # CLI flags override URI values (same behavior as psql)
+        if user:
+            kwargs["user"] = user
+        if host:
+            kwargs["host"] = host
+        if port:
+            kwargs["port"] = port
+
         # Pass the original URI as dsn parameter for .pgpass support with SSH tunnels
         self.connect(dsn=uri, **kwargs)
 
@@ -1860,9 +1877,9 @@ def cli(
             )
             sys.exit(1)
         pgcli.dsn_alias = dsn
-        pgcli.connect_uri(dsn_config)
+        pgcli.connect_uri(dsn_config, user=user, host=host, port=port)
     elif "://" in database:
-        pgcli.connect_uri(database)
+        pgcli.connect_uri(database, user=user, host=host, port=port)
     elif "=" in database and service is None:
         pgcli.connect_dsn(database, user=user)
     elif service is not None:

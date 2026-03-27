@@ -12,6 +12,10 @@ Features:
 
 Bug Fixes:
 ----------
+* Show friendly error for JDBC URIs instead of traceback. Suggests removing
+  the ``jdbc:`` prefix.
+* CLI flags (``-U``, ``-h``, ``-p``) now override URI values, matching ``psql``
+  behavior. Previously ``pgcli "postgres://user@host/db" -U other`` ignored ``-U``.
 * Fix ``OSError`` not caught in ``_sanitize_path`` for ``\i`` command.
 * Fix fragile test assertions that depended on result index positions.
 * Fix behave integration tests for CI with PG 16:

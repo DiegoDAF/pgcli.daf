@@ -6,6 +6,7 @@ import datetime
 from unittest import mock
 from unittest.mock import patch
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -831,6 +832,46 @@ def test_application_name_db_uri(tmpdir):
         cli.connect_uri(uri)
     # connect_uri now passes the URI as dsn
     mock_pgexecute.assert_called_with("bar", "bar", "", "baz.com", "", uri, notify_callback, application_name="cow")
+
+
+def test_jdbc_uri_error(tmpdir):
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    uri = "jdbc:postgresql://host:5432/db?sslmode=disable"
+    with pytest.raises(click.ClickException) as exc_info:
+        cli.connect_uri(uri)
+    assert "JDBC" in str(exc_info.value)
+    assert "postgresql://host:5432/db?sslmode=disable" in str(exc_info.value)
+
+
+def test_invalid_uri_error(tmpdir):
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    with pytest.raises(click.ClickException) as exc_info:
+        cli.connect_uri("not://a valid uri at all")
+    assert "Invalid connection URI" in str(exc_info.value)
+
+
+def test_uri_cli_user_override(tmpdir):
+    with mock.patch.object(PGCli, "connect") as mock_connect:
+        cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        uri = "postgres://original_user:pass@host.com/mydb"
+        cli.connect_uri(uri, user="override_user")
+    mock_connect.assert_called_with(dsn=uri, database="mydb", host="host.com", user="override_user", passwd="pass")
+
+
+def test_uri_cli_host_port_override(tmpdir):
+    with mock.patch.object(PGCli, "connect") as mock_connect:
+        cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        uri = "postgres://user:pass@original.com:5432/mydb"
+        cli.connect_uri(uri, host="override.com", port="5433")
+    mock_connect.assert_called_with(dsn=uri, database="mydb", host="override.com", user="user", passwd="pass", port="5433")
+
+
+def test_uri_no_override_when_empty(tmpdir):
+    with mock.patch.object(PGCli, "connect") as mock_connect:
+        cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        uri = "postgres://bar:foo@baz.com/testdb"
+        cli.connect_uri(uri, user="", host="", port="")
+    mock_connect.assert_called_with(dsn=uri, database="testdb", host="baz.com", user="bar", passwd="foo")
 
 
 @pytest.mark.parametrize(
