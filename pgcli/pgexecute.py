@@ -683,6 +683,19 @@ class PGExecute:
             cur.execute(query)
             return [x[0] for x in cur.fetchall()]
 
+    def settings(self):
+        """Returns available PostgreSQL settings for SET command."""
+        query = """
+            SELECT name
+            FROM pg_catalog.pg_settings
+            WHERE context != 'internal'
+            ORDER BY name
+        """
+        with self.conn.cursor() as cur:  # type: ignore[union-attr]
+            _logger.debug("Settings Query. sql: %r", query)
+            cur.execute(query)
+            return [x[0] for x in cur.fetchall()]
+
     def is_protocol_error(self):
         query = "SELECT 1"
         with self.conn.cursor() as cur:  # type: ignore[union-attr]

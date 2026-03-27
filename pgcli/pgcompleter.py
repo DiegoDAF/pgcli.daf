@@ -28,6 +28,7 @@ from .packages.sqlcompletion import (
     JoinCondition,
     Join,
     Role,
+    Setting,
 )
 from .packages.parseutils.meta import ColumnMetadata, ForeignKey
 from .packages.parseutils.utils import last_word
@@ -137,6 +138,7 @@ class PGCompleter(Completer):
 
         self.databases = []
         self.roles = []
+        self.settings = []
         self.dbmetadata: Dict[str, Dict[str, Any]] = {"tables": {}, "views": {}, "functions": {}, "datatypes": {}}
         self.search_path = []
         self.casing = {}
@@ -167,6 +169,9 @@ class PGCompleter(Completer):
 
     def extend_role_names(self, roles):
         self.roles.extend(roles)
+
+    def extend_setting_names(self, settings):
+        self.settings.extend(settings)
 
     def extend_keywords(self, additional_keywords):
         self.keywords.extend(additional_keywords)  # type: ignore[attr-defined]
@@ -316,6 +321,7 @@ class PGCompleter(Completer):
     def reset_completions(self):
         self.databases = []
         self.roles = []
+        self.settings = []
         self.special_commands = []
         self.search_path = []
         self.dbmetadata = {"tables": {}, "views": {}, "functions": {}, "datatypes": {}}
@@ -873,6 +879,9 @@ class PGCompleter(Completer):
     def get_role_matches(self, _, word_before_cursor):
         return self.find_matches(word_before_cursor, self.roles, meta="role")
 
+    def get_setting_matches(self, _, word_before_cursor):
+        return self.find_matches(word_before_cursor, self.settings, meta="setting")
+
     suggestion_matchers = {
         FromClauseItem: get_from_clause_item_matches,
         JoinCondition: get_join_condition_matches,
@@ -890,6 +899,7 @@ class PGCompleter(Completer):
         Datatype: get_datatype_matches,
         NamedQuery: get_namedquery_matches,
         Role: get_role_matches,
+        Setting: get_setting_matches,
         Path: get_path_matches,
     }
 

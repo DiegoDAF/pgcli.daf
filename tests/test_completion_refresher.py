@@ -25,6 +25,7 @@ def test_ctor(refresher):
         "types",
         "databases",
         "roles",
+        "settings",
         "casing",
         "functions",
     ]

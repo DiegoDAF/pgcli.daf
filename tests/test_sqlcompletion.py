@@ -15,6 +15,7 @@ from pgcli.packages.sqlcompletion import (
     Join,
     NamedQuery,
     Role,
+    Setting,
 )
 from pgcli.packages.parseutils.tables import TableReference
 import pytest
@@ -940,11 +941,23 @@ def test_keyword_after_alter(sql):
 def test_suggestion_when_setting_search_path():
     sql_set = "SET "
     suggestion_set = suggest_type(sql_set, sql_set)
-    assert set(suggestion_set) == {Keyword("SET")}
+    assert set(suggestion_set) == {Setting(), Keyword("SET")}
 
     sql_set_search_path_to = "SET search_path TO "
     suggestion_set_search_path_to = suggest_type(sql_set_search_path_to, sql_set_search_path_to)
     assert set(suggestion_set_search_path_to) == {Schema()}
+
+
+def test_suggestion_for_set_setting():
+    """Test that SET suggests pg_settings names."""
+    sql_set = "SET "
+    suggestion = suggest_type(sql_set, sql_set)
+    assert Setting() in set(suggestion)
+
+    # SET with partial typing should still suggest settings
+    sql_set_partial = "SET state"
+    suggestion = suggest_type(sql_set_partial, sql_set_partial)
+    assert Setting() in set(suggestion)
 
 
 def test_suggestion_for_set_role():

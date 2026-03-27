@@ -82,6 +82,10 @@ class Role(NamedTuple):
     pass
 
 
+class Setting(NamedTuple):
+    pass
+
+
 class Datatype(NamedTuple):
     schema: Optional[str]
 
@@ -424,7 +428,7 @@ def suggest_based_on_last_token(token, stmt):
         p = sqlparse.parse(stmt.text_before_cursor)[0]
         is_first_token = p.token_first().value.upper() == token_v.upper()
         if is_first_token:
-            return (Keyword(token_v.upper()),)
+            return (Setting(), Keyword(token_v.upper()))
 
         # E.g. 'UPDATE foo SET'
         return (Column(table_refs=stmt.get_tables(), local_tables=stmt.local_tables),)

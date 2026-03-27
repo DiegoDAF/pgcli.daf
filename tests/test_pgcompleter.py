@@ -122,3 +122,27 @@ def test_get_role_matches():
     assert "admin" in role_names
     # Fuzzy matching may include other roles, but admin should be present
     assert len(role_names) >= 1
+
+
+def test_get_setting_matches():
+    """Test that get_setting_matches returns matching pg_settings."""
+    completer = pgcompleter.PGCompleter()
+    completer.extend_setting_names(
+        ["statement_timeout", "search_path", "work_mem", "shared_buffers"]
+    )
+
+    from pgcli.packages.sqlcompletion import Setting
+
+    # Partial match on "state" should return statement_timeout
+    matches = list(completer.get_setting_matches(Setting(), "state"))
+    setting_names = [m.completion.text for m in matches]
+    assert "statement_timeout" in setting_names
+
+    # Partial match on "work" should return work_mem
+    matches = list(completer.get_setting_matches(Setting(), "work"))
+    setting_names = [m.completion.text for m in matches]
+    assert "work_mem" in setting_names
+
+    # Empty prefix should return all settings
+    matches = list(completer.get_setting_matches(Setting(), ""))
+    assert len(matches) == 4

@@ -1,3 +1,14 @@
+4.4.4 (2026-03-27) - upstream: 4.4.0
+=====================================
+
+Features:
+---------
+* Autocomplete for ``SET`` command with ``pg_settings`` names. Typing
+  ``SET`` and pressing TAB now suggests PostgreSQL runtime parameters like
+  ``statement_timeout``, ``work_mem``, ``search_path``, etc. Parameters are
+  queried live from the connected server (``pg_catalog.pg_settings``).
+  Neither pgAdmin nor upstream pgcli have this feature.
+
 4.4.3 (2026-03-27) - upstream: 4.4.0
 =====================================
 

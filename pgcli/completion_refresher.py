@@ -134,6 +134,11 @@ def refresh_roles(completer, executor):
     completer.extend_role_names(executor.roles())
 
 
+@refresher("settings")
+def refresh_settings(completer, executor):
+    completer.extend_setting_names(executor.settings())
+
+
 @refresher("casing")
 def refresh_casing(completer, executor):
     casing_file = completer.casing_file

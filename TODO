@@ -3,13 +3,7 @@
 Upcoming
 ==============
 
-### v4.4.3 (prioritario)
-* [ ] Autocomplete de SET con pg_settings (statement_timeout, work_mem, etc)
-  - Mismo patrón que SET ROLE: query pg_settings, tipo Setting(), extend_settings(), refresher
-  - ~30 líneas en 4 archivos: pgexecute, pgcompleter, completion_refresher, sqlcompletion
-  - Ni pgAdmin ni pgcli upstream lo tienen — sería feature única de pgcli.daf
-
-### v4.4.3
+### v4.4.4
 * [ ] Add coverage
 * [ ] PR \restrict/\unrestrict al repo upstream
 
@@ -39,6 +33,9 @@ Upcoming
 2026-03-27
 ===================
 
+* [x] Autocomplete de SET con pg_settings (statement_timeout, work_mem, etc)
+  - Query live a pg_catalog.pg_settings, patrón SET ROLE, 4 archivos
+  - Feature única de pgcli.daf (ni pgAdmin ni upstream lo tienen)
 * [x] Fix URI connection: JDBC URIs muestran error amigable en vez de traceback
 * [x] Fix URI connection: CLI flags (-U, -h, -p) ahora sobreescriben valores de la URI (comportamiento psql)
 * [x] 5 tests nuevos para connect_uri (JDBC, invalid URI, user/host/port override)
