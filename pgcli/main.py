@@ -644,6 +644,7 @@ class PGCli:
             on_error_resume=on_error_resume,
             explain_mode=self.explain_mode,
             restrict_token=self.restrict_token,
+            notice_callback=lambda msg: click.echo(msg),
         )
 
     def write_to_logfile(self, pattern, **_):
@@ -1339,6 +1340,9 @@ class PGCli:
         # Run the query.
         start = time()
         on_error_resume = self.on_error == "RESUME"
+        def _stream_notice(msg):
+            click.echo(msg)
+
         res = self.pgexecute.run(
             text,
             self.pgspecial,
@@ -1346,6 +1350,7 @@ class PGCli:
             on_error_resume,
             explain_mode=self.explain_mode,
             restrict_token=self.restrict_token,
+            notice_callback=_stream_notice,
         )
 
         is_special = False

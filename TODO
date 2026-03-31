@@ -3,9 +3,17 @@
 Upcoming
 ==============
 
-### v4.4.4
-* [ ] Add coverage
+### v4.4.5
 * [ ] PR \restrict/\unrestrict al repo upstream
+
+2026-03-30
+===================
+
+* [x] Streaming NOTICE output para VACUUM VERBOSE, ANALYZE VERBOSE, etc
+  - notice_callback en execute_normal_sql() imprime cada NOTICE al instante
+  - Funciona en modo interactivo y no-interactivo (-c, -f)
+* [x] Add coverage reporting (pytest-cov, .coveragerc, CI artifact upload)
+  - Baseline: 68% (excluyendo magic.py y pyev.py)
 
 ### Backlog
 * [ ] Refactor to sqlcompletion to consume the text from left to right and use a state machine to suggest cols or tables instead of relying on hacks.

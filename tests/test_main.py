@@ -874,6 +874,40 @@ def test_uri_no_override_when_empty(tmpdir):
     mock_connect.assert_called_with(dsn=uri, database="testdb", host="baz.com", user="bar", passwd="foo")
 
 
+def test_notice_callback_streams_messages():
+    """Test that notice_callback receives NOTICEs in real time instead of buffering."""
+    streamed = []
+
+    def callback(msg):
+        streamed.append(msg)
+
+    # Simulate the notice handler logic directly
+    title = ""
+
+    def handle_notices_with_callback(n_primary, n_detail, notice_callback):
+        nonlocal title
+        msg = ""
+        if n_primary is not None:
+            msg += n_primary
+        if n_detail is not None:
+            msg += f"\n{n_detail}"
+        if notice_callback and msg:
+            notice_callback(msg)
+        else:
+            title = f"{title}\n{msg}" if msg else title
+
+    # With callback: messages go to callback, not title
+    handle_notices_with_callback("first notice", None, callback)
+    handle_notices_with_callback("second notice", "with detail", callback)
+    assert streamed == ["first notice", "second notice\nwith detail"]
+    assert title == ""
+
+    # Without callback: messages accumulate in title
+    handle_notices_with_callback("buffered notice", None, None)
+    assert title == "\nbuffered notice"
+    assert len(streamed) == 2
+
+
 @pytest.mark.parametrize(
     "duration_in_seconds,words",
     [

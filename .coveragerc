@@ -1,2 +1,16 @@
 [run]
-source=pgcli
+source = pgcli
+omit =
+    pgcli/magic.py
+    pgcli/pyev.py
+
+[report]
+show_missing = true
+skip_covered = true
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+
+[xml]
+output = coverage.xml

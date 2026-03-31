@@ -332,6 +332,7 @@ class PGExecute:
         on_error_resume=False,
         explain_mode=False,
         restrict_token=None,
+        notice_callback=None,
     ):
         """Execute the sql in the database and return the results.
 
@@ -427,7 +428,7 @@ class PGExecute:
                         pass
 
                 # Not a special command, so execute as normal sql
-                yield self.execute_normal_sql(sql) + (sql, True, False)
+                yield self.execute_normal_sql(sql, notice_callback=notice_callback) + (sql, True, False)
             except psycopg.DatabaseError as e:
                 _logger.error("sql: %r, error: %r", sql, e)
                 _logger.error("traceback: %r", traceback.format_exc())
@@ -458,8 +459,15 @@ class PGExecute:
         """
         return self.conn.closed != 0  # type: ignore[union-attr]
 
-    def execute_normal_sql(self, split_sql):
-        """Returns tuple (title, rows, headers, status)"""
+    def execute_normal_sql(self, split_sql, notice_callback=None):
+        """Returns tuple (title, rows, headers, status)
+
+        :param notice_callback: Optional callable that receives each NOTICE
+               message as it arrives from the server. When provided, NOTICEs
+               are streamed to the callback in real time instead of being
+               accumulated in the title field. Useful for long-running
+               commands like VACUUM VERBOSE, ANALYZE VERBOSE, REINDEX, etc.
+        """
         log_sql = re.sub(
             r"(PASSWORD\s+)'[^']*'",
             r"\1'***'",
@@ -472,11 +480,15 @@ class PGExecute:
 
         def handle_notices(n):
             nonlocal title
-            title = f"{title}"
+            msg = ""
             if n.message_primary is not None:
-                title = f"{title}\n{n.message_primary}"
+                msg += n.message_primary
             if n.message_detail is not None:
-                title = f"{title}\n{n.message_detail}"
+                msg += f"\n{n.message_detail}"
+            if notice_callback and msg:
+                notice_callback(msg)
+            else:
+                title = f"{title}\n{msg}" if msg else title
 
         self.conn.add_notice_handler(handle_notices)  # type: ignore[union-attr]
 

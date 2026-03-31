@@ -1,3 +1,15 @@
+4.4.5 (2026-03-30) - upstream: 4.4.0
+=====================================
+
+Features:
+---------
+* Streaming NOTICE output for long-running commands. Commands like
+  ``VACUUM VERBOSE``, ``ANALYZE VERBOSE``, ``REINDEX`` now display server
+  messages (NOTICEs) line by line as they arrive, instead of waiting until
+  the command finishes. Also works in non-interactive mode (``-c``, ``-f``).
+* Add test coverage reporting with ``pytest-cov``. Coverage reports are
+  generated in CI and uploaded as artifacts (baseline: 68%).
+
 4.4.4 (2026-03-27) - upstream: 4.4.0
 =====================================
 
