@@ -16,6 +16,7 @@ Upcoming
   - Baseline: 68% (excluyendo magic.py y pyev.py)
 
 ### Backlog
+* [ ] Restaurar publish.yml para publicar a PyPI (removido 2026-04-01, estaba desactualizado)
 * [ ] Refactor to sqlcompletion to consume the text from left to right and use a state machine to suggest cols or tables instead of relying on hacks.
 * [ ] Add a few more special commands. (\l pattern, \dp, \ds, \dy, \z etc)
 * [ ] Refactor pgspecial.py to a class.

@@ -1340,6 +1340,7 @@ class PGCli:
         # Run the query.
         start = time()
         on_error_resume = self.on_error == "RESUME"
+
         def _stream_notice(msg):
             click.echo(msg)
 
