@@ -3,20 +3,8 @@
 Upcoming
 ==============
 
-### v4.4.5
-* [ ] PR \restrict/\unrestrict al repo upstream
-
-2026-03-30
-===================
-
-* [x] Streaming NOTICE output para VACUUM VERBOSE, ANALYZE VERBOSE, etc
-  - notice_callback en execute_normal_sql() imprime cada NOTICE al instante
-  - Funciona en modo interactivo y no-interactivo (-c, -f)
-* [x] Add coverage reporting (pytest-cov, .coveragerc, CI artifact upload)
-  - Baseline: 68% (excluyendo magic.py y pyev.py)
-
 ### Backlog
-* [ ] Restaurar publish.yml para publicar a PyPI (removido 2026-04-01, estaba desactualizado)
+* [ ] Restore publish.yml for PyPI publishing (removed 2026-04-01, was outdated)
 * [ ] Refactor to sqlcompletion to consume the text from left to right and use a state machine to suggest cols or tables instead of relying on hacks.
 * [ ] Add a few more special commands. (\l pattern, \dp, \ds, \dy, \z etc)
 * [ ] Refactor pgspecial.py to a class.
@@ -25,60 +13,70 @@ Upcoming
 * [ ] Add a new trigger for M-/ that does naive completion.
 * [ ] New Feature List - Write the current version to config file. At launch if the version has changed, display the changelog between the two versions.
 * [ ] Add a test for 'select * from custom.abc where custom.abc.' should suggest columns from abc.
-* [ ] pgexecute columns(), tables() etc can be just cursors instead of fetchall()
+* [-] pgexecute columns(), tables() etc can be just cursors instead of fetchall() — DISCARDED: completer loads everything into memory anyway, no real gain
 * [ ] Add colorschemes in config file.
-* [ ] Cambiar versionado a CalVer YY.DDD (año.dia_juliano) - DIFERIDO
+* [ ] Switch versioning to CalVer YY.DDD (year.julian_day) - DEFERRED
+* [ ] PR \restrict/\unrestrict to upstream repo (feature done since v4.3.17, PR pending)
 
-### PRs upstream pendientes de review
-* [ ] PR #1545 (-t/--tuples-only) - rebased 2026-02-20, esperando j-bennet
-* [ ] PR #1546 (.pgpass SSH) - CI fix 2026-02-23, esperando j-bennet
-* [ ] PR #1559 (fix trailing SQL comments) - abierto 2026-03-02
+### Upstream PRs waiting review
+* [ ] PR #1545 (-t/--tuples-only) - rebased 2026-02-20, waiting j-bennet
+* [ ] PR #1546 (.pgpass SSH) - CI fix 2026-02-23, waiting j-bennet
+* [ ] PR #1559 (fix trailing SQL comments) - opened 2026-03-02
 
-### PRs upstream interesantes a seguir
+### Upstream PRs to follow
 * [ ] #1562 - Fix DSN password precedence over PGPASSWORD env var (BillionClaw)
-* [x] #1558 - Cursor shape indicator for vi mode (joryeugene) — MERGEADO, cherry-picked 2026-03-26
-* [ ] #1536 - Port en keyring para no sobreescribir entre servidores (bechampion)
+* [x] #1558 - Cursor shape indicator for vi mode (joryeugene) — MERGED, cherry-picked 2026-03-26
+* [ ] #1536 - Port in keyring to avoid overwriting between servers (bechampion)
+
+2026-03-30
+===================
+
+* [x] Streaming NOTICE output for VACUUM VERBOSE, ANALYZE VERBOSE, etc
+  - notice_callback in execute_normal_sql() prints each NOTICE instantly
+  - Works in interactive and non-interactive mode (-c, -f)
+* [x] Add coverage reporting (pytest-cov, .coveragerc, CI artifact upload)
+  - Baseline: 68% (excluding magic.py and pyev.py)
 
 2026-03-27
 ===================
 
-* [x] Autocomplete de SET con pg_settings (statement_timeout, work_mem, etc)
-  - Query live a pg_catalog.pg_settings, patrón SET ROLE, 4 archivos
-  - Feature única de pgcli.daf (ni pgAdmin ni upstream lo tienen)
-* [x] Fix URI connection: JDBC URIs muestran error amigable en vez de traceback
-* [x] Fix URI connection: CLI flags (-U, -h, -p) ahora sobreescriben valores de la URI (comportamiento psql)
-* [x] 5 tests nuevos para connect_uri (JDBC, invalid URI, user/host/port override)
+* [x] SET autocomplete with pg_settings (statement_timeout, work_mem, etc)
+  - Live query to pg_catalog.pg_settings, SET ROLE pattern, 4 files
+  - Unique feature of pgcli.daf (neither pgAdmin nor upstream have it)
+* [x] Fix URI connection: JDBC URIs show friendly error instead of traceback
+* [x] Fix URI connection: CLI flags (-U, -h, -p) now override URI values (psql behavior)
+* [x] 5 new tests for connect_uri (JDBC, invalid URI, user/host/port override)
 
 2026-03-26
 ===================
 
-* [x] Cherry-pick upstream #1558: cursor shape indicator para vi mode
-* [x] Revisar upstream — único PR mergeado nuevo era #1558
+* [x] Cherry-pick upstream #1558: cursor shape indicator for vi mode
+* [x] Review upstream — only new merged PR was #1558
 
 2026-03-20
 ===================
 
-* [x] Fix behave integration tests para CI con PG 16:
-  - [x] file_option.feature: check table borders en vez de contar "SELECT"
-  - [x] tuples_only.feature: remover scenarios de formato (ya no aplica con -t puro)
-  - [x] log_rotation.feature: agregar step "we query" faltante y flag exit_sent
-* [x] Fix RST warning en changelog (backtick con trailing space)
-* [x] Fix ruff style errors (71 errores pre-existentes) y auto-format
-* [x] Fix tox allowlist_externals para behave, docutils, mypy
+* [x] Fix behave integration tests for CI with PG 16:
+  - [x] file_option.feature: check table borders instead of counting "SELECT"
+  - [x] tuples_only.feature: remove format argument scenarios (-t is now a pure flag)
+  - [x] log_rotation.feature: add missing "we query" step and exit_sent flag
+* [x] Fix RST warning in changelog (backtick with trailing space)
+* [x] Fix ruff style errors (71 pre-existing errors) and auto-format
+* [x] Fix tox allowlist_externals for behave, docutils, mypy
 * [x] Fix mypy type errors: ssh_tunnel, pgexecute, main
-* [x] CI verde en Python 3.10, 3.11, 3.12, 3.13 con PG 16
+* [x] CI green on Python 3.10, 3.11, 3.12, 3.13 with PG 16
 
 2026-03-18
 ===================
 
-* [x] Agregar upstream version tracking al changelog
-* [x] Crear GitHub release v4.4.2 con changelog completo
-* [x] Reescribir README con features de pgcli.daf y --help actualizado
-* [x] Ordenar output de --help alfabeticamente
-* [x] Drop Python 3.9 (EOL), update CI a PG 16, fix duplicate checkout
-* [x] Fix test_execute_from_file_io_error (OSError en _sanitize_path)
-* [x] Fix test_execute_commented_first_line_and_special (assertions fragiles)
-* [x] Suppress timezone message en modo no-interactivo (-c, -f)
+* [x] Add upstream version tracking to changelog
+* [x] Create GitHub release v4.4.2 with full changelog
+* [x] Rewrite README with pgcli.daf features and updated --help
+* [x] Sort --help output alphabetically
+* [x] Drop Python 3.9 (EOL), update CI to PG 16, fix duplicate checkout
+* [x] Fix test_execute_from_file_io_error (OSError in _sanitize_path)
+* [x] Fix test_execute_commented_first_line_and_special (fragile assertions)
+* [x] Suppress timezone message in non-interactive mode (-c, -f)
 
 2026-03-02
 ===================
@@ -88,32 +86,32 @@ Upcoming
 2026-02-24
 ===================
 
-* [x] Merge upstream features (v4.4.0) y bump a v4.4.1
-* [x] Cambiar -t/--tuples-only a flag booleano puro
-* [x] -t/--tuples-only: forzar formato plain sin bordes ni headers
-* [x] Traer \nq named query quiet mode (#1551) de upstream
-* [x] Traer \T prompt transaction status (#1553) de upstream
+* [x] Merge upstream features (v4.4.0) and bump to v4.4.1
+* [x] Change -t/--tuples-only to pure boolean flag
+* [x] -t/--tuples-only: force plain format without borders or headers
+* [x] Cherry-pick \nq named query quiet mode (#1551) from upstream
+* [x] Cherry-pick \T prompt transaction status (#1553) from upstream
 * [x] Bump click >= 8.3.1 (#1556)
 
 2026-02-13
 ===================
 
-* [x] Migrar SSH tunnel de sshtunnel a Paramiko nativo
-* [x] Leer IdentityFile del SSH config
+* [x] Migrate SSH tunnel from sshtunnel to native Paramiko
+* [x] Read IdentityFile from SSH config
 * [x] Host key verification configurable (auto-add, warn, reject)
-* [x] pgcli_isready wrapper con soporte SSH tunnel
-* [x] Security: sanitize passwords en logs, \restrict blocking, path sanitization
+* [x] pgcli_isready wrapper with SSH tunnel support
+* [x] Security: sanitize passwords in logs, \restrict blocking, path sanitization
 * [x] --no-timings / --no-status flags
-* [x] \restrict/\unrestrict completo (CVE-2025-8714)
+* [x] \restrict/\unrestrict complete (CVE-2025-8714)
 * [x] \np autocomplete fix
-* [x] PR #1545 y #1546 rebased
+* [x] PR #1545 and #1546 rebased
 
 2026-01-20
 ===================
 
 * [x] allow_agent config, \nr reload, SET ROLE autocomplete
 * [x] Fix mypy errors (136 total)
-* [x] Restore .pgpass support en connect_uri()
+* [x] Restore .pgpass support in connect_uri()
 
 2026-01-19
 ===================
