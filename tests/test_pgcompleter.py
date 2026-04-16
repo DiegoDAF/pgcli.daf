@@ -127,9 +127,7 @@ def test_get_role_matches():
 def test_get_setting_matches():
     """Test that get_setting_matches returns matching pg_settings."""
     completer = pgcompleter.PGCompleter()
-    completer.extend_setting_names(
-        ["statement_timeout", "search_path", "work_mem", "shared_buffers"]
-    )
+    completer.extend_setting_names(["statement_timeout", "search_path", "work_mem", "shared_buffers"])
 
     from pgcli.packages.sqlcompletion import Setting
 
