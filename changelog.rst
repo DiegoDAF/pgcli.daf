@@ -1,3 +1,17 @@
+4.4.8 (2026-06-01) - upstream: 4.4.0
+=====================================
+
+Upstream cherry-picks:
+----------------------
+* Fix completion crash when tables are created during refresh
+  (upstream #1591). Guards against a race in the completion refresh
+  thread when a relation is created between ``extend_relations`` and
+  ``extend_columns``, which raised a ``KeyError``.
+* Fix row-limit detection for multiline ``LIMIT`` clauses (upstream #1594).
+  ``_has_limit`` now parses with ``sqlparse`` instead of a substring match,
+  so ``LIMIT`` split across lines/tabs is detected and ``LIMIT`` inside
+  comments or string literals no longer triggers the row-limit prompt.
+
 4.4.7 (2026-05-18) - upstream: 4.4.0
 =====================================
 
