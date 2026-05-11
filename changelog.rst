@@ -1,3 +1,22 @@
+4.4.6 (2026-05-11) - upstream: 4.4.0
+=====================================
+
+Upstream cherry-picks:
+----------------------
+* Respect DSN password over ``PGPASSWORD`` env var (upstream #1562).
+* Make auto-suggest optional via ``auto_suggest`` config (upstream #1570).
+* Add ``VERSION`` to built-in function completion (upstream #1574).
+* Hide timezone notice when local and server timezones are the same
+  (upstream #1580). Complements our existing suppression in
+  non-interactive mode.
+* Add support for Python 3.14 in classifiers (upstream #1583).
+* Fix integration with IPython magic (upstream #1585).
+
+Internal:
+---------
+* Remove outdated Vagrantfile (upstream #1581).
+* Bump Dockerfile to Python 3.14 (upstream #1584).
+
 4.4.5 (2026-03-30) - upstream: 4.4.0
 =====================================
 
