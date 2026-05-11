@@ -23,12 +23,7 @@ class TestIsCompleteWithTrailingComments:
         assert _is_complete("SELECT 1; /* block comment */") is True
 
     def test_vacuum_with_comment(self):
-        assert (
-            _is_complete(
-                "vacuum freeze verbose tpd.file_delivery; -- 82% towards emergency"
-            )
-            is True
-        )
+        assert _is_complete("vacuum freeze verbose tpd.file_delivery; -- 82% towards emergency") is True
 
     def test_comment_only(self):
         assert _is_complete("-- just a comment") is False
@@ -49,7 +44,4 @@ class TestIsCompleteWithTrailingComments:
         assert _is_complete("SELECT 1; SELECT 2; -- done") is True
 
     def test_comment_with_special_chars(self):
-        assert (
-            _is_complete("VACUUM ANALYZE; -- 81.0% towards emergency, 971 MB")
-            is True
-        )
+        assert _is_complete("VACUUM ANALYZE; -- 81.0% towards emergency, 971 MB") is True
