@@ -3,6 +3,9 @@ from typing import NamedTuple, Optional
 from sqlparse.sql import IdentifierList, Identifier, Function
 from sqlparse.tokens import Keyword, DML, Punctuation
 
+sqlparse.engine.grouping.MAX_GROUPING_DEPTH = None
+sqlparse.engine.grouping.MAX_GROUPING_TOKENS = None
+
 
 class TableReference(NamedTuple):
     schema: Optional[str]
