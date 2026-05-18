@@ -1,3 +1,21 @@
+4.4.7 (2026-05-18) - upstream: 4.4.0
+=====================================
+
+Upstream cherry-picks:
+----------------------
+* Allow force-quit when a transaction is running (upstream #1573).
+  Pressing Ctrl-D or running ``\q`` now offers to exit even with an
+  active transaction, instead of leaving the user stuck.
+* Let ``sqlparse`` accept arbitrarily-large queries by disabling
+  ``MAX_GROUPING_DEPTH`` and ``MAX_GROUPING_TOKENS`` (upstream #1595).
+  Fixes crashes when parsing very large SQL.
+
+Internal:
+---------
+* Pass ``PG*`` env variables to integration tests via ``tox.ini``
+  ``passenv`` (upstream #1596). Fixes integration test breakage
+  introduced by #1560.
+
 4.4.6 (2026-05-11) - upstream: 4.4.0
 =====================================
 
