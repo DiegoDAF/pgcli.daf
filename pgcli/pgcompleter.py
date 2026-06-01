@@ -492,7 +492,7 @@ class PGCompleter(Completer):
             # Map suggestion type to method
             # e.g. 'table' -> self.get_table_matches
             matcher = self.suggestion_matchers[suggestion_type]
-            matches.extend(matcher(self, suggestion, word_before_cursor))  # type: ignore[operator]
+            matches.extend(matcher(self, suggestion, word_before_cursor))
 
         # Sort matches so highest priorities are first
         matches = sorted(matches, key=operator.attrgetter("priority"), reverse=True)
