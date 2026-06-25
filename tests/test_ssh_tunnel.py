@@ -783,3 +783,189 @@ class TestGetTunnelManagerFromConfig:
         """Test host_key_policy defaults to auto-add."""
         manager = get_tunnel_manager_from_config({})
         assert manager.host_key_policy == "auto-add"
+
+
+class TestSSHTunnelSecretEscalation:
+    """Tests for saving/reusing the SSH tunnel passphrase / password (keyring).
+
+    When agent / unencrypted-key auth fails, _NativeSSHTunnel asks a
+    secret_provider for a key passphrase or SSH password and retries once,
+    optionally persisting the secret via secret_saver.
+    """
+
+    def test_passphrase_escalation_retries_and_does_not_save_on_keyring_hit(self, mock_native_tunnel):
+        """A passphrase from the provider (keyring hit -> should_save False) is
+        used on retry, and the saver is not called."""
+        mock_native_tunnel["client"].connect.side_effect = [
+            paramiko.PasswordRequiredException("encrypted key"),
+            None,  # retry succeeds
+        ]
+        provider = MagicMock(return_value=("passphrase", "s3cr3t", False))
+        saver = MagicMock()
+
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
+            ssh_username="testuser",
+            key_filenames=["/home/user/.ssh/id_rsa"],
+            secret_provider=provider,
+            secret_saver=saver,
+            logger=logging.getLogger("test"),
+        )
+        tunnel.start()
+
+        assert tunnel.is_active
+        assert mock_native_tunnel["client"].connect.call_count == 2
+        retry_kwargs = mock_native_tunnel["client"].connect.call_args_list[1][1]
+        assert retry_kwargs["passphrase"] == "s3cr3t"
+        provider.assert_called_once()
+        saver.assert_not_called()
+
+    def test_password_escalation_saves_when_requested(self, mock_native_tunnel):
+        """A freshly prompted password (should_save True) triggers the saver."""
+        mock_native_tunnel["client"].connect.side_effect = [
+            paramiko.AuthenticationException("auth failed"),
+            None,
+        ]
+        provider = MagicMock(return_value=("password", "hunter2", True))
+        saver = MagicMock()
+
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
+            ssh_username="testuser",
+            secret_provider=provider,
+            secret_saver=saver,
+            logger=logging.getLogger("test"),
+        )
+        tunnel.start()
+
+        assert tunnel.is_active
+        retry_kwargs = mock_native_tunnel["client"].connect.call_args_list[1][1]
+        assert retry_kwargs["password"] == "hunter2"
+        saver.assert_called_once()
+        ctx, kind, secret = saver.call_args[0]
+        assert kind == "password"
+        assert secret == "hunter2"
+
+    def test_no_provider_reraises(self, mock_native_tunnel):
+        """Without a provider the auth error propagates unchanged."""
+        mock_native_tunnel["client"].connect.side_effect = paramiko.AuthenticationException("nope")
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
+            ssh_username="testuser",
+            logger=logging.getLogger("test"),
+        )
+        with pytest.raises(paramiko.AuthenticationException):
+            tunnel.start()
+
+    def test_provider_returns_none_reraises(self, mock_native_tunnel):
+        """If the provider declines (None), the original error is raised."""
+        mock_native_tunnel["client"].connect.side_effect = paramiko.PasswordRequiredException("enc")
+        provider = MagicMock(return_value=None)
+        tunnel = _NativeSSHTunnel(
+            ssh_hostname="bastion",
+            ssh_port=22,
+            remote_host="db.internal",
+            remote_port=5432,
+            ssh_username="testuser",
+            key_filenames=["/home/user/.ssh/id_rsa"],
+            secret_provider=provider,
+            logger=logging.getLogger("test"),
+        )
+        with pytest.raises(paramiko.PasswordRequiredException):
+            tunnel.start()
+
+    def test_proxy_command_rebuilt_per_attempt_on_retry(self, mock_native_tunnel):
+        """ProxyCommand (single-use socket) must be rebuilt on the retry so the
+        keyring passphrase escalation works behind a ProxyCommand."""
+        mock_native_tunnel["client"].connect.side_effect = [
+            paramiko.PasswordRequiredException("encrypted key"),
+            None,
+        ]
+        provider = MagicMock(return_value=("passphrase", "pp", False))
+        with patch("pgcli.ssh_tunnel.paramiko.ProxyCommand") as mock_proxy:
+            tunnel = _NativeSSHTunnel(
+                ssh_hostname="bastion",
+                ssh_port=22,
+                remote_host="db.internal",
+                remote_port=5432,
+                ssh_username="testuser",
+                key_filenames=["/home/user/.ssh/id_rsa"],
+                ssh_proxy_command="corkscrew proxy 8080 %h %p",
+                secret_provider=provider,
+                logger=logging.getLogger("test"),
+            )
+            tunnel.start()
+        # One ProxyCommand built per connect attempt (initial + retry).
+        assert mock_proxy.call_count == 2
+
+
+class TestPGCliSSHSecretProvider:
+    """Tests for PGCli._ssh_tunnel_secret_provider / _secret_saver / keyring key."""
+
+    def _cli(self, tmpdir):
+        rcfile = str(tmpdir.join("rcfile"))
+        return PGCli(pgclirc_file=rcfile)
+
+    def test_keyring_key_naming(self, tmpdir):
+        cli = self._cli(tmpdir)
+        ctx = {"username": "u", "hostname": "h", "port": 22, "key_filenames": ["/k/id_rsa"]}
+        assert cli._ssh_tunnel_keyring_key(ctx, "passphrase") == "ssh-tunnel-passphrase:/k/id_rsa"
+        assert cli._ssh_tunnel_keyring_key(ctx, "password") == "ssh-tunnel-password:u@h:22"
+
+    def test_provider_keyring_hit_no_prompt(self, tmpdir):
+        cli = self._cli(tmpdir)
+        ctx = {"username": "u", "hostname": "h", "port": 22, "key_filenames": ["/k/id_rsa"]}
+        with (
+            patch("pgcli.main.auth.keyring", object()),
+            patch("pgcli.main.auth.keyring_get_password", return_value="stored-pp"),
+            patch("pgcli.main.getpass") as mock_getpass,
+        ):
+            result = cli._ssh_tunnel_secret_provider(ctx)
+        assert result == ("passphrase", "stored-pp", False)
+        mock_getpass.assert_not_called()
+
+    def test_provider_prompt_with_save_flag(self, tmpdir):
+        cli = self._cli(tmpdir)
+        cli.ssh_tunnel_save_password = True
+        ctx = {"username": "u", "hostname": "h", "port": 22, "key_filenames": None}
+        with (
+            patch("pgcli.main.auth.keyring", object()),
+            patch("pgcli.main.auth.keyring_get_password", return_value=""),
+            patch("pgcli.main.getpass", return_value="typed-pw"),
+        ):
+            result = cli._ssh_tunnel_secret_provider(ctx)
+        # No key_filenames -> password; save flag on -> should_save True
+        assert result == ("password", "typed-pw", True)
+
+    def test_provider_prompt_asks_when_flag_off(self, tmpdir):
+        cli = self._cli(tmpdir)
+        cli.ssh_tunnel_save_password = False
+        ctx = {"username": "u", "hostname": "h", "port": 22, "key_filenames": ["/k/id_rsa"]}
+        with (
+            patch("pgcli.main.auth.keyring", object()),
+            patch("pgcli.main.auth.keyring_get_password", return_value=""),
+            patch("pgcli.main.getpass", return_value="typed-pp"),
+            patch("pgcli.main.confirm", return_value=True) as mock_confirm,
+        ):
+            result = cli._ssh_tunnel_secret_provider(ctx)
+        assert result == ("passphrase", "typed-pp", True)
+        mock_confirm.assert_called_once()
+
+    def test_saver_sets_keyring(self, tmpdir):
+        cli = self._cli(tmpdir)
+        ctx = {"username": "u", "hostname": "h", "port": 22, "key_filenames": ["/k/id_rsa"]}
+        with (
+            patch("pgcli.main.auth.keyring", object()),
+            patch("pgcli.main.auth.keyring_set_password") as mock_set,
+        ):
+            cli._ssh_tunnel_secret_saver(ctx, "passphrase", "pp")
+        mock_set.assert_called_once_with("ssh-tunnel-passphrase:/k/id_rsa", "pp")

@@ -98,6 +98,10 @@ class _NativeSSHTunnel:
         key_filenames: Optional[list] = None,
         host_key_policy: str = "auto-add",
         logger: Optional[logging.Logger] = None,
+        passphrase: Optional[str] = None,
+        secret_provider: Optional[Any] = None,
+        secret_saver: Optional[Any] = None,
+        ssh_proxy_command: Optional[str] = None,
     ):
         self.ssh_hostname = ssh_hostname
         self.ssh_port = ssh_port
@@ -106,10 +110,21 @@ class _NativeSSHTunnel:
         self.ssh_username = ssh_username
         self.ssh_password = ssh_password
         self.ssh_proxy = ssh_proxy
+        # ProxyCommand as a string so a fresh paramiko.ProxyCommand can be built
+        # per connect attempt (the proxy socket is single-use; reusing it after
+        # a failed auth would break the keyring retry).
+        self.ssh_proxy_command = ssh_proxy_command
         self.allow_agent = allow_agent
         self.key_filenames = key_filenames
         self.host_key_policy = host_key_policy
         self.logger = logger or logging.getLogger(__name__)
+        # Optional secret persistence (e.g. OS keyring) for key passphrase /
+        # SSH password when no agent is available.
+        self.passphrase = passphrase
+        # secret_provider(context) -> Optional[(kind, secret, should_save)]
+        # secret_saver(context, kind, secret) -> None
+        self.secret_provider = secret_provider
+        self.secret_saver = secret_saver
 
         self._ssh_client: Optional[paramiko.SSHClient] = None
         self._server: Optional[socketserver.ThreadingTCPServer] = None
@@ -126,13 +141,14 @@ class _NativeSSHTunnel:
             return self._server.server_address[1]
         return None
 
-    def start(self):
-        """Start SSH connection and local forwarding server."""
-        self._ssh_client = paramiko.SSHClient()
-        self._ssh_client.load_system_host_keys()
+    def _build_client(self) -> paramiko.SSHClient:
+        client = paramiko.SSHClient()
+        client.load_system_host_keys()
         policy_cls = self.HOST_KEY_POLICIES.get(self.host_key_policy, paramiko.AutoAddPolicy)
-        self._ssh_client.set_missing_host_key_policy(policy_cls())
+        client.set_missing_host_key_policy(policy_cls())
+        return client
 
+    def _base_connect_kwargs(self) -> "dict[str, Any]":
         connect_kwargs: dict[str, Any] = {
             "hostname": self.ssh_hostname,
             "port": self.ssh_port,
@@ -146,10 +162,47 @@ class _NativeSSHTunnel:
             connect_kwargs["key_filename"] = self.key_filenames
         if self.ssh_password:
             connect_kwargs["password"] = self.ssh_password
-        if self.ssh_proxy:
+        if self.passphrase:
+            connect_kwargs["passphrase"] = self.passphrase
+        if self.ssh_proxy_command:
+            # Fresh proxy socket per attempt (single-use), so the retry works.
+            connect_kwargs["sock"] = paramiko.ProxyCommand(self.ssh_proxy_command)
+        elif self.ssh_proxy:
             connect_kwargs["sock"] = self.ssh_proxy
+        return connect_kwargs
 
-        self._ssh_client.connect(**connect_kwargs)
+    def start(self):
+        """Start SSH connection and local forwarding server."""
+        self._ssh_client = self._build_client()
+        connect_kwargs = self._base_connect_kwargs()
+
+        try:
+            self._ssh_client.connect(**connect_kwargs)
+        except (paramiko.PasswordRequiredException, paramiko.AuthenticationException) as e:
+            # Agent / unencrypted-key auth failed. If a secret provider is
+            # available (interactive pgcli), ask it for the key passphrase or
+            # SSH password (from keyring or a prompt) and retry once.
+            if not self.secret_provider:
+                raise
+            context = {
+                "hostname": self.ssh_hostname,
+                "username": self.ssh_username,
+                "port": self.ssh_port,
+                "key_filenames": self.key_filenames,
+            }
+            result = self.secret_provider(context)
+            if not result:
+                raise e
+            kind, secret, should_save = result
+            self.logger.debug("Retrying SSH auth with provided %s", kind)
+            retry_kwargs = self._base_connect_kwargs()
+            retry_kwargs["passphrase" if kind == "passphrase" else "password"] = secret
+            # Fresh client: a failed connect leaves the previous one unusable.
+            self._ssh_client.close()
+            self._ssh_client = self._build_client()
+            self._ssh_client.connect(**retry_kwargs)
+            if should_save and self.secret_saver:
+                self.secret_saver(context, kind, secret)
         self.logger.debug("SSH connection established to %s:%d", self.ssh_hostname, self.ssh_port)
 
         handler_class = type(
@@ -203,6 +256,8 @@ class SSHTunnelManager:
         logger: Optional[logging.Logger] = None,
         allow_agent: bool = True,
         host_key_policy: str = "auto-add",
+        secret_provider: Optional[Any] = None,
+        secret_saver: Optional[Any] = None,
     ):
         """
         Initialize SSH tunnel manager.
@@ -214,6 +269,11 @@ class SSHTunnelManager:
             logger: Logger instance for debug output
             allow_agent: Whether to allow SSH agent for key authentication (default True)
             host_key_policy: SSH host key policy: 'auto-add', 'warn', or 'reject' (default 'auto-add')
+            secret_provider: Optional callable to obtain a key passphrase / SSH
+                password when agent auth fails. Receives a context dict and
+                returns (kind, secret, should_save) or None.
+            secret_saver: Optional callable to persist a secret after a
+                successful retry. Receives (context, kind, secret).
         """
         self.ssh_tunnel_url = ssh_tunnel_url
         self.ssh_tunnel_config = ssh_tunnel_config or {}
@@ -222,6 +282,8 @@ class SSHTunnelManager:
         self.tunnel: Optional[_NativeSSHTunnel] = None
         self.allow_agent = allow_agent
         self.host_key_policy = host_key_policy
+        self.secret_provider = secret_provider
+        self.secret_saver = secret_saver
 
     def find_tunnel_url(
         self,
@@ -303,7 +365,7 @@ class SSHTunnelManager:
         ssh_hostname = tunnel_info.hostname
         ssh_port = tunnel_info.port or 22
         ssh_username = tunnel_info.username
-        ssh_proxy = None
+        proxycommand = None
 
         # Read SSH config for username/port/proxycommand/identityfile.
         # IdentityFile entries are read in order (host-specific first, wildcard after)
@@ -325,8 +387,6 @@ class SSHTunnelManager:
                 if not tunnel_info.port and "port" in host_config:
                     ssh_port = int(host_config["port"])
                 proxycommand = host_config.get("proxycommand")
-                if proxycommand:
-                    ssh_proxy = paramiko.ProxyCommand(proxycommand)
                 identity_files = host_config.get("identityfile", [])
                 key_filenames = [os.path.expanduser(f) for f in identity_files if os.path.isfile(os.path.expanduser(f))]
                 if key_filenames:
@@ -361,11 +421,13 @@ class SSHTunnelManager:
                 remote_port=int(port),
                 ssh_username=ssh_username,
                 ssh_password=tunnel_info.password,
-                ssh_proxy=ssh_proxy,
+                ssh_proxy_command=proxycommand,
                 allow_agent=self.allow_agent,
                 key_filenames=key_filenames or None,
                 host_key_policy=self.host_key_policy,
                 logger=self.logger,
+                secret_provider=self.secret_provider,
+                secret_saver=self.secret_saver,
             )
             tunnel.start()
             self.tunnel = tunnel

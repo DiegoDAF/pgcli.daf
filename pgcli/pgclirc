@@ -228,6 +228,14 @@ enable_pager = True
 # Use keyring to automatically save and load password in a secure manner
 keyring = True
 
+# Save the SSH tunnel key passphrase / password in the OS keyring so it is
+# reused on the next connect (requires keyring = True). This kicks in only when
+# the SSH agent cannot authenticate (e.g. a passphrase-protected key with no
+# agent, or password auth). When True, the secret is stored automatically after
+# a successful connect; when False, pgcli asks "save for next time?" the first
+# time it has to prompt for it.
+ssh_tunnel_save_password = False
+
 # Automatically set the session time zone to the local time zone
 # If unset, uses the server's time zone, which is the Postgres default
 use_local_timezone = True

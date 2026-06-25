@@ -1,4 +1,4 @@
-4.5.1 (unreleased) - upstream: 4.5.0
+4.5.1 (2026-06-25) - upstream: 4.5.0
 =====================================
 
 Version realigned to track upstream: this fork now carries everything from
@@ -13,6 +13,13 @@ Features:
   (``select a; select b; select c;``) now shows each result live as its
   statement completes, similar to psql/pgAdmin. Note: in stream mode the pager
   is not used to wrap the combined output.
+* Add ``ssh_tunnel_save_password`` config option (default ``False``). When the
+  SSH agent cannot authenticate the tunnel (a passphrase-protected key with no
+  agent, or password auth), pgcli now prompts for the key passphrase / SSH
+  password and can store it in the OS keyring (reusing the existing keyring
+  integration) so it is reused on the next connect, similar to pgAdmin. When
+  ``True`` the secret is saved automatically after a successful connect; when
+  ``False`` pgcli asks before saving. Requires ``keyring = True``.
 
 4.4.8 (2026-06-01) - upstream: 4.4.0
 =====================================
