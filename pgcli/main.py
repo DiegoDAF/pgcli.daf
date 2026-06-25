@@ -79,7 +79,7 @@ from .__init__ import __version__
 click.disable_unicode_literals_warning = True
 
 
-from getpass import getuser
+from getpass import getuser, getpass
 
 from psycopg import OperationalError, InterfaceError, Notify
 from psycopg.conninfo import make_conninfo, conninfo_to_dict
@@ -270,6 +270,7 @@ class PGCli:
         self.float_format = c["data_formats"]["float"]
         self.column_date_formats = c["column_date_formats"]
         auth.keyring_initialize(c["main"].as_bool("keyring"), logger=self.logger)
+        self.ssh_tunnel_save_password = c["main"].as_bool("ssh_tunnel_save_password")
         self.show_bottom_toolbar = c["main"].as_bool("show_bottom_toolbar")
         self.restrict_token = None  # Token for \restrict/\unrestrict mode (CVE-2025-8714)
 
@@ -318,6 +319,8 @@ class PGCli:
             logger=self.logger,
             allow_agent=str(ssh_tunnels_config.get("allow_agent", "True")).lower() == "true",
             host_key_policy=str(ssh_tunnels_config.get("host_key_policy", "auto-add")).lower(),
+            secret_provider=self._ssh_tunnel_secret_provider,
+            secret_saver=self._ssh_tunnel_secret_saver,
         )
         self.ssh_tunnel: Optional[Any] = None
 
@@ -770,6 +773,63 @@ class PGCli:
         pgspecial_logger = logging.getLogger("pgspecial")
         pgspecial_logger.addHandler(handler)
         pgspecial_logger.setLevel(log_level)
+
+    @staticmethod
+    def _ssh_tunnel_keyring_key(context, kind):
+        """Build the keyring entry name for an SSH tunnel secret.
+
+        Passphrases are keyed by the (first) identity file path, since a
+        passphrase belongs to the key and is reusable across tunnels. SSH
+        passwords are keyed by user@host:port.
+        """
+        if kind == "passphrase":
+            key_filenames = context.get("key_filenames") or []
+            target = key_filenames[0] if key_filenames else "unknown"
+            return f"ssh-tunnel-passphrase:{target}"
+        return "ssh-tunnel-password:{username}@{hostname}:{port}".format(**context)
+
+    def _ssh_tunnel_secret_provider(self, context):
+        """Provide an SSH key passphrase / password when agent auth fails.
+
+        Looks the secret up in the keyring first; if missing, prompts the user
+        once. Returns (kind, secret, should_save) or None to abort.
+        """
+        kind = "passphrase" if context.get("key_filenames") else "password"
+        kr_key = self._ssh_tunnel_keyring_key(context, kind)
+
+        if auth.keyring:
+            stored = auth.keyring_get_password(kr_key)
+            if stored:
+                self.logger.debug("Using stored SSH %s from keyring", kind)
+                return (kind, stored, False)
+
+        if kind == "passphrase":
+            prompt_msg = "Passphrase for SSH key %s: " % context["key_filenames"][0]
+        else:
+            prompt_msg = "SSH password for {username}@{hostname}: ".format(**context)
+
+        try:
+            secret = getpass(prompt_msg)
+        except (EOFError, KeyboardInterrupt):
+            return None
+        if not secret:
+            return None
+
+        if not auth.keyring:
+            should_save = False
+        elif self.ssh_tunnel_save_password:
+            should_save = True
+        else:
+            should_save = confirm("Save this SSH secret in the keyring for next time?")
+        return (kind, secret, should_save)
+
+    def _ssh_tunnel_secret_saver(self, context, kind, secret):
+        """Persist an SSH tunnel secret in the keyring after a successful auth."""
+        if not auth.keyring:
+            return
+        kr_key = self._ssh_tunnel_keyring_key(context, kind)
+        auth.keyring_set_password(kr_key, secret)
+        self.logger.debug("Saved SSH %s to keyring", kind)
 
     def connect_dsn(self, dsn, **kwargs):
         self.connect(dsn=dsn, **kwargs)
