@@ -215,6 +215,7 @@ class PGCli:
         self.auto_expand = auto_vertical_output or c["main"].as_bool("auto_expand")
         self.auto_retry_closed_connection = c["main"].as_bool("auto_retry_closed_connection")
         self.expanded_output = c["main"].as_bool("expand")
+        self.stream_results = c["main"].as_bool("stream_results")
         self.pgspecial.timing_enabled = c["main"].as_bool("timing")
         if row_limit is not None:
             self.row_limit = row_limit
@@ -1035,7 +1036,9 @@ class PGCli:
                     except OSError as e:
                         click.secho(str(e), err=True, fg="red")
                 else:
-                    if output:
+                    # In stream mode each result was already echoed live in
+                    # _evaluate_command, so skip the buffered pager dump.
+                    if output and not self.stream_results:
                         self.echo_via_pager("\n".join(output))
 
                 # Log to file in addition to normal output
@@ -1368,6 +1371,11 @@ class PGCli:
 
         is_special = False
 
+        # Stream each statement's result as soon as it is ready (psql/pgAdmin
+        # style) instead of buffering everything until the end. Gated on
+        # output_file so `-o`/`\o` redirection keeps writing the buffered output.
+        stream = self.stream_results and not self.output_file
+
         for title, cur, headers, status, sql, success, is_special in res:
             logger.debug("headers: %r", headers)
             logger.debug("rows: %r", cur)
@@ -1411,6 +1419,8 @@ class PGCli:
             execution = time() - start
             formatted = format_output(title, cur, headers, status, settings, self.explain_mode)
 
+            if stream and formatted:
+                click.echo("\n".join(formatted))
             output.extend(formatted)
             total = time() - start
 

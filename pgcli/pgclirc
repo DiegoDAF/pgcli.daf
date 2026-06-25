@@ -53,6 +53,13 @@ expand = False
 # Enables auto expand mode, which is similar to `\x auto` in psql.
 auto_expand = False
 
+# Print each statement's result as soon as it finishes, instead of buffering
+# all results and printing them together at the end. When you paste several
+# statements ("select a; select b; select c;") each result appears live as its
+# statement completes, similar to psql/pgAdmin. Note: in stream mode the pager
+# is not used to wrap the combined output.
+stream_results = False
+
 # Auto-retry queries on connection failures and other operational errors. If
 # False, will prompt to rerun the failed query instead of auto-retrying.
 auto_retry_closed_connection = True

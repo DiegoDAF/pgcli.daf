@@ -1,3 +1,19 @@
+4.5.1 (unreleased) - upstream: 4.5.0
+=====================================
+
+Version realigned to track upstream: this fork now carries everything from
+upstream 4.5.0 (all our cherry-picks landed there) plus the features below.
+Previous fork release was 4.4.8.
+
+Features:
+---------
+* Add ``stream_results`` config option (default ``False``). When enabled, the
+  result of each statement is printed as soon as it finishes instead of being
+  buffered and printed all together at the end. Pasting several statements
+  (``select a; select b; select c;``) now shows each result live as its
+  statement completes, similar to psql/pgAdmin. Note: in stream mode the pager
+  is not used to wrap the combined output.
+
 4.4.8 (2026-06-01) - upstream: 4.4.0
 =====================================
 

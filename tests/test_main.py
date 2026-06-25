@@ -321,6 +321,75 @@ def test_pset_pager_on(term_height, term_width, text, use_pager, pset_pager_mock
         mock_echo.assert_called()
 
 
+def _fake_two_statement_run():
+    """Mimic pgexecute.run() yielding one result per statement."""
+    yield (None, [("2024",)], ["now"], "SELECT 1", "select now()", True, False)
+    yield (None, [("ok",)], ["pg_sleep"], "SELECT 1", "select pg_sleep(1)", True, False)
+
+
+def test_stream_results_echoes_each_statement_inline(tmpdir):
+    """With stream_results=True each statement result is echoed live and the
+    buffered pager dump is skipped."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    cli.stream_results = True
+    cli.pgexecute = mock.Mock()
+    cli.pgexecute.run.return_value = _fake_two_statement_run()
+
+    with (
+        mock.patch("pgcli.main.click.echo") as mock_echo,
+        mock.patch.object(cli, "echo_via_pager") as mock_pager,
+        mock.patch.object(cli, "_should_limit_output", return_value=False),
+    ):
+        cli.execute_command("select now(); select pg_sleep(1)")
+
+    # One inline echo per statement, nothing dumped through the pager.
+    assert mock_echo.call_count == 2
+    mock_pager.assert_not_called()
+
+
+def test_no_stream_buffers_results_to_pager(tmpdir):
+    """Default behavior (stream_results=False): nothing is echoed live, all
+    output is dumped once through the pager."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    assert cli.stream_results is False  # default from packaged pgclirc
+    cli.pgexecute = mock.Mock()
+    cli.pgexecute.run.return_value = _fake_two_statement_run()
+
+    with (
+        mock.patch("pgcli.main.click.echo") as mock_echo,
+        mock.patch.object(cli, "echo_via_pager") as mock_pager,
+        mock.patch.object(cli, "_should_limit_output", return_value=False),
+    ):
+        cli.execute_command("select now(); select pg_sleep(1)")
+
+    mock_echo.assert_not_called()
+    mock_pager.assert_called_once()
+
+
+def test_stream_results_disabled_when_output_file_set(tmpdir):
+    """stream_results must not echo to stdout when output is redirected to a
+    file (`-o`/`\\o`); the buffered output is returned for the file writer."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    cli.stream_results = True
+    cli.output_file = str(tmpdir.join("out.txt"))
+    cli.pgexecute = mock.Mock()
+    cli.pgexecute.run.return_value = _fake_two_statement_run()
+
+    with (
+        mock.patch("pgcli.main.click.echo") as mock_echo,
+        mock.patch.object(cli, "_should_limit_output", return_value=False),
+    ):
+        output, _ = cli._evaluate_command("select now(); select pg_sleep(1)")
+
+    # No live echo: streaming is suppressed when redirecting to a file.
+    mock_echo.assert_not_called()
+    # Output is buffered/returned instead, so the file writer can persist it.
+    assert output
+
+
 @pytest.mark.parametrize(
     "text,expected_length",
     [
