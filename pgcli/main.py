@@ -464,6 +464,13 @@ class PGCli:
         )
 
         self.pgspecial.register(
+            self.edit_named_query,
+            "\\ne",
+            "\\ne name",
+            "Edit a named query in the external editor.",
+        )
+
+        self.pgspecial.register(
             self.enter_restrict_mode,
             "\\restrict",
             "\\restrict token",
@@ -492,6 +499,42 @@ class PGCli:
 
     def echo(self, pattern, **_):
         return [(None, None, None, pattern)]
+
+    def edit_named_query(self, pattern, **_):
+        r"""Edit (or create) a named query in the external editor (\ne name).
+
+        Loads the named query's SQL into $EDITOR; on save, persists it back to
+        the main config's [named queries] section (like \ns). If the name does
+        not exist, the editor opens empty and saving creates it.
+        """
+        name = pattern.strip()
+        if not name:
+            return [(None, None, None, "Usage: \\ne <name>")]
+
+        existing = NamedQueries.instance.get(name)
+        source = None
+        if hasattr(NamedQueries.instance, "get_source"):
+            source = NamedQueries.instance.get_source(name)
+
+        sql, message = special.open_external_editor(sql=existing or "")
+        if message:
+            return [(None, None, None, message)]
+
+        sql = (sql or "").strip()
+        if not sql:
+            return [(None, None, None, f"{name}: empty query, not saved.")]
+        if existing is not None and sql == existing.strip():
+            return [(None, None, None, f"{name}: no changes.")]
+
+        NamedQueries.instance.save(name, sql)
+
+        if existing is None:
+            status = f"{name}: Created"
+        elif source == "include":
+            status = f"{name}: Saved to main config (overrides the namedqueries.d copy)"
+        else:
+            status = f"{name}: Saved"
+        return [(None, None, None, status)]
 
     def reload_named_queries(self, pattern, **_):
         """Reload named queries from config and namedqueries.d directory."""

@@ -483,6 +483,71 @@ def test_reload_named_queries():
         assert "3 named queries" in result[0][3]
 
 
+def test_edit_named_query():
+    """Test \\ne edits/creates a named query via the external editor."""
+    from pgspecial.namedqueries import NamedQueries
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_file = os.path.join(tmpdir, "config")
+        with open(config_file, "w") as f:
+            f.write("[main]\n")
+            f.write(f"log_file = {os.path.join(tmpdir, 'pgcli.log')}\n")
+
+        cli = PGCli(pgclirc_file=config_file)
+
+        # Create a new named query (editor returns SQL, no error).
+        with mock.patch("pgcli.main.special.open_external_editor", return_value=("select 1", None)):
+            out = cli.edit_named_query("foo")
+        assert "Created" in out[0][3]
+        assert NamedQueries.instance.get("foo") == "select 1"
+
+        # Update the existing one.
+        with mock.patch("pgcli.main.special.open_external_editor", return_value=("select 2", None)):
+            out = cli.edit_named_query("foo")
+        assert "Saved" in out[0][3]
+        assert NamedQueries.instance.get("foo") == "select 2"
+
+        # No changes -> not re-saved.
+        with mock.patch("pgcli.main.special.open_external_editor", return_value=("select 2", None)):
+            out = cli.edit_named_query("foo")
+        assert "no changes" in out[0][3]
+
+        # Empty editor result -> not saved, previous value kept.
+        with mock.patch("pgcli.main.special.open_external_editor", return_value=("", None)):
+            out = cli.edit_named_query("foo")
+        assert "not saved" in out[0][3]
+        assert NamedQueries.instance.get("foo") == "select 2"
+
+        # Editor reported an error -> surfaced, nothing saved.
+        with mock.patch("pgcli.main.special.open_external_editor", return_value=(None, "boom")):
+            out = cli.edit_named_query("foo")
+        assert out[0][3] == "boom"
+
+        # Missing name -> usage message.
+        out = cli.edit_named_query("")
+        assert "Usage" in out[0][3]
+
+
+def test_edit_named_query_overrides_include(tmpdir):
+    """\\ne on a query that lives in namedqueries.d saves a copy to main config."""
+    from pgspecial.namedqueries import NamedQueries
+
+    config_file = str(tmpdir.join("config"))
+    with open(config_file, "w") as f:
+        f.write("[main]\n")
+        f.write(f"log_file = {tmpdir.join('pgcli.log')}\n")
+    nq_dir = tmpdir.mkdir("namedqueries.d")
+    nq_dir.join("inc.conf").write('included = "select 100"\n')
+
+    cli = PGCli(pgclirc_file=config_file)
+    assert NamedQueries.instance.get("included") == "select 100"
+
+    with mock.patch("pgcli.main.special.open_external_editor", return_value=("select 200", None)):
+        out = cli.edit_named_query("included")
+    assert "overrides" in out[0][3]
+    assert NamedQueries.instance.get("included") == "select 200"
+
+
 def test_restrict_mode_enter():
     """Test \\restrict command enters restricted mode."""
     with tempfile.TemporaryDirectory() as tmpdir:

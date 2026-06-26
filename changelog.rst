@@ -1,3 +1,15 @@
+4.5.2 (unreleased) - upstream: 4.5.0
+=====================================
+
+Features:
+---------
+* Add ``\ne <name>`` to edit a named query in the external editor. Loads the
+  named query's SQL into ``$EDITOR``; on save it is persisted back to the main
+  config's ``[named queries]`` section. If the name does not exist the editor
+  opens empty and saving creates it. Editing a query that lives in
+  ``namedqueries.d`` saves an overriding copy to the main config. Addresses the
+  editor part of upstream issue #1430.
+
 4.5.1 (2026-06-25) - upstream: 4.5.0
 =====================================
 
