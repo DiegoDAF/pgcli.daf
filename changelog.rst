@@ -1,3 +1,13 @@
+Upcoming
+========
+
+Features:
+---------
+* Add ``\\ne <name>`` to edit a named query in the external editor. Loads the
+  named query's SQL into ``$EDITOR``; on save it is written back to the
+  ``[named queries]`` section, creating it if it does not exist. Complements
+  ``\\ns`` (save) by making longer queries easier to edit ([issue 1430](https://github.com/dbcli/pgcli/issues/1430)).
+
 4.5.0 (2026-06-02)
 ==================
 
