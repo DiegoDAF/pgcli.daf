@@ -1,5 +1,15 @@
-Upcoming (TBD)
-==============
+Upcoming
+========
+
+Features:
+---------
+* Enable ``.pgpass`` support for SSH tunnel connections.
+    * Preserve original hostname for ``.pgpass`` lookup using PostgreSQL's ``hostaddr`` parameter
+    * SSH tunnel endpoint (``127.0.0.1``) is passed via ``hostaddr``, keeping ``host`` for ``.pgpass``
+    * Works with both DSN and host/port connection styles
+
+4.5.0 (2026-06-02)
+==================
 
 Features:
 ---------
@@ -7,17 +17,19 @@ Features:
 * Add cursor shape support for vi mode. When ``vi = True``, the terminal cursor now
   reflects the current editing mode: beam in INSERT, block in NORMAL, underline in REPLACE.
   Uses prompt_toolkit's ``ModalCursorShapeConfig``.
+* Add the option to force-quit pgcli when a transaction is in progress.
 * Add support of Python 3.14.
 * Drop support of Python 3.9.
-* Enable ``.pgpass`` support for SSH tunnel connections.
-    * Preserve original hostname for ``.pgpass`` lookup using PostgreSQL's ``hostaddr`` parameter
-    * SSH tunnel endpoint (``127.0.0.1``) is passed via ``hostaddr``, keeping ``host`` for ``.pgpass``
-    * Works with both DSN and host/port connection styles
 
 Bug fixes:
 ----------
 * Add `VERSION` to built-in function completion so `SELECT VERSION();` is suggested.
 * Hide timezone notice at startup when local and server timezones are the same.
+* Let `sqlparse` accept arbitrarily-large queries.
+* Respect user-specified `LIMIT` clauses when the limit value starts on a new line.
+* Fix trailing SQL comments preventing query submission and execution.
+    * ``SELECT 1; -- note`` now submits correctly in multiline mode
+    * ``rstrip(";")`` in ``pgexecute.py`` now handles comments after the semicolon
 
 4.4.0 (2025-12-24)
 ==================
