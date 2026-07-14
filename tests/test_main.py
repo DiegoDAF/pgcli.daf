@@ -1413,3 +1413,21 @@ class TestNoTimingsNoStatus:
             call_kwargs = mock_pgcli.call_args[1]
             assert call_kwargs["tuples_only"] is True
             assert call_kwargs["no_timings"] is True
+
+
+def test_psql_editor_env(tmpdir, monkeypatch):
+    r"""\ne / \e / \ev / \ef honor $PSQL_EDITOR first (psql precedence)."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+
+    monkeypatch.setenv("PSQL_EDITOR", "my-editor")
+    assert cli._external_editor() == "my-editor"
+
+    # \ne passes the resolved editor to open_external_editor.
+    with mock.patch("pgcli.main.special.open_external_editor", return_value=("select 1", None)) as m:
+        cli.edit_named_query("foo")
+    assert m.call_args.kwargs.get("editor") == "my-editor"
+
+    # Unset -> None, so pgspecial/click falls back to $EDITOR/$VISUAL.
+    monkeypatch.delenv("PSQL_EDITOR")
+    assert cli._external_editor() is None

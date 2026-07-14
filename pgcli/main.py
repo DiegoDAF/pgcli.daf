@@ -517,7 +517,7 @@ class PGCli:
         if hasattr(NamedQueries.instance, "get_source"):
             source = NamedQueries.instance.get_source(name)
 
-        sql, message = special.open_external_editor(sql=existing or "")
+        sql, message = special.open_external_editor(sql=existing or "", editor=self._external_editor())
         if message:
             return [(None, None, None, message)]
 
@@ -1048,6 +1048,15 @@ class PGCli:
 
         self.pgexecute = pgexecute
 
+    @staticmethod
+    def _external_editor():
+        """Editor to use for \\e / \\ev / \\ef / \\ne.
+
+        Honors ``$PSQL_EDITOR`` first (like psql); returns None otherwise so
+        pgspecial/click falls back to ``$EDITOR`` / ``$VISUAL``.
+        """
+        return os.environ.get("PSQL_EDITOR") or None
+
     def handle_editor_command(self, text):
         r"""
         Editor command is any query that is prefixed or suffixed
@@ -1072,7 +1081,7 @@ class PGCli:
                     query = self.pgexecute.view_definition(spec)
                 elif editor_command == "\\ef":
                     query = self.pgexecute.function_definition(spec)
-            sql, message = special.open_external_editor(filename, sql=query)
+            sql, message = special.open_external_editor(filename, sql=query, editor=self._external_editor())
             if message:
                 # Something went wrong. Raise an exception and bail.
                 raise RuntimeError(message)

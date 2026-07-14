@@ -3,6 +3,9 @@
 
 Features:
 ---------
+* Honor ``$PSQL_EDITOR`` for the editor commands (``\e``, ``\ev``, ``\ef``,
+  ``\ne``), matching psql precedence: ``$PSQL_EDITOR`` first, then the usual
+  ``$EDITOR`` / ``$VISUAL`` fallback (issue #1398).
 * Resolve ``.pgpass`` ourselves for SSH tunnel connections. pgcli rewrites the
   connection port to the tunnel's random local port, which made libpq's own
   ``.pgpass`` lookup miss entries with an explicit port (only ``*`` port entries
