@@ -84,10 +84,7 @@ def test_has_safe_permissions_predicate(tmp_path):
 
 
 def test_missing_file_returns_none(tmp_path):
-    assert (
-        lookup_password("h", 5432, "db", "u", path=str(tmp_path / "does_not_exist"))
-        is None
-    )
+    assert lookup_password("h", 5432, "db", "u", path=str(tmp_path / "does_not_exist")) is None
 
 
 def test_directory_is_not_a_regular_file(tmp_path):

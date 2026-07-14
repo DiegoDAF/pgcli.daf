@@ -186,13 +186,9 @@ def test_dangerous_specials_blocked_while_restricted():
     ]
     for cmd in dangerous:
         executor = _make_executor()
-        results = list(
-            executor.run(cmd, pgspecial=pgspecial, restrict_token="tok")
-        )
+        results = list(executor.run(cmd, pgspecial=pgspecial, restrict_token="tok"))
         statuses = _statuses(results)
-        assert any("Restricted mode active" in s for s in statuses), (
-            f"Expected {cmd!r} to be blocked in restricted mode"
-        )
+        assert any("Restricted mode active" in s for s in statuses), f"Expected {cmd!r} to be blocked in restricted mode"
     # None of the blocked commands should have been dispatched to pgspecial.
     pgspecial.execute.assert_not_called()
 
@@ -201,9 +197,7 @@ def test_blocked_command_result_is_marked_unsuccessful():
     """A blocked meta-command must report success=False, not a fake success."""
     pgspecial = mock.MagicMock()
     executor = _make_executor()
-    results = list(
-        executor.run("\\i /tmp/evil.sql", pgspecial=pgspecial, restrict_token="tok")
-    )
+    results = list(executor.run("\\i /tmp/evil.sql", pgspecial=pgspecial, restrict_token="tok"))
     # Tuple layout: (title, rows, headers, status, query, success, is_special)
     blocked = [r for r in results if r[3] and "Restricted mode active" in r[3]]
     assert blocked, "expected a blocked result tuple"
@@ -216,9 +210,7 @@ def test_unrestrict_is_not_blocked():
     pgspecial = mock.MagicMock()
     pgspecial.execute.return_value = iter([(None, None, None, "OK")])
     executor = _make_executor()
-    results = list(
-        executor.run("\\unrestrict tok", pgspecial=pgspecial, restrict_token="tok")
-    )
+    results = list(executor.run("\\unrestrict tok", pgspecial=pgspecial, restrict_token="tok"))
     statuses = _statuses(results)
     assert not any("Restricted mode active" in s for s in statuses)
     pgspecial.execute.assert_called_once()
@@ -234,20 +226,16 @@ def test_unrestrict_lookalikes_are_still_blocked():
     """
     pgspecial = mock.MagicMock()
     lookalikes = [
-        "\\unrestrictx tok",   # glued suffix -> different first token
-        "\\UNRESTRICT tok",    # different case
-        "\\unrestrictdb",      # no space, different token
-        "\\restrict newtok",   # trying to re-arm with attacker token
+        "\\unrestrictx tok",  # glued suffix -> different first token
+        "\\UNRESTRICT tok",  # different case
+        "\\unrestrictdb",  # no space, different token
+        "\\restrict newtok",  # trying to re-arm with attacker token
     ]
     for cmd in lookalikes:
         executor = _make_executor()
-        results = list(
-            executor.run(cmd, pgspecial=pgspecial, restrict_token="tok")
-        )
+        results = list(executor.run(cmd, pgspecial=pgspecial, restrict_token="tok"))
         statuses = _statuses(results)
-        assert any("Restricted mode active" in s for s in statuses), (
-            f"Expected lookalike {cmd!r} to be blocked"
-        )
+        assert any("Restricted mode active" in s for s in statuses), f"Expected lookalike {cmd!r} to be blocked"
     pgspecial.execute.assert_not_called()
 
 
@@ -274,12 +262,8 @@ def test_regular_sql_not_blocked_while_restricted():
     pgspecial.execute.side_effect = CommandNotFound("not special")
 
     executor = _make_executor()
-    executor.execute_normal_sql = mock.MagicMock(
-        return_value=("title", [("1",)], ["?column?"], "SELECT 1")
-    )
-    results = list(
-        executor.run("SELECT 1", pgspecial=pgspecial, restrict_token="tok")
-    )
+    executor.execute_normal_sql = mock.MagicMock(return_value=("title", [("1",)], ["?column?"], "SELECT 1"))
+    results = list(executor.run("SELECT 1", pgspecial=pgspecial, restrict_token="tok"))
     statuses = _statuses(results)
     assert not any("Restricted mode active" in s for s in statuses)
     executor.execute_normal_sql.assert_called_once()
@@ -294,9 +278,7 @@ def test_multiple_meta_commands_all_blocked_in_one_statement():
     pgspecial = mock.MagicMock()
     executor = _make_executor()
     batch = "\\d ;\n\\i /tmp/evil.sql ;\n\\! id"
-    results = list(
-        executor.run(batch, pgspecial=pgspecial, restrict_token="tok")
-    )
+    results = list(executor.run(batch, pgspecial=pgspecial, restrict_token="tok"))
     blocked = [s for s in _statuses(results) if "Restricted mode active" in s]
     assert len(blocked) == 3, f"expected 3 blocked specials, got {blocked}"
     pgspecial.execute.assert_not_called()

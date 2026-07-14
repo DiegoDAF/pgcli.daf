@@ -6,7 +6,6 @@ throwaway file passed explicitly or via the ``PGPASSFILE`` env var.
 
 import os
 
-import pytest
 
 from pgcli.pgpass import lookup_password
 
