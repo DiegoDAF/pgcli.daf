@@ -13,6 +13,15 @@ Features:
   host:port before the rewrite, via a small libpq-compatible reader
   (``pgcli/pgpass.py``). Workaround pending a base fix in libpq.
 
+Internal:
+---------
+* Adopt the SPDX ``license = "BSD-3-Clause"`` expression (PEP 639) and drop the
+  now-redundant license classifier (upstream #1601).
+* Fix a broken build: our ``pyproject.toml`` declared both ``setuptools-scm``
+  and a ``[tool.setuptools.dynamic]`` ``version = attr`` source; recent
+  ``setuptools-scm`` treats that as a hard error. Removed ``setuptools-scm``
+  (we version from ``pgcli/__init__.py`` with a manual bump per release).
+
 4.5.2 (2026-06-26) - upstream: 4.5.0
 =====================================
 

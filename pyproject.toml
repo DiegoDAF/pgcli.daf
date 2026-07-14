@@ -1,12 +1,11 @@
 [project]
 name = "pgcli"
 authors = [{ name = "Pgcli Core Team", email = "pgcli-dev@googlegroups.com" }]
-license = { text = "BSD" }
+license = "BSD-3-Clause"
 description = "CLI for Postgres Database. With auto-completion and syntax highlighting."
 readme = "README.rst"
 classifiers = [
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: Unix",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
@@ -70,14 +69,15 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=64.0", "setuptools-scm>=8"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
-
-[tool.setuptools_scm]
 
 [tool.setuptools]
 include-package-data = false
 
+# Version comes from pgcli/__init__.py __version__ (manual bump per release).
+# NOTE: we intentionally do NOT use setuptools-scm here (it would take the
+# version from git tags and conflict with our manual bump workflow).
 [tool.setuptools.dynamic]
 version = { attr = "pgcli.__version__" }
 
