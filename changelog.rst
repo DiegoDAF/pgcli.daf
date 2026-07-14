@@ -18,8 +18,19 @@ Features:
   host:port before the rewrite, via a small libpq-compatible reader
   (``pgcli/pgpass.py``). Workaround pending a base fix in libpq.
 
+Bug fixes:
+----------
+* Security: ``obfuscate_process_password`` used a greedy ``:(.*):(.*)@`` regex
+  that, when the process title contained more than one connection URL, masked
+  only the last password and leaked the earlier ones in the process title
+  (visible via ``ps``). It now masks every URL's password with a per-URL
+  character-class substitution.
+
 Internal:
 ---------
+* Add a security-focused test suite (``tests/test_sec_*.py``): ``.pgpass``
+  permission/escaping/wildcard handling, secret/path sanitization, ``\restrict``
+  restricted-mode enforcement, and SSH tunnel keyring key scoping.
 * Adopt the SPDX ``license = "BSD-3-Clause"`` expression (PEP 639) and drop the
   now-redundant license classifier (upstream #1601).
 * Fix a broken build: our ``pyproject.toml`` declared both ``setuptools-scm``

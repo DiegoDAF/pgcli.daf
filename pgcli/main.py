@@ -2162,7 +2162,10 @@ def cli(
 def obfuscate_process_password():
     process_title = setproctitle.getproctitle()
     if "://" in process_title:
-        process_title = re.sub(r":(.*):(.*)@", r":\1:xxxx@", process_title)
+        # Per-URL, non-greedy character classes so EVERY password is masked.
+        # A greedy ":(.*):(.*)@" would span across multiple connection URLs and
+        # leak all but the last password in the process title (visible via `ps`).
+        process_title = re.sub(r"://([^:/@]+):([^@]+)@", r"://\1:xxxx@", process_title)
     elif "=" in process_title:
         process_title = re.sub(r"password=(.+?)((\s[a-zA-Z]+=)|$)", r"password=xxxx\2", process_title)
 
