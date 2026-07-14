@@ -1,3 +1,15 @@
+4.5.3 (unreleased) - upstream: 4.5.0
+=====================================
+
+Features:
+---------
+* Resolve ``.pgpass`` ourselves for SSH tunnel connections. pgcli rewrites the
+  connection port to the tunnel's random local port, which made libpq's own
+  ``.pgpass`` lookup miss entries with an explicit port (only ``*`` port entries
+  matched). pgcli now looks up the password from ``.pgpass`` using the ORIGINAL
+  host:port before the rewrite, via a small libpq-compatible reader
+  (``pgcli/pgpass.py``). Workaround pending a base fix in libpq.
+
 4.5.2 (2026-06-26) - upstream: 4.5.0
 =====================================
 

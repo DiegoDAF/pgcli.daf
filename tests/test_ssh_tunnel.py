@@ -969,3 +969,41 @@ class TestPGCliSSHSecretProvider:
         ):
             cli._ssh_tunnel_secret_saver(ctx, "passphrase", "pp")
         mock_set.assert_called_once_with("ssh-tunnel-passphrase:/k/id_rsa", "pp")
+
+
+def test_ssh_tunnel_resolves_pgpass_explicit_port(mock_tunnel_manager, mock_pgexecute, monkeypatch):
+    """Through an SSH tunnel, the password is resolved from .pgpass using the
+    ORIGINAL host:port (before the port is rewritten to the tunnel's random
+    local port), so entries with an explicit port are still honored. The
+    .pgpass reader itself is unit-tested in test_pgpass.py; here we mock it to
+    assert the wiring (and to never touch the real ~/.pgpass)."""
+    monkeypatch.delenv("PGPASSWORD", raising=False)
+    with (
+        # Patch the keyring HELPERS (not auth.keyring): PGCli.__init__ re-runs
+        # keyring_initialize, which would undo a patch of the module attribute.
+        patch("pgcli.main.auth.keyring_get_password", return_value=""),
+        patch("pgcli.main.auth.keyring_set_password"),
+        patch("pgcli.main.pgpass.lookup_password", return_value="secretpw") as mock_lookup,
+    ):
+        pgcli = PGCli()
+        pgcli.connect(database="mydb", host="realhost", user="myuser", port="5432")
+
+    # Looked up with the ORIGINAL port (5432), not the tunnel's local port.
+    mock_lookup.assert_called_once_with("realhost", "5432", "mydb", "myuser")
+    # 3rd positional arg to PGExecute is the resolved password.
+    assert mock_pgexecute.call_args[0][2] == "secretpw"
+
+
+def test_ssh_tunnel_pgpass_not_consulted_when_password_given(mock_tunnel_manager, mock_pgexecute, monkeypatch):
+    """If a password is already supplied, the .pgpass fallback is not consulted."""
+    monkeypatch.delenv("PGPASSWORD", raising=False)
+    with (
+        patch("pgcli.main.auth.keyring_get_password", return_value=""),
+        patch("pgcli.main.auth.keyring_set_password"),
+        patch("pgcli.main.pgpass.lookup_password") as mock_lookup,
+    ):
+        pgcli = PGCli()
+        pgcli.connect(database="mydb", host="realhost", user="myuser", port="5432", passwd="explicitpw")
+
+    mock_lookup.assert_not_called()
+    assert mock_pgexecute.call_args[0][2] == "explicitpw"

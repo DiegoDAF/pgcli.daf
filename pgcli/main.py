@@ -57,6 +57,7 @@ from pgspecial.main import PGSpecial, NO_QUERY, PAGER_OFF, PAGER_LONG_OUTPUT
 import pgspecial as special
 
 from . import auth
+from . import pgpass
 from .pgcompleter import PGCompleter
 from .pgtoolbar import create_toolbar_tokens_func
 from .pgstyle import style_factory, style_factory_output
@@ -980,6 +981,18 @@ class PGCli:
             # Preserve original host for .pgpass lookup and SSL certificate verification
             # Use hostaddr to specify the actual connection endpoint (SSH tunnel)
             hostaddr = "127.0.0.1"
+
+            # Resolve the password from .pgpass ourselves, using the ORIGINAL
+            # host:port, BEFORE rewriting `port` to the tunnel's random local
+            # port below. Otherwise libpq runs its own .pgpass lookup against
+            # that random port and misses entries with an explicit port (only
+            # `*` port entries would match). Workaround pending a base fix in
+            # libpq (raised on the pgsql-hackers list); revert once that lands.
+            if not passwd:
+                pgpass_pw = pgpass.lookup_password(host or "localhost", port or 5432, database, user)
+                if pgpass_pw:
+                    passwd = pgpass_pw
+
             port = tunnel_port
             self.logger.debug("SSH tunnel ready, local port: %d, hostaddr: %s", port, hostaddr)
 
