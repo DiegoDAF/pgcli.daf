@@ -67,6 +67,8 @@ from .config import (
     get_casing_file,
     load_config,
     config_location,
+    state_location,
+    migrate_state_file,
     get_config,
     get_config_filename,
 )
@@ -745,7 +747,9 @@ class PGCli:
     def initialize_logging(self):
         log_file = self.config["main"]["log_file"]
         if log_file == "default":
-            log_file = config_location() + "log"
+            # Logs are state, not config: use $XDG_STATE_HOME (~/.local/state),
+            # migrating an existing ~/.config/pgcli/log on first run (issue #1497).
+            log_file = migrate_state_file("log")
 
         # Get log rotation mode and destination
         log_rotation_mode = self.config["main"].get("log_rotation_mode", "none")
@@ -755,7 +759,7 @@ class PGCli:
         if log_destination == "default":
             # Use same location as log_file
             if log_file == "default" or log_file.endswith("log"):
-                log_dir = os.path.dirname(log_file) if os.path.dirname(log_file) else config_location()
+                log_dir = os.path.dirname(log_file) if os.path.dirname(log_file) else state_location()
             else:
                 log_dir = log_file if os.path.isdir(log_file) else os.path.dirname(log_file)
         else:
@@ -1292,7 +1296,9 @@ class PGCli:
 
         history_file = self.config["main"]["history_file"]
         if history_file == "default":
-            history_file = config_location() + "history"
+            # History is state, not config: use $XDG_STATE_HOME (~/.local/state),
+            # migrating an existing ~/.config/pgcli/history on first run (#1497).
+            history_file = migrate_state_file("history")
         history = FileHistory(os.path.expanduser(history_file))
         self.refresh_completions(history=history, persist_priorities="none")
 

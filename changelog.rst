@@ -3,6 +3,11 @@
 
 Features:
 ---------
+* Store the log and history files under ``$XDG_STATE_HOME``
+  (``~/.local/state/pgcli/``) instead of ``$XDG_CONFIG_HOME``, per the XDG Base
+  Directory Spec (log/history are state, not config). Existing
+  ``~/.config/pgcli/log`` and ``~/.config/pgcli/history`` files are migrated to
+  the new location automatically on first run (issue #1497).
 * Honor ``$PSQL_EDITOR`` for the editor commands (``\e``, ``\ev``, ``\ef``,
   ``\ne``), matching psql precedence: ``$PSQL_EDITOR`` first, then the usual
   ``$EDITOR`` / ``$VISUAL`` fallback (issue #1398).

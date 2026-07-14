@@ -17,6 +17,45 @@ def config_location():
         return expanduser("~/.config/pgcli/")
 
 
+def state_location():
+    """Directory for state files (log, history) per the XDG Base Directory Spec.
+
+    Config lives in $XDG_CONFIG_HOME (~/.config); log/history are state, not
+    config, so they belong in $XDG_STATE_HOME (~/.local/state). See issue #1497.
+    """
+    if "XDG_STATE_HOME" in os.environ:
+        return "%s/pgcli/" % expanduser(os.environ["XDG_STATE_HOME"])
+    elif platform.system() == "Windows":
+        user_profile = os.getenv("USERPROFILE", "")
+        return user_profile + "\\AppData\\Local\\dbcli\\pgcli\\"
+    else:
+        return expanduser("~/.local/state/pgcli/")
+
+
+def migrate_state_file(filename, config_dir=None, state_dir=None):
+    """Move a state file (log/history) from the old config dir to the state dir.
+
+    Only migrates when the file exists in the old location and is absent in the
+    new one, so it runs at most once and never clobbers a newer file. Returns
+    the new path to use.
+    """
+    config_dir = config_dir or config_location()
+    state_dir = state_dir or state_location()
+    old_path = os.path.join(expanduser(config_dir), filename)
+    new_path = os.path.join(expanduser(state_dir), filename)
+    if os.path.abspath(old_path) == os.path.abspath(new_path):
+        return new_path  # same dir (e.g. Windows) - nothing to migrate
+    try:
+        if os.path.exists(old_path) and not os.path.exists(new_path):
+            ensure_dir_exists(new_path)
+            shutil.move(old_path, new_path)
+    except OSError:
+        # If migration fails, fall back to the new location; pgcli will just
+        # start a fresh file there.
+        pass
+    return new_path
+
+
 def load_config(usr_cfg, def_cfg=None):
     # avoid config merges when possible. For writing, we need an umerged config instance.
     # see https://github.com/dbcli/pgcli/issues/1240 and https://github.com/DiffSK/configobj/issues/171
