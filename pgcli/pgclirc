@@ -60,6 +60,12 @@ auto_expand = False
 # is not used to wrap the combined output.
 stream_results = False
 
+# psql-style paste mode. When True, pasting (or entering) MORE THAN ONE
+# statement echoes each statement followed by its result, interleaved, just
+# like pasting into psql. When False (default) the behavior is unchanged.
+# Toggle at runtime with F6.
+paste_mode = False
+
 # Auto-retry queries on connection failures and other operational errors. If
 # False, will prompt to rerun the failed query instead of auto-retrying.
 auto_retry_closed_connection = True

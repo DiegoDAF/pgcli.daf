@@ -1,3 +1,14 @@
+4.5.4 (unreleased) - upstream: 4.5.0
+=====================================
+
+Features:
+---------
+* Add ``paste_mode`` config option (default ``False``) + F6 toggle: psql-style
+  paste. When a MULTI-statement block is run, each statement is echoed followed
+  by its result, interleaved (like pasting into psql). Off by default, so the
+  current behavior is unchanged; flip it in the config or toggle at runtime with
+  F6. Inspired by pgAdmin's PSQL tool.
+
 4.5.3 (unreleased) - upstream: 4.5.0
 =====================================
 

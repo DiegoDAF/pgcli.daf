@@ -219,6 +219,9 @@ class PGCli:
         self.auto_retry_closed_connection = c["main"].as_bool("auto_retry_closed_connection")
         self.expanded_output = c["main"].as_bool("expand")
         self.stream_results = c["main"].as_bool("stream_results")
+        # psql-style paste: echo each statement + its result inline for a
+        # multi-statement input. Default from config; toggle at runtime with F6.
+        self.paste_mode = c["main"].as_bool("paste_mode")
         self.pgspecial.timing_enabled = c["main"].as_bool("timing")
         if row_limit is not None:
             self.row_limit = row_limit
@@ -1165,9 +1168,9 @@ class PGCli:
                     except OSError as e:
                         click.secho(str(e), err=True, fg="red")
                 else:
-                    # In stream mode each result was already echoed live in
-                    # _evaluate_command, so skip the buffered pager dump.
-                    if output and not self.stream_results:
+                    # In stream / paste mode each result was already echoed live
+                    # in _evaluate_command, so skip the buffered pager dump.
+                    if output and not getattr(self, "_results_streamed", False):
                         self.echo_via_pager("\n".join(output))
 
                 # Log to file in addition to normal output
@@ -1505,7 +1508,16 @@ class PGCli:
         # Stream each statement's result as soon as it is ready (psql/pgAdmin
         # style) instead of buffering everything until the end. Gated on
         # output_file so `-o`/`\o` redirection keeps writing the buffered output.
-        stream = self.stream_results and not self.output_file
+        # paste_mode (F6): for a MULTI-statement input, also echo each statement
+        # before its result, for the full psql-paste look.
+        paste_echo = False
+        if self.paste_mode and not self.output_file:
+            try:
+                paste_echo = len(sqlparse.split(text)) > 1
+            except Exception:
+                paste_echo = False
+        stream = (self.stream_results and not self.output_file) or paste_echo
+        self._results_streamed = stream
 
         for title, cur, headers, status, sql, success, is_special in res:
             logger.debug("headers: %r", headers)
@@ -1550,6 +1562,9 @@ class PGCli:
             execution = time() - start
             formatted = format_output(title, cur, headers, status, settings, self.explain_mode)
 
+            if paste_echo and sql:
+                # Echo the statement before its result (psql-paste look).
+                click.echo("> " + sql.strip())
             if stream and formatted:
                 click.echo("\n".join(formatted))
             output.extend(formatted)

@@ -49,6 +49,11 @@ def create_toolbar_tokens_func(pgcli):
         else:
             result.append(("class:bottom-toolbar", "[F5] Explain: OFF "))
 
+        if pgcli.paste_mode:
+            result.append(("class:bottom-toolbar.on", "[F6] Paste: ON "))
+        else:
+            result.append(("class:bottom-toolbar.off", "[F6] Paste: OFF "))
+
         if pgcli.pgexecute.failed_transaction():
             result.append(("class:bottom-toolbar.transaction.failed", "     Failed transaction"))
 

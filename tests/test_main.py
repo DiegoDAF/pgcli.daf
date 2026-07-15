@@ -1431,3 +1431,59 @@ def test_psql_editor_env(tmpdir, monkeypatch):
     # Unset -> None, so pgspecial/click falls back to $EDITOR/$VISUAL.
     monkeypatch.delenv("PSQL_EDITOR")
     assert cli._external_editor() is None
+
+
+def test_paste_mode_echoes_each_statement(tmpdir):
+    """paste_mode=True + a MULTI-statement input echoes each statement before its
+    result (psql-paste look) and streams inline (no buffered pager dump)."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    cli.paste_mode = True
+    cli.pgexecute = mock.Mock()
+    cli.pgexecute.run.return_value = _fake_two_statement_run()
+
+    with (
+        mock.patch("pgcli.main.click.echo") as mock_echo,
+        mock.patch.object(cli, "echo_via_pager") as mock_pager,
+        mock.patch.object(cli, "_should_limit_output", return_value=False),
+    ):
+        cli.execute_command("select now(); select pg_sleep(1)")
+
+    echoed = "\n".join(str(c.args[0]) for c in mock_echo.call_args_list if c.args)
+    assert "> select now()" in echoed
+    assert "> select pg_sleep(1)" in echoed
+    mock_pager.assert_not_called()  # streamed inline
+
+
+def test_paste_mode_single_statement_not_echoed(tmpdir):
+    """paste_mode only kicks in for multiple statements; a single statement is
+    not echoed and uses the normal buffered path."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    cli.paste_mode = True
+
+    def _one():
+        yield (None, [("1",)], ["c"], "SELECT 1", "select 1", True, False)
+
+    cli.pgexecute = mock.Mock()
+    cli.pgexecute.run.return_value = _one()
+
+    with (
+        mock.patch("pgcli.main.click.echo") as mock_echo,
+        mock.patch.object(cli, "echo_via_pager") as mock_pager,
+        mock.patch.object(cli, "_should_limit_output", return_value=False),
+    ):
+        cli.execute_command("select 1")
+
+    echoed = "\n".join(str(c.args[0]) for c in mock_echo.call_args_list if c.args)
+    assert "> select 1" not in echoed
+    mock_pager.assert_called_once()  # buffered, not streamed
+
+
+def test_paste_mode_default_from_config(tmpdir):
+    """paste_mode default is False and is read from the config."""
+    rcfile = str(tmpdir.join("rcfile"))
+    assert PGCli(pgclirc_file=rcfile).paste_mode is False
+    rc2 = tmpdir.join("rc2")
+    rc2.write("[main]\npaste_mode = True\n")
+    assert PGCli(pgclirc_file=str(rc2)).paste_mode is True
