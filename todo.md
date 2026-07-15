@@ -1,6 +1,16 @@
 Upcoming
 ==============
 
+### FORK: features inspiradas en pgadmin4 (analisis 2026-07-15)
+# Lista completa (47) + detalle en notas LOCALES (no en este repo publico):
+#   ../pgadmin-feature-ideas.md  (los 47, con valor/portabilidad/esfuerzo)
+#   ../pgadmin-feature-plans.md  (planes detallados de EXPLAIN / Query-tool / Conexiones)
+- [x] #1 psql-style paste (paste_mode + F6 toggle) -> v4.5.4, PUSHEADO
+- [x] #2 EXPLAIN summary (slowest nodes / time by relation / estimate misses; explain_summary default False) -> v4.5.5, LOCAL listo para push
+- [ ] #3 Query-tool bundle (plan escrito): \history con timing/source, post_connection_sql, execute-selection, macros, autocommit toggle, cancel query
+- [ ] #4 Conexiones (plan escrito, PARA MAS TARDE): post-connect SQL, TCP keepalives, connect_timeout, .pg_service.conf, SSL path expansion
+- [ ] Backlog (~40 restantes en ideas.md): sub-warnings de EXPLAIN (nested-loop/hash-spill/bitmap-recheck), tweaks de autocomplete, params chicos de conexion, y varios de bajo valor. Ir picando por valor
+
 ### UPSTREAM (dbcli/pgcli) - estado real AUDITADO 2026-07-14
 # Auditado con workflow (19 features): TODOS estan en nuestra fork; 18/19 NO
 # estan en upstream (solo pgcli_isready se pisa con el --ping de upstream).
