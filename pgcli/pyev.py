@@ -25,20 +25,47 @@ DESCRIPTIONS = {
 
 
 class Visualizer:
-    def __init__(self, terminal_width=100, color=True):
+    def __init__(self, terminal_width=100, color=True, summary=False):
         self.color = color
         self.terminal_width = terminal_width
         self.string_lines = []
+        self.summary = summary
+        self.node_stats = []
 
     def load(self, explain_dict):
         self.plan = explain_dict.pop("Plan")
         self.explain = explain_dict
+        self.node_stats = []
         self.process_all()
         self.generate_lines()
 
     def process_all(self):
         self.plan = self.process_plan(self.plan)
         self.plan = self.calculate_outlier_nodes(self.plan)
+        self.collect_node_stats(self.plan)
+
+    def collect_node_stats(self, plan):
+        """Flatten the plan tree into per-node stats for the summary section.
+
+        ``Actual Duration`` is already the node's EXCLUSIVE time (this node
+        minus its children, times loops), computed in ``calculate_actuals``.
+        """
+        label = plan.get("Node Type", "?")
+        relation = plan.get("Relation Name")
+        if relation:
+            label = "%s on %s.%s" % (label, plan.get("Schema", "?"), relation)
+        elif plan.get("CTE Name"):
+            label = "%s %s" % (label, plan.get("CTE Name"))
+        self.node_stats.append({
+            "label": label,
+            "relation": (("%s.%s" % (plan.get("Schema", "?"), relation)) if relation else None),
+            "duration": plan.get("Actual Duration", 0) or 0,
+            "rows": plan.get("Actual Rows", 0),
+            "est_factor": plan.get("Planner Row Estimate Factor", 0) or 0,
+            "est_dir": plan.get("Planner Row Estimate Direction", ""),
+        })
+        for child in plan.get("Plans", []):
+            self.collect_node_stats(child)
 
     #
     def process_plan(self, plan):
@@ -408,6 +435,80 @@ class Visualizer:
             self.terminal_width,
             len(self.plan.get("Plans", [])) == 1,
         )
+        if self.summary:
+            self.generate_summary()
+
+    def severity_format(self, pct, text):
+        """Color a value by its share of total execution time (pgAdmin-style)."""
+        if not self.color:
+            return text
+        if pct < 10:
+            return color(text, fg="green")
+        elif pct < 50:
+            return color(text, fg="yellow")
+        return color(text, fg="red")
+
+    def generate_summary(self):
+        """Append a compact analysis summary after the plan tree: the slowest
+        nodes (by exclusive time), time grouped by relation, and the worst
+        planner row-estimate misses. All values reuse metrics already computed
+        for the tree."""
+        exec_time = self.explain.get("Execution Time") or 0
+        if not self.node_stats or exec_time <= 0:
+            return
+
+        def pct(d):
+            return (d / exec_time) * 100 if exec_time else 0
+
+        lines = ["", self.bold_format("Summary")]
+
+        # Slowest nodes by exclusive time.
+        slowest = sorted(self.node_stats, key=lambda n: n["duration"], reverse=True)[:5]
+        lines.append(self.muted_format("  Slowest nodes (exclusive time):"))
+        for n in slowest:
+            p = pct(n["duration"])
+            lines.append(
+                "    %-45s %s %s"
+                % (
+                    n["label"][:45],
+                    self.duration_to_string(n["duration"]),
+                    self.severity_format(p, "(%.0f%%)" % p),
+                )
+            )
+
+        # Time grouped by relation.
+        by_rel: dict = {}
+        for n in self.node_stats:
+            if n["relation"]:
+                agg = by_rel.setdefault(n["relation"], {"duration": 0.0, "nodes": 0})
+                agg["duration"] += n["duration"]
+                agg["nodes"] += 1
+        if by_rel:
+            lines.append(self.muted_format("  Time by relation:"))
+            for rel, agg in sorted(by_rel.items(), key=lambda kv: kv[1]["duration"], reverse=True):
+                p = pct(agg["duration"])
+                lines.append(
+                    "    %-35s %s %s  %d node(s)"
+                    % (
+                        rel[:35],
+                        self.duration_to_string(agg["duration"]),
+                        self.severity_format(p, "(%.0f%%)" % p),
+                        agg["nodes"],
+                    )
+                )
+
+        # Worst planner row-estimate misses (factor >= 10).
+        misses = sorted(
+            (n for n in self.node_stats if n["est_factor"] and n["est_factor"] >= 10),
+            key=lambda n: n["est_factor"],
+            reverse=True,
+        )[:5]
+        if misses:
+            lines.append(self.muted_format("  Planner estimate misses:"))
+            for n in misses:
+                lines.append("    %-45s %s-estimated %.0fx" % (n["label"][:45], (n["est_dir"] or "mis").lower(), n["est_factor"]))
+
+        self.string_lines.extend(lines)
 
     def get_list(self):
         return "\n".join(self.string_lines)

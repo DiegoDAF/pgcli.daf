@@ -6,14 +6,15 @@ import json
 
 
 class ExplainOutputFormatter:
-    def __init__(self, max_width):
+    def __init__(self, max_width, summary=False):
         self.max_width = max_width
+        self.summary = summary
 
     def format_output(self, cur, headers, **output_kwargs):
         # explain query results should always contain 1 row each
         [(data,)] = list(cur)
         explain_list = json.loads(data)
-        visualizer = Visualizer(self.max_width)
+        visualizer = Visualizer(self.max_width, summary=self.summary)
         for explain in explain_list:
             visualizer.load(explain)
             yield visualizer.get_list()

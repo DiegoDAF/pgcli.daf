@@ -66,6 +66,11 @@ stream_results = False
 # Toggle at runtime with F6.
 paste_mode = False
 
+# When explain mode is on (F5), append an analysis summary after the plan tree:
+# the slowest nodes (by exclusive time), time grouped by relation, and the worst
+# planner row-estimate misses. Set to True to enable (default only shows tree).
+explain_summary = False
+
 # Auto-retry queries on connection failures and other operational errors. If
 # False, will prompt to rerun the failed query instead of auto-retrying.
 auto_retry_closed_connection = True

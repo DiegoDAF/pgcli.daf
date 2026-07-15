@@ -1,3 +1,14 @@
+4.5.5 (unreleased) - upstream: 4.5.0
+=====================================
+
+Features:
+---------
+* EXPLAIN analysis summary. When explain mode (F5) is on, the plan tree is now
+  followed by a compact summary: the slowest nodes by EXCLUSIVE time (colored
+  by share of total), time grouped by relation, and the worst planner
+  row-estimate misses. Controlled by the ``explain_summary`` config option
+  (default ``False``). Inspired by pgAdmin's graphical EXPLAIN.
+
 4.5.4 (unreleased) - upstream: 4.5.0
 =====================================
 

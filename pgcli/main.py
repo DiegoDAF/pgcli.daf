@@ -123,6 +123,7 @@ class OutputSettings(NamedTuple):
     max_field_width: int = DEFAULT_MAX_FIELD_WIDTH
     tuples_only: bool = False
     show_status: bool = True
+    explain_summary: bool = False
 
 
 class PgCliQuitError(Exception):
@@ -222,6 +223,9 @@ class PGCli:
         # psql-style paste: echo each statement + its result inline for a
         # multi-statement input. Default from config; toggle at runtime with F6.
         self.paste_mode = c["main"].as_bool("paste_mode")
+        # Append an analysis summary (slowest nodes, time by relation, estimate
+        # misses) after the EXPLAIN tree.
+        self.explain_summary = c["main"].as_bool("explain_summary")
         self.pgspecial.timing_enabled = c["main"].as_bool("timing")
         if row_limit is not None:
             self.row_limit = row_limit
@@ -1546,6 +1550,7 @@ class PGCli:
                 max_field_width=self.max_field_width,
                 tuples_only=self.tuples_only,
                 show_status=self.show_status,
+                explain_summary=self.explain_summary,
             )
 
             # Hide query text for named queries in quiet mode
@@ -2313,7 +2318,7 @@ def format_output(title, cur, headers, status, settings, explain_mode=False):
     max_width = settings.max_width
     case_function = settings.case_function
     if explain_mode:
-        formatter = ExplainOutputFormatter(max_width or 100)
+        formatter = ExplainOutputFormatter(max_width or 100, summary=settings.explain_summary)
     else:
         formatter = TabularOutputFormatter(format_name=table_format)
 
