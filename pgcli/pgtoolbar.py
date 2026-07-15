@@ -54,6 +54,19 @@ def create_toolbar_tokens_func(pgcli):
         else:
             result.append(("class:bottom-toolbar.off", "[F6] Paste: OFF "))
 
+        # Autocommit ON is the default; only flag it when OFF so the user knows
+        # statements are running inside a manual transaction.
+        if pgcli.pgexecute and not pgcli.pgexecute.auto_commit:
+            result.append(("class:bottom-toolbar.off", " Autocommit: OFF "))
+
+        # Contextual hint: only surfaced while text is selected, so it does not
+        # clutter the toolbar the rest of the time.
+        try:
+            if get_app().current_buffer.selection_state is not None:
+                result.append(("class:bottom-toolbar.on", " [F9] Run selection "))
+        except Exception:
+            pass
+
         if pgcli.pgexecute.failed_transaction():
             result.append(("class:bottom-toolbar.transaction.failed", "     Failed transaction"))
 

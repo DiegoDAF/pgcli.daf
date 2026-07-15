@@ -181,6 +181,9 @@ class PGExecute:
         self.server_version: Optional[str] = None
         self.extra_args = None
         self.notify_callback = notify_callback
+        # Whether the connection runs in autocommit mode. Toggled via \autocommit
+        # and preserved across reconnects.
+        self.auto_commit = True
         self.connect(database, user, password, host, port, dsn, **kwargs)
         self.reset_expanded = None
 
@@ -245,7 +248,7 @@ class PGExecute:
         if self.conn:
             self.conn.close()
         self.conn = conn
-        self.conn.autocommit = True
+        self.conn.autocommit = self.auto_commit
 
         if self.notify_callback is not None:
             self.conn.add_notify_handler(self.notify_callback)

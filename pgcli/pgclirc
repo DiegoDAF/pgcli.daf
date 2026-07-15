@@ -71,6 +71,11 @@ paste_mode = False
 # planner row-estimate misses. Set to True to enable (default only shows tree).
 explain_summary = False
 
+# Connection autocommit. When True (default), each statement commits on its own.
+# Set to False to run inside a transaction until an explicit COMMIT/ROLLBACK.
+# Toggle at runtime with \autocommit [on|off].
+autocommit = True
+
 # Auto-retry queries on connection failures and other operational errors. If
 # False, will prompt to rerun the failed query instead of auto-retrying.
 auto_retry_closed_connection = True

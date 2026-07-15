@@ -1,30 +1,29 @@
-4.5.5 (unreleased) - upstream: 4.5.0
+4.5.6 (unreleased) - upstream: 4.5.0
 =====================================
 
 Features:
 ---------
+* Query-tool bundle inspired by pgAdmin. New ``\autocommit [on|off]`` special
+  command (and matching ``autocommit`` config option, default ``True``) to run
+  inside a manual transaction until an explicit COMMIT/ROLLBACK; the bottom
+  toolbar flags ``Autocommit: OFF`` while it is off. New ``\hist [N]`` command
+  that lists the SQL run this session with elapsed time (last N if given),
+  skipping special commands. New F9 key binding that runs only the selected
+  text (pgAdmin-style run-selection); make a selection with vi visual mode or
+  shift+arrow keys in emacs mode, and the toolbar shows a ``[F9] Run selection``
+  hint while text is selected. Note: Ctrl-C already cancels the running query
+  server-side (handled by psycopg3's ``Connection.wait``), so no extra
+  cancel-query wiring was needed.
 * EXPLAIN analysis summary. When explain mode (F5) is on, the plan tree is now
   followed by a compact summary: the slowest nodes by EXCLUSIVE time (colored
   by share of total), time grouped by relation, and the worst planner
   row-estimate misses. Controlled by the ``explain_summary`` config option
   (default ``False``). Inspired by pgAdmin's graphical EXPLAIN.
-
-4.5.4 (unreleased) - upstream: 4.5.0
-=====================================
-
-Features:
----------
 * Add ``paste_mode`` config option (default ``False``) + F6 toggle: psql-style
   paste. When a MULTI-statement block is run, each statement is echoed followed
   by its result, interleaved (like pasting into psql). Off by default, so the
   current behavior is unchanged; flip it in the config or toggle at runtime with
   F6. Inspired by pgAdmin's PSQL tool.
-
-4.5.3 (unreleased) - upstream: 4.5.0
-=====================================
-
-Features:
----------
 * Store the log and history files under ``$XDG_STATE_HOME``
   (``~/.local/state/pgcli/``) instead of ``$XDG_CONFIG_HOME``, per the XDG Base
   Directory Spec (log/history are state, not config). Existing

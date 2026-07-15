@@ -7,7 +7,7 @@ Upcoming
 #   ../pgadmin-feature-plans.md  (planes detallados de EXPLAIN / Query-tool / Conexiones)
 - [x] #1 psql-style paste (paste_mode + F6 toggle) -> v4.5.4, PUSHEADO
 - [x] #2 EXPLAIN summary (slowest nodes / time by relation / estimate misses; explain_summary default False) -> v4.5.5, LOCAL listo para push
-- [ ] #3 Query-tool bundle (plan escrito): \history con timing/source, post_connection_sql, execute-selection, macros, autocommit toggle, cancel query
+- [x] #3 Query-tool bundle -> v4.5.6, LOCAL (commit sin push; falta test de Diego en nb). Ver seccion 2026-07-15
 - [ ] #4 Conexiones (plan escrito, PARA MAS TARDE): post-connect SQL, TCP keepalives, connect_timeout, .pg_service.conf, SSL path expansion
 - [ ] Backlog (~40 restantes en ideas.md): sub-warnings de EXPLAIN (nested-loop/hash-spill/bitmap-recheck), tweaks de autocomplete, params chicos de conexion, y varios de bajo valor. Ir picando por valor
 
@@ -64,6 +64,19 @@ Upcoming
 - [ ] Branches feature/stream-results y feature/ssh-tunnel-keyring: ya estan en main; se pueden borrar o conservar si los queremos para PRs upstream separados
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
+
+2026-07-15
+===================
+- [x] #3 Query-tool bundle (v4.5.6, LOCAL, commit a main SIN push; pendiente test de Diego en nb)
+  - [x] autocommit toggle: special command `\autocommit [on|off]` + config `autocommit` (default True). Se preserva en reconexiones (pgexecute.auto_commit). Bloquea el cambio si hay transaccion abierta. Toolbar marca "Autocommit: OFF" cuando esta off. 6 unit tests. Smoke test end-to-end: rollback efectivo con off, auto-commit con on
+  - [x] \hist [N]: historial de SQL de la sesion con timing (total_time) + OK/ERR, salteando special commands. Usa self.query_history (MetaQuery). Alias \history. 5 unit tests. Verificado end-to-end (incluye flag ERR en query fallida y limite N)
+  - [x] execute-selection: binding F9 (filter=has_selection) corre solo el texto seleccionado (estilo pgAdmin run-selection). Seleccion via vi visual mode o shift+flechas en emacs. Toolbar muestra hint "[F9] Run selection" solo cuando hay seleccion. 3 unit tests (test_key_bindings.py nuevo)
+  - [~] cancel-query: NO hacia falta. psycopg3 3.3.4 ya cancela server-side en Ctrl-C (Connection.wait captura KeyboardInterrupt -> _try_cancel/cancel_safe -> drena QueryCanceled -> re-lanza). Verificado empiricamente con PG throwaway: backend queda idle y la conexion reusable. Agregar cancel propio seria doble-cancel/dead-code
+  - [~] macros: DESCARTADO. Se solapa con named queries (\n, \ns, \ne, \nr que ya guardan/ejecutan snippets); lo unico que suman es bindear snippet a tecla -> bajo valor en REPL, riesgo de colision de teclas + bindings dinamicos
+  - [x] post_connection_sql: YA EXISTIA como init-commands (global/DSN/--init-command). Sin trabajo
+  - [x] changelog 4.5.6 (unreleased) + bump __init__ 4.5.5->4.5.6 + pgclirc (autocommit=True)
+  - [x] Suite completa: 2969 passed, 135 skipped, 1 xfailed, 1 xpassed. ruff + mypy limpios
+  - [x] Build wheel 4.5.6 + install `uv tool install --force ...[sshtunnel,keyring]`. Verificado: version, keyring (SecretService), paramiko 5.0, comandos registrados, F9 bound
 
 2026-06-26
 ===================

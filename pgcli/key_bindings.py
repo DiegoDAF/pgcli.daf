@@ -1,4 +1,5 @@
 import logging
+from prompt_toolkit.document import Document
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.filters import (
@@ -50,6 +51,21 @@ def pgcli_bindings(pgcli):
         """Toggle psql-style paste mode (echo each statement + its result inline)."""
         _logger.debug("Detected F6 key.")
         pgcli.paste_mode = not pgcli.paste_mode
+
+    @kb.add("f9", filter=has_selection)
+    def _(event):
+        """Execute only the selected text (pgAdmin-style run-selection).
+
+        Only active when there is a selection; otherwise the key does nothing
+        and the whole buffer runs on Enter as usual. Make a selection with vi
+        visual mode or shift+arrow keys in emacs mode.
+        """
+        _logger.debug("Detected F9 key (execute selection).")
+        buff = event.current_buffer
+        selected = buff.copy_selection().text
+        if selected.strip():
+            buff.set_document(Document(text=selected, cursor_position=len(selected)))
+            buff.validate_and_handle()
 
     @kb.add("tab")
     def _(event):

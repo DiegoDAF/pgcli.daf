@@ -226,6 +226,9 @@ class PGCli:
         # Append an analysis summary (slowest nodes, time by relation, estimate
         # misses) after the EXPLAIN tree.
         self.explain_summary = c["main"].as_bool("explain_summary")
+        # Connection autocommit. Default True (each statement commits on its own);
+        # set False for manual transactions. Toggle at runtime with \autocommit.
+        self.autocommit = c["main"].as_bool("autocommit")
         self.pgspecial.timing_enabled = c["main"].as_bool("timing")
         if row_limit is not None:
             self.row_limit = row_limit
@@ -365,6 +368,74 @@ class PGCli:
         message = f"Named query quiet mode: {status}"
         return [(None, None, None, message)]
 
+    def toggle_autocommit(self, pattern, **_):
+        r"""Toggle or set connection autocommit mode: \autocommit [on|off].
+
+        With autocommit off, statements run inside a transaction until you issue
+        an explicit COMMIT/ROLLBACK.
+        """
+        arg = (pattern or "").strip().lower()
+        if arg in ("on", "true", "1"):
+            target = True
+        elif arg in ("off", "false", "0"):
+            target = False
+        elif arg == "":
+            target = not self.pgexecute.auto_commit
+        else:
+            return [(None, None, None, "Usage: \\autocommit [on|off]")]
+
+        if target == self.pgexecute.auto_commit:
+            return [(None, None, None, "Autocommit already %s" % ("ON" if target else "OFF"))]
+
+        # psycopg refuses to change autocommit inside an open transaction.
+        if self.pgexecute.valid_transaction() or self.pgexecute.failed_transaction():
+            return [(None, None, None, "Commit or rollback the current transaction before changing autocommit.")]
+
+        try:
+            self.pgexecute.conn.autocommit = target
+        except Exception as e:
+            return [(None, None, None, "Could not change autocommit: %s" % e)]
+        self.pgexecute.auto_commit = target
+        self.autocommit = target
+        return [(None, None, None, "Autocommit %s" % ("ON" if target else "OFF"))]
+
+    def show_query_history(self, pattern, **_):
+        r"""Show the SQL statements run this session and how long each took: \hist [N].
+
+        With an integer argument, show only the last N statements. Special
+        commands (\d, \hist itself, etc.) are omitted.
+        """
+        limit = None
+        arg = (pattern or "").strip()
+        if arg:
+            try:
+                limit = int(arg)
+            except ValueError:
+                return [(None, None, None, "Usage: \\hist [N]")]
+            if limit <= 0:
+                return [(None, None, None, "Usage: \\hist [N]  (N must be a positive integer)")]
+
+        entries = [q for q in self.query_history if q.query and q.query.strip() and not q.is_special]
+        if not entries:
+            return [(None, None, None, "No queries in this session yet.")]
+        if limit is not None:
+            entries = entries[-limit:]
+
+        rows = []
+        for idx, q in enumerate(entries, start=1):
+            oneline = " ".join(q.query.split())
+            if len(oneline) > 60:
+                oneline = oneline[:57] + "..."
+            rows.append((
+                idx,
+                "%0.3f" % q.total_time,
+                "OK" if q.successful else "ERR",
+                oneline,
+            ))
+        headers = ["#", "time(s)", "ok", "query"]
+        status = "%d quer%s" % (len(rows), "y" if len(rows) == 1 else "ies")
+        return [(None, rows, headers, status)]
+
     def _is_named_query_execution(self, text):
         """Check if the command is a named query execution (\n <name>)."""
         text = text.strip()
@@ -378,6 +449,21 @@ class PGCli:
             "Toggle named query quiet mode (hide query text)",
             arg_type=NO_QUERY,
             case_sensitive=True,
+        )
+
+        self.pgspecial.register(
+            self.toggle_autocommit,
+            "\\autocommit",
+            "\\autocommit [on|off]",
+            "Toggle connection autocommit mode.",
+        )
+
+        self.pgspecial.register(
+            self.show_query_history,
+            "\\hist",
+            "\\hist [N]",
+            "Show SQL run this session with elapsed time (last N if given).",
+            aliases=("\\history",),
         )
 
         self.pgspecial.register(
@@ -1058,6 +1144,12 @@ class PGCli:
             sys.exit(1)
 
         self.pgexecute = pgexecute
+        # Apply the configured autocommit mode (safe here: no open transaction
+        # right after connect). Preserved across reconnects via pgexecute.auto_commit.
+        if not self.autocommit:
+            pgexecute.auto_commit = False
+            if pgexecute.conn is not None:
+                pgexecute.conn.autocommit = False
 
     @staticmethod
     def _external_editor():

@@ -22,6 +22,7 @@ from pgcli.main import (
     format_output,
     notify_callback,
     PGCli,
+    MetaQuery,
     OutputSettings,
     COLOR_CODE_REGEX,
 )
@@ -1487,3 +1488,141 @@ def test_paste_mode_default_from_config(tmpdir):
     rc2 = tmpdir.join("rc2")
     rc2.write("[main]\npaste_mode = True\n")
     assert PGCli(pgclirc_file=str(rc2)).paste_mode is True
+
+
+def _make_cli_with_conn(tmpdir):
+    """Build a PGCli with a mock pgexecute whose conn tracks .autocommit and
+    reports no open transaction by default."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    cli.pgexecute = mock.Mock()
+    cli.pgexecute.auto_commit = True
+    cli.pgexecute.conn.autocommit = True
+    cli.pgexecute.valid_transaction.return_value = False
+    cli.pgexecute.failed_transaction.return_value = False
+    return cli
+
+
+def test_autocommit_default_from_config(tmpdir):
+    """autocommit default is True and is read from the config."""
+    rcfile = str(tmpdir.join("rcfile"))
+    assert PGCli(pgclirc_file=rcfile).autocommit is True
+    rc2 = tmpdir.join("rc2")
+    rc2.write("[main]\nautocommit = False\n")
+    assert PGCli(pgclirc_file=str(rc2)).autocommit is False
+
+
+def test_toggle_autocommit_off_then_on(tmpdir):
+    """\\autocommit off / on flips both the flag and the live connection."""
+    cli = _make_cli_with_conn(tmpdir)
+
+    msg = cli.toggle_autocommit("off")[0][3]
+    assert msg == "Autocommit OFF"
+    assert cli.pgexecute.auto_commit is False
+    assert cli.pgexecute.conn.autocommit is False
+    assert cli.autocommit is False
+
+    msg = cli.toggle_autocommit("on")[0][3]
+    assert msg == "Autocommit ON"
+    assert cli.pgexecute.auto_commit is True
+    assert cli.pgexecute.conn.autocommit is True
+    assert cli.autocommit is True
+
+
+def test_toggle_autocommit_no_arg_toggles(tmpdir):
+    """\\autocommit with no argument flips the current value."""
+    cli = _make_cli_with_conn(tmpdir)
+    assert cli.toggle_autocommit("")[0][3] == "Autocommit OFF"
+    assert cli.pgexecute.auto_commit is False
+    assert cli.toggle_autocommit("")[0][3] == "Autocommit ON"
+    assert cli.pgexecute.auto_commit is True
+
+
+def test_toggle_autocommit_already_in_state(tmpdir):
+    """Setting autocommit to the value it already has is a no-op message."""
+    cli = _make_cli_with_conn(tmpdir)
+    assert cli.toggle_autocommit("on")[0][3] == "Autocommit already ON"
+    # The live connection was not touched.
+    assert cli.pgexecute.conn.autocommit is True
+
+
+def test_toggle_autocommit_invalid_arg(tmpdir):
+    """An unrecognized argument returns a usage hint and changes nothing."""
+    cli = _make_cli_with_conn(tmpdir)
+    msg = cli.toggle_autocommit("maybe")[0][3]
+    assert "Usage" in msg
+    assert cli.pgexecute.auto_commit is True
+
+
+def test_toggle_autocommit_blocked_in_transaction(tmpdir):
+    """Cannot change autocommit while a transaction is open."""
+    cli = _make_cli_with_conn(tmpdir)
+    cli.pgexecute.valid_transaction.return_value = True
+    msg = cli.toggle_autocommit("off")[0][3]
+    assert "transaction" in msg.lower()
+    assert cli.pgexecute.auto_commit is True
+    assert cli.pgexecute.conn.autocommit is True
+
+
+def test_show_query_history_empty(tmpdir):
+    """\\hist on a fresh session reports nothing yet."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    msg = cli.show_query_history("")[0][3]
+    assert "No queries" in msg
+
+
+def test_show_query_history_lists_sql_with_timing(tmpdir):
+    """\\hist returns a table of SQL statements with elapsed time, skipping
+    special commands."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    cli.query_history = [
+        MetaQuery(query="select 1", successful=True, total_time=0.012),
+        MetaQuery(query="\\dt", successful=True, total_time=0.003, is_special=True),
+        MetaQuery(query="update t set x = 1", successful=True, total_time=0.5),
+        MetaQuery(query="select boom", successful=False, total_time=0.001),
+    ]
+    title, rows, headers, status = cli.show_query_history("")[0]
+    assert headers == ["#", "time(s)", "ok", "query"]
+    # The special command (\dt) is omitted; 3 SQL statements remain.
+    assert len(rows) == 3
+    queries = [r[3] for r in rows]
+    assert "select 1" in queries
+    assert "\\dt" not in queries
+    assert rows[0][1] == "0.012"  # timing formatted
+    assert rows[2][2] == "ERR"  # failed statement flagged
+    assert "3 queries" in status
+
+
+def test_show_query_history_last_n(tmpdir):
+    """\\hist N shows only the last N SQL statements."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    cli.query_history = [MetaQuery(query="select %d" % i, successful=True, total_time=0.001) for i in range(5)]
+    _, rows, _, _ = cli.show_query_history("2")[0]
+    assert len(rows) == 2
+    assert rows[0][3] == "select 3"
+    assert rows[1][3] == "select 4"
+
+
+def test_show_query_history_invalid_arg(tmpdir):
+    """A non-integer argument returns a usage hint."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    cli.query_history = [MetaQuery(query="select 1", successful=True, total_time=0.001)]
+    assert "Usage" in cli.show_query_history("abc")[0][3]
+    assert "Usage" in cli.show_query_history("-3")[0][3]
+
+
+def test_show_query_history_truncates_long_query(tmpdir):
+    """Long statements are collapsed to one line and truncated with an ellipsis."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli = PGCli(pgclirc_file=rcfile)
+    long_sql = "select " + ", ".join("col%d" % i for i in range(40)) + "\nfrom t"
+    cli.query_history = [MetaQuery(query=long_sql, successful=True, total_time=0.001)]
+    _, rows, _, _ = cli.show_query_history("")[0]
+    shown = rows[0][3]
+    assert len(shown) == 60
+    assert shown.endswith("...")
+    assert "\n" not in shown
