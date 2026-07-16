@@ -776,6 +776,67 @@ def test_exit_without_active_connection(executor):
 
 
 @dbtest
+def test_explain_mode_does_not_wrap_special_command(executor):
+    """A special command (\\q) must still be dispatched as special -- NOT wrapped
+    with the EXPLAIN prefix -- when explain mode (F5) is on.
+
+    Regression for the bug where explain mode prepended ``EXPLAIN (...)`` to every
+    input, turning ``\\q``/``\\d``/``exit`` into invalid SQL and leaving the user
+    unable to even quit.
+    """
+    quit_handler = MagicMock()
+    pgspecial = PGSpecial()
+    pgspecial.register(
+        quit_handler,
+        "\\q",
+        "\\q",
+        "Quit pgcli.",
+        arg_type=NO_QUERY,
+        case_sensitive=True,
+        aliases=(":q",),
+    )
+    with patch.object(executor, "execute_normal_sql") as normal_sql:
+        list(executor.run("\\q", pgspecial=pgspecial, explain_mode=True))
+
+    quit_handler.assert_called_once()  # special dispatched despite explain mode
+    normal_sql.assert_not_called()  # never shipped to the server as SQL
+
+
+@dbtest
+def test_explain_mode_describe_command_runs_as_special(executor, pgspecial):
+    """A real describe command (\\dt) runs as special, not EXPLAIN-wrapped, under
+    explain mode."""
+    with patch.object(executor, "execute_normal_sql") as normal_sql:
+        result = list(executor.run("\\dt", pgspecial=pgspecial, explain_mode=True))
+
+    normal_sql.assert_not_called()
+    assert result[0][6] is True  # is_special flag set
+
+
+@dbtest
+def test_explain_mode_wraps_normal_sql(executor, pgspecial):
+    """Normal SQL is still wrapped with the EXPLAIN prefix when explain mode is on."""
+    with patch.object(executor, "execute_normal_sql", return_value=("", None, None, "")) as normal_sql:
+        list(executor.run("select 1", pgspecial=pgspecial, explain_mode=True))
+
+    normal_sql.assert_called_once()
+    sent = normal_sql.call_args.args[0]
+    assert sent == executor.explain_prefix() + "select 1"
+
+
+@dbtest
+def test_explain_mode_strips_G_suffix(executor, pgspecial):
+    """`select ... \\G` under explain mode strips the \\G and wraps the clean SQL,
+    instead of shipping a stray trailing backslash to the server."""
+    with patch.object(executor, "execute_normal_sql", return_value=("", None, None, "")) as normal_sql:
+        list(executor.run("select 1 \\G", pgspecial=pgspecial, explain_mode=True))
+
+    sent = normal_sql.call_args.args[0]
+    assert sent == executor.explain_prefix() + "select 1"
+    assert "\\G" not in sent
+
+
+@dbtest
 def test_virtual_database(executor):
     virtual_connection = MagicMock()
     virtual_connection.cursor.return_value = VirtualCursor()

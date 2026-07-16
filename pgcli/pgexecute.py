@@ -390,9 +390,12 @@ class PGExecute:
             if not sql:
                 continue
             try:
-                if explain_mode:
-                    sql = self.explain_prefix() + sql
-                elif pgspecial:
+                # Try special (backslash / meta) commands FIRST, regardless of
+                # explain mode. Otherwise, with explain mode (F5) on, commands
+                # like \q, \d, exit, named queries, \i, \autocommit would get
+                # the EXPLAIN prefix prepended and be shipped to the server as
+                # invalid SQL -- leaving the user unable to even quit.
+                if pgspecial:
                     # \G is treated specially since we have to set the expanded output.
                     if sql.endswith("\\G"):
                         if not pgspecial.expanded_output:
@@ -433,7 +436,12 @@ class PGExecute:
                     except special.CommandNotFound:
                         pass
 
-                # Not a special command, so execute as normal sql
+                # Not a special command, so execute as normal sql. The EXPLAIN
+                # prefix is applied ONLY here, to real SQL, so special commands
+                # keep working while explain mode is on (see comment above).
+                if explain_mode:
+                    sql = self.explain_prefix() + sql
+
                 yield self.execute_normal_sql(sql, notice_callback=notice_callback) + (sql, True, False)
             except psycopg.DatabaseError as e:
                 _logger.error("sql: %r, error: %r", sql, e)
