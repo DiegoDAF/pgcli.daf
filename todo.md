@@ -27,6 +27,9 @@ Upcoming
 ## MERGED
 - [x] trailing SQL comments   -> #1559 (en upstream 4.5.0)
 
+## BUG DE UPSTREAM que arreglamos nosotros (PR-worthy, aislado en commit 5d60b80)
+- [ ] explain mode (F5) rompe special commands: `if explain_mode / elif pgspecial` en pgexecute.run() -> los meta-comandos nunca se detectan con F5 ON. Fix nuestro en 4.5.7. original/main tiene el bug identico (commit 372da81, 2022). EXCELENTE candidato a PR upstream (self-contained, con tests). Ademas arregla \G en explain mode y el guard de restrict-mode
+
 ## GENUINAMENTE PENDIENTE (nuestro, confirmado NO en upstream, SIN PR)
 # Buenos candidatos (self-contained, aditivos, no entrelazados con sshtunnel):
 - [ ] dsn.d/ (DSN aliases drop-in) - ademas resuelve issue abierto #1489. BUEN candidato
@@ -64,6 +67,22 @@ Upcoming
 - [ ] Branches feature/stream-results y feature/ssh-tunnel-keyring: ya estan en main; se pueden borrar o conservar si los queremos para PRs upstream separados
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
+
+2026-07-16
+===================
+- [x] FIX -d/--dsn override (reportado por Diego): los flags CLI (-d/-U/-h/-p) se ignoraban con --dsn/URI; el connection string siempre ganaba (ej: `pgcli --dsn prod -d otherdb` conectaba igual a la db del alias). Folded en 4.5.7 (SIN bump; Diego pidio no subir version). LOCAL, sin push
+  - Root cause (2 capas): (1) PGExecute.connect() reduce a preserved_params={dsn,password,hostaddr} cuando hay dsn -> descarta dbname/user/host/port; (2) PGCli.connect() re-deriva host/port del dsn. Solo lo embebido en el dsn toma efecto
+  - Fix: connect_uri() hornea los overrides en el dsn via make_conninfo (+ los sigue pasando como kwargs para pgpass/keyring). Precedencia psql: SOLO flags explicitos de command line overridean (via ctx.get_parameter_source == COMMANDLINE); ni el default de -p (5432) ni env vars (PGPORT/PGHOST/PGDATABASE) pisan el dsn
+  - Gotcha encontrado: -p tiene default=5432 (no vacio) -> `if port:` siempre true horneaba 5432 sobre TODO dsn. Por eso el gate por parameter-source. Tambien: -l/--ping fuerza database=postgres -> capturar explicit_dbname antes del clobber
+  - Workflow de review adversarial (3 agentes): encontro la regresion de -l/--ping + el multi-host+`-h` (minor, no fixeado, narrow). connect_uri es NUESTRO (dsn=routing), NO es PR upstream limpio
+  - 6 tests en test_main.py (2 actualizados + 4 nuevos: dbname override, combined, port-default-no-forwarded, explicit-flags-forwarded). Adversarial: los 6 fallan sin el fix. Suite 2973 (sin DB) / 3102 (con DB throwaway). ruff+mypy limpios. End-to-end verificado por CLI real (6 escenarios)
+- [x] FIX explain mode (F5) rompia special commands (v4.5.7, LOCAL commit 5d60b80, SIN push; pendiente test de Diego)
+  - Bug (screenshot de Diego): con F5/explain ON, pgexecute.run() tenia `if explain_mode: prefijo / elif pgspecial:` -> el if/elif salteaba la deteccion de special commands, asi \q, exit, \d, \i, named queries, \autocommit, \G, \c... se volvian `EXPLAIN (...) <cmd>` -> syntax error. No se podia ni salir (peor tras reconnect por idle-timeout, que reintenta el comando)
+  - Confirmado en log ~/.local/state/pgcli/pgcli-Wed.log + reproducido a nivel run() en PG throwaway
+  - Fix: `if pgspecial:` (special SIEMPRE primero) + mover el prefijo EXPLAIN a justo antes de execute_normal_sql (solo SQL real). Bonus: arregla \G en explain mode y mantiene el guard de restrict-mode (CVE-2025-8714) que tambien quedaba bypasseado por F5
+  - BUG DE UPSTREAM (original/main tiene el if/elif identico; commit 372da81 "add explain visualizer #1279", 2022). Candidato a PR upstream -> ver seccion UPSTREAM
+  - Workflow (5 agentes) para mapear blast radius / diseño / upstream / tests / regresion
+  - 4 tests nuevos @dbtest (special no envuelto / describe corre como special / SQL normal si envuelto / \G stripped). Verificacion adversarial: 3 fallan sin el fix. Suite 2969 passed (sin DB), ruff+mypy limpios. Build+install 4.5.7 con [sshtunnel,keyring]
 
 2026-07-15
 ===================

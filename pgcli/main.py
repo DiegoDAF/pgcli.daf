@@ -989,7 +989,7 @@ class PGCli:
             passwd=service_config.get("password"),
         )
 
-    def connect_uri(self, uri, user="", host="", port=""):
+    def connect_uri(self, uri, user="", host="", port="", dbname=""):
         # Detect JDBC URIs and give a friendly error
         if uri.startswith("jdbc:"):
             raise click.ClickException(f"JDBC connection strings are not supported.\nRemove the 'jdbc:' prefix and use: {uri[5:]}")
@@ -1002,15 +1002,34 @@ class PGCli:
         remap = {"dbname": "database", "password": "passwd"}
         kwargs = {remap.get(k, k): v for k, v in kwargs.items()}
 
-        # CLI flags override URI values (same behavior as psql)
+        # CLI flags override URI/DSN values, matching psql precedence (an
+        # explicit -d/-U/-h/-p wins over the connection string). We must bake
+        # the overrides back into the DSN string itself, because downstream the
+        # DSN is treated as authoritative (PGExecute) and is re-parsed to derive
+        # the SSH-tunnel target and .pgpass host/port -- so passing them only as
+        # separate kwargs is not enough (they get dropped / overwritten by the
+        # DSN's own values). We still pass them as kwargs too, to keep
+        # .pgpass/keyring lookups aligned with the effective connection target.
+        overrides = {}
         if user:
             kwargs["user"] = user
+            overrides["user"] = user
         if host:
             kwargs["host"] = host
+            overrides["host"] = host
         if port:
             kwargs["port"] = port
+            overrides["port"] = port
+        if dbname:
+            kwargs["database"] = dbname
+            overrides["dbname"] = dbname
+        if overrides:
+            try:
+                uri = make_conninfo(uri, **overrides)
+            except Exception as e:
+                raise click.ClickException(f"Invalid connection URI: {e}")
 
-        # Pass the original URI as dsn parameter for .pgpass support with SSH tunnels
+        # Pass the (override-merged) URI as dsn parameter for .pgpass support with SSH tunnels
         self.connect(dsn=uri, **kwargs)
 
     def connect(self, database="", host="", user="", port="", passwd="", dsn="", **kwargs):
@@ -2118,15 +2137,39 @@ def cli(
         # work as psql: when database is given as option and argument use the argument as user
         username = dbname
     database = dbname_opt or dbname or ""
+    # The database the user explicitly asked for (via -d or the positional arg),
+    # captured before --list/--ping forces it to "postgres" below. Only this is
+    # used to override a --dsn/URI's own database, so e.g. `--dsn alias -l` keeps
+    # using the alias's database instead of forcing "postgres" into the DSN.
+    explicit_dbname = database
     user = username_opt or username
     service = None
     if database.startswith("service="):
         service = database[8:]
+        explicit_dbname = ""
     elif os.getenv("PGSERVICE") is not None:
         service = os.getenv("PGSERVICE")
     # because option --ping, --list or -l are not supposed to have a db name
     if list_databases or ping_database:
         database = "postgres"
+
+    # psql/libpq precedence: for a --dsn / URI connection, only connection
+    # params the user gave EXPLICITLY on the command line may override the
+    # connection string. click defaults (--port defaults to 5432) and env vars
+    # (PGPORT, PGHOST, PGDATABASE, ...) must NOT clobber the DSN's own values.
+    ctx = click.get_current_context()
+
+    def _from_cmdline(*params):
+        for p in params:
+            src = ctx.get_parameter_source(p)
+            if src is not None and src.name == "COMMANDLINE":
+                return True
+        return False
+
+    ov_host = host if _from_cmdline("host") else ""
+    ov_port = str(port) if _from_cmdline("port") else ""
+    ov_user = user if _from_cmdline("username_opt", "username") else ""
+    ov_dbname = explicit_dbname if _from_cmdline("dbname_opt", "dbname") else ""
 
     cfg = load_config(pgclirc, config_full_path)
     if dsn != "":
@@ -2148,9 +2191,9 @@ def cli(
             )
             sys.exit(1)
         pgcli.dsn_alias = dsn
-        pgcli.connect_uri(dsn_config, user=user, host=host, port=port)
+        pgcli.connect_uri(dsn_config, user=ov_user, host=ov_host, port=ov_port, dbname=ov_dbname)
     elif "://" in database:
-        pgcli.connect_uri(database, user=user, host=host, port=port)
+        pgcli.connect_uri(database, user=ov_user, host=ov_host, port=ov_port)
     elif "=" in database and service is None:
         pgcli.connect_dsn(database, user=user)
     elif service is not None:

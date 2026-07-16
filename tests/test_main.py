@@ -28,6 +28,7 @@ from pgcli.main import (
 )
 from pgcli.pgexecute import PGExecute
 from pgspecial.main import PAGER_OFF, PAGER_LONG_OUTPUT, PAGER_ALWAYS
+from psycopg.conninfo import conninfo_to_dict
 from utils import dbtest, run
 from collections import namedtuple
 
@@ -986,11 +987,21 @@ def test_invalid_uri_error(tmpdir):
 
 
 def test_uri_cli_user_override(tmpdir):
+    # A -U override must be baked into the DSN (so it wins over the connection
+    # string downstream) AND still passed as a kwarg (for .pgpass/keyring).
     with mock.patch.object(PGCli, "connect") as mock_connect:
         cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
         uri = "postgres://original_user:pass@host.com/mydb"
         cli.connect_uri(uri, user="override_user")
-    mock_connect.assert_called_with(dsn=uri, database="mydb", host="host.com", user="override_user", passwd="pass")
+    _, kwargs = mock_connect.call_args
+    baked = conninfo_to_dict(kwargs["dsn"])
+    assert baked["user"] == "override_user"  # override baked into the dsn
+    assert baked["dbname"] == "mydb"  # untouched keys preserved
+    assert baked["host"] == "host.com"
+    assert baked["password"] == "pass"
+    assert kwargs["user"] == "override_user"  # also passed as kwargs
+    assert kwargs["database"] == "mydb"
+    assert kwargs["passwd"] == "pass"
 
 
 def test_uri_cli_host_port_override(tmpdir):
@@ -998,15 +1009,94 @@ def test_uri_cli_host_port_override(tmpdir):
         cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
         uri = "postgres://user:pass@original.com:5432/mydb"
         cli.connect_uri(uri, host="override.com", port="5433")
-    mock_connect.assert_called_with(dsn=uri, database="mydb", host="override.com", user="user", passwd="pass", port="5433")
+    _, kwargs = mock_connect.call_args
+    baked = conninfo_to_dict(kwargs["dsn"])
+    assert baked["host"] == "override.com"  # overrides baked in
+    assert baked["port"] == "5433"
+    assert baked["user"] == "user"  # preserved from the original uri
+    assert baked["dbname"] == "mydb"
+    assert kwargs["host"] == "override.com"  # also passed as kwargs
+    assert kwargs["port"] == "5433"
+
+
+def test_uri_cli_dbname_override(tmpdir):
+    # The reported bug: -d must override the database of a --dsn/URI. The
+    # override is baked into the dsn AND passed as the database kwarg.
+    with mock.patch.object(PGCli, "connect") as mock_connect:
+        cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        uri = "postgres://original_user:pass@host.com/mydb"
+        cli.connect_uri(uri, dbname="otherdb")
+    _, kwargs = mock_connect.call_args
+    baked = conninfo_to_dict(kwargs["dsn"])
+    assert baked["dbname"] == "otherdb"  # override baked in (was "mydb")
+    assert baked["user"] == "original_user"  # preserved
+    assert baked["host"] == "host.com"
+    assert kwargs["database"] == "otherdb"  # also passed as kwarg
+
+
+def test_uri_cli_combined_dbname_and_user_override(tmpdir):
+    with mock.patch.object(PGCli, "connect") as mock_connect:
+        cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        uri = "postgres://original_user:pass@host.com/mydb"
+        cli.connect_uri(uri, user="u2", dbname="otherdb")
+    _, kwargs = mock_connect.call_args
+    baked = conninfo_to_dict(kwargs["dsn"])
+    assert baked["dbname"] == "otherdb"  # both overrides baked in
+    assert baked["user"] == "u2"
+    assert baked["host"] == "host.com"  # preserved
+    assert baked["password"] == "pass"
+    assert kwargs["database"] == "otherdb"
+    assert kwargs["user"] == "u2"
 
 
 def test_uri_no_override_when_empty(tmpdir):
+    # With no override the dsn must stay byte-identical to the original URI, so
+    # .pgpass/SSH-tunnel DSN reparsing sees the untouched form.
     with mock.patch.object(PGCli, "connect") as mock_connect:
-        cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
-        uri = "postgres://bar:foo@baz.com/testdb"
-        cli.connect_uri(uri, user="", host="", port="")
-    mock_connect.assert_called_with(dsn=uri, database="testdb", host="baz.com", user="bar", passwd="foo")
+        with mock.patch("pgcli.main.make_conninfo") as mock_make_conninfo:
+            cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+            uri = "postgres://bar:foo@baz.com/testdb"
+            cli.connect_uri(uri, user="", host="", port="")
+    mock_make_conninfo.assert_not_called()  # no re-serialization when nothing overrides
+    _, kwargs = mock_connect.call_args
+    assert kwargs["dsn"] == uri  # exact string identity
+    assert kwargs["database"] == "testdb"
+    assert kwargs["host"] == "baz.com"
+    assert kwargs["user"] == "bar"
+    assert kwargs["passwd"] == "foo"
+
+
+def test_cli_dsn_default_port_not_forwarded_as_override(tmpdir):
+    """cli(): the click default of --port (5432) must NOT be forwarded as a
+    --dsn override, or it would clobber the DSN's own port. Only explicit
+    command-line flags override the connection string.
+    """
+    rc = tmpdir.join("rcfile")
+    rc.write("[alias_dsn]\nta = postgres://u@realhost:6000/realdb\n")
+    runner = CliRunner()
+    with patch.object(PGCli, "connect_uri", side_effect=RuntimeError("stop")) as mock_cu:
+        runner.invoke(cli, ["--dsn", "ta", "--pgclirc", str(rc), "-c", "select 1"])
+    _, kwargs = mock_cu.call_args
+    assert kwargs["port"] == ""  # default 5432 NOT forwarded
+    assert kwargs["host"] == ""
+    assert kwargs["user"] == ""
+    assert kwargs["dbname"] == ""
+
+
+def test_cli_dsn_explicit_flags_forwarded_as_override(tmpdir):
+    """Explicit -d/-p/-u on the command line ARE forwarded to override the DSN."""
+    rc = tmpdir.join("rcfile")
+    rc.write("[alias_dsn]\nta = postgres://u@realhost:6000/realdb\n")
+    runner = CliRunner()
+    with patch.object(PGCli, "connect_uri", side_effect=RuntimeError("stop")) as mock_cu:
+        runner.invoke(
+            cli,
+            ["--dsn", "ta", "-d", "otherdb", "-p", "7000", "-u", "u2", "--pgclirc", str(rc), "-c", "select 1"],
+        )
+    _, kwargs = mock_cu.call_args
+    assert kwargs["dbname"] == "otherdb"
+    assert kwargs["port"] == "7000"
+    assert kwargs["user"] == "u2"
 
 
 def test_notice_callback_streams_messages():

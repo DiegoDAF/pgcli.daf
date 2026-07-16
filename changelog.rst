@@ -1,24 +1,6 @@
 4.5.7 (unreleased) - upstream: 4.5.0
 =====================================
 
-Bug fixes:
-----------
-* Explain mode (F5) no longer breaks special/meta commands. Previously, while
-  explain mode was on, EVERY input got the ``EXPLAIN (...)`` prefix prepended and
-  was sent to the server as SQL -- including backslash commands and the bare
-  words ``exit``/``quit``. So ``\q``, ``\d``, ``\i``, named queries,
-  ``\autocommit``, ``\G`` and the rest turned into invalid SQL, and the user
-  could not even quit (``EXPLAIN (...) \q`` produced a syntax error, trapping the
-  session, especially after an idle-timeout reconnect). pgcli now detects special
-  commands FIRST and applies the EXPLAIN prefix only to genuine SQL, so meta
-  commands keep working (and you can quit) while explain mode is on. As a side
-  effect this also repairs ``\G`` under explain mode and keeps the restrict-mode
-  meta-command guard authoritative. This is an upstream bug, present in
-  dbcli/pgcli since the explain visualizer was added.
-
-4.5.6 (unreleased) - upstream: 4.5.0
-=====================================
-
 Features:
 ---------
 * Query-tool bundle inspired by pgAdmin. New ``\autocommit [on|off]`` special
@@ -64,6 +46,27 @@ Bug fixes:
   only the last password and leaked the earlier ones in the process title
   (visible via ``ps``). It now masks every URL's password with a per-URL
   character-class substitution.
+* Explain mode (F5) no longer breaks special/meta commands. Previously, while
+  explain mode was on, EVERY input got the ``EXPLAIN (...)`` prefix prepended and
+  was sent to the server as SQL -- including backslash commands and the bare
+  words ``exit``/``quit``. So ``\q``, ``\d``, ``\i``, named queries,
+  ``\autocommit``, ``\G`` and the rest turned into invalid SQL, and the user
+  could not even quit (``EXPLAIN (...) \q`` produced a syntax error, trapping the
+  session, especially after an idle-timeout reconnect). pgcli now detects special
+  commands FIRST and applies the EXPLAIN prefix only to genuine SQL, so meta
+  commands keep working (and you can quit) while explain mode is on. As a side
+  effect this also repairs ``\G`` under explain mode and keeps the restrict-mode
+  meta-command guard authoritative. This is an upstream bug, present in
+  dbcli/pgcli since the explain visualizer was added.
+* CLI connection flags now override a ``--dsn`` / connection URI, matching psql
+  precedence. Previously ``-d``/``-U``/``-h``/``-p`` were silently ignored when
+  connecting via ``--dsn <alias>`` or a URI -- the connection string's own values
+  always won, so e.g. ``pgcli --dsn prod -d otherdb`` still connected to the
+  alias's database instead of ``otherdb``. The explicit flags are now applied on
+  top of the connection string. Only genuinely explicit command-line flags
+  override it: the ``--port`` default (5432) and environment variables such as
+  ``PGPORT``/``PGHOST``/``PGDATABASE`` do not clobber the DSN's own
+  host/port/user/database.
 
 Internal:
 ---------
