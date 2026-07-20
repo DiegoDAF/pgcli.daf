@@ -11,6 +11,8 @@ Bug fixes:
   ``.pgpass`` lookup now use the connstring's user instead of falling back to
   the OS login name (no more "Password for daf" when the connstring says
   ``user=test2``).
+* Suggest columns after ``GROUP BY``, like ``ORDER BY`` already does
+  (upstream #1599, cherry-picked).
 
 4.5.7 (2026-07-21) - upstream: 4.5.0
 =====================================
