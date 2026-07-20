@@ -70,6 +70,11 @@ Bug fixes:
 
 Internal:
 ---------
+* ``confirm_destructive_query`` now takes a ``force`` parameter and owns the whole
+  "should we proceed?" decision, instead of ``self.force_destructive`` being
+  checked separately at both call sites. Behaviour is unchanged; the parameter
+  defaults to ``False`` so existing callers are unaffected. Mirrors the review
+  feedback on upstream PR #1544.
 * Add a security-focused test suite (``tests/test_sec_*.py``): ``.pgpass``
   permission/escaping/wildcard handling, secret/path sanitization, ``\restrict``
   restricted-mode enforcement, and SSH tunnel keyring key scoping.
