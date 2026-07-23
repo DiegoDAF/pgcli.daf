@@ -2189,7 +2189,13 @@ def cli(
     elif "://" in database:
         pgcli.connect_uri(database, user=ov_user, host=ov_host, port=ov_port)
     elif "=" in database and service is None:
-        pgcli.connect_dsn(database, user=user)
+        # key=value conninfo strings go through connect_uri too: it bakes the
+        # explicit CLI overrides into the connstring (otherwise -U/-h/-p are
+        # dropped downstream when a dsn is present) and passes the PARSED
+        # components as kwargs, so the password prompt / keyring / .pgpass use
+        # the connstring's user instead of the OS login name. No dbname
+        # override here: the connstring itself IS the -d / positional value.
+        pgcli.connect_uri(database, user=ov_user, host=ov_host, port=ov_port)
     elif service is not None:
         pgcli.connect_service(service, user)
     else:

@@ -1099,6 +1099,70 @@ def test_cli_dsn_explicit_flags_forwarded_as_override(tmpdir):
     assert kwargs["user"] == "u2"
 
 
+def test_kv_connstring_cli_user_override(tmpdir):
+    # Same contract as the URI form, for key=value conninfo strings: an explicit
+    # -U override is baked into the connstring AND passed as a kwarg.
+    with mock.patch.object(PGCli, "connect") as mock_connect:
+        cli_obj = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        kv = "host=realhost port=6000 dbname=realdb user=usera"
+        cli_obj.connect_uri(kv, user="userb")
+    _, kwargs = mock_connect.call_args
+    baked = conninfo_to_dict(kwargs["dsn"])
+    assert baked["user"] == "userb"  # override baked into the connstring
+    assert baked["dbname"] == "realdb"  # untouched keys preserved
+    assert baked["host"] == "realhost"
+    assert baked["port"] == "6000"
+    assert kwargs["user"] == "userb"  # also passed as kwarg
+
+
+def test_kv_connstring_parses_components_as_kwargs(tmpdir):
+    # Without overrides the connstring stays byte-identical, and its PARSED user
+    # is passed as a kwarg -- that is what the password prompt, keyring key and
+    # .pgpass lookup use (previously they fell back to the OS login name).
+    with mock.patch.object(PGCli, "connect") as mock_connect:
+        cli_obj = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        kv = "host=realhost port=6000 dbname=realdb user=usera"
+        cli_obj.connect_uri(kv)
+    _, kwargs = mock_connect.call_args
+    assert kwargs["dsn"] == kv  # untouched
+    assert kwargs["user"] == "usera"  # parsed from the connstring
+    assert kwargs["host"] == "realhost"
+    assert kwargs["database"] == "realdb"
+
+
+def test_cli_kv_connstring_forwards_overrides(tmpdir):
+    """cli(): the key=value branch forwards explicit -U/-p to connect_uri (they
+    used to be dropped downstream, so `pgcli "host=... user=a" -U b` connected
+    as `a`)."""
+    rc = tmpdir.join("rcfile")
+    rc.write("[main]\n")
+    runner = CliRunner()
+    kv = "host=realhost port=6000 dbname=realdb user=usera"
+    with patch.object(PGCli, "connect_uri", side_effect=RuntimeError("stop")) as mock_cu:
+        runner.invoke(cli, [kv, "-U", "userb", "--pgclirc", str(rc), "-c", "select 1"])
+    args, kwargs = mock_cu.call_args
+    assert args[0] == kv  # the connstring is passed through as-is
+    assert kwargs["user"] == "userb"  # explicit -U forwarded
+    assert kwargs["port"] == ""  # click default (5432) NOT forwarded
+    assert "dbname" not in kwargs  # the connstring itself is the -d value
+
+
+def test_cli_kv_connstring_no_flags_no_overrides(tmpdir):
+    """cli(): with no explicit flags, the key=value branch forwards no overrides
+    (env vars and click defaults must not clobber the connstring)."""
+    rc = tmpdir.join("rcfile")
+    rc.write("[main]\n")
+    runner = CliRunner()
+    kv = "host=realhost port=6000 dbname=realdb user=usera"
+    with patch.object(PGCli, "connect_uri", side_effect=RuntimeError("stop")) as mock_cu:
+        runner.invoke(cli, [kv, "--pgclirc", str(rc), "-c", "select 1"])
+    args, kwargs = mock_cu.call_args
+    assert args[0] == kv
+    assert kwargs["user"] == ""
+    assert kwargs["host"] == ""
+    assert kwargs["port"] == ""
+
+
 def test_notice_callback_streams_messages():
     """Test that notice_callback receives NOTICEs in real time instead of buffering."""
     streamed = []

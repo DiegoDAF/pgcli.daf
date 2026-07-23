@@ -1,3 +1,17 @@
+Unreleased - upstream: 4.5.0
+============================
+
+Bug fixes:
+----------
+* CLI connection flags now also override a ``key=value`` conninfo string
+  (``pgcli "host=... user=a" -U b``), completing the 4.5.7 fix that covered
+  ``--dsn`` aliases and URIs: this third form still dropped ``-U``/``-h``/``-p``
+  silently, connecting as the connstring's user while prompting for the
+  override's. As part of the same fix, the password prompt, keyring entry and
+  ``.pgpass`` lookup now use the connstring's user instead of falling back to
+  the OS login name (no more "Password for daf" when the connstring says
+  ``user=test2``).
+
 4.5.7 (2026-07-21) - upstream: 4.5.0
 =====================================
 
