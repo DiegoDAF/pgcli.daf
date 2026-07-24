@@ -3,6 +3,9 @@ Unreleased - upstream: 4.5.0
 
 Bug fixes:
 ----------
+* Restore cursor shape behaviour for Emacs mode: ``ModalCursorShapeConfig`` is
+  only applied when vi mode is on, so Emacs mode keeps the terminal's own
+  cursor shape (upstream #1610, cherry-picked).
 * CLI connection flags now also override a ``key=value`` conninfo string
   (``pgcli "host=... user=a" -U b``), completing the 4.5.7 fix that covered
   ``--dsn`` aliases and URIs: this third form still dropped ``-U``/``-h``/``-p``
