@@ -749,6 +749,77 @@ def test_log_rotation_day_of_month(executor):
         assert os.path.exists(expected_log)
 
 
+def _init_logging_with(executor, tmpdir, extra_main):
+    """Run initialize_logging with a day-of-week rotation config + extras."""
+    config = {
+        "main": {
+            "log_file": "default",
+            "log_rotation_mode": "day-of-week",
+            "log_destination": tmpdir,
+            "log_level": "INFO",
+            **extra_main,
+        }
+    }
+    with mock.patch("pgcli.main.config_location", return_value=tmpdir + "/"):
+        cli = PGCli(pgexecute=executor)
+        cli.config = config
+        cli.initialize_logging()
+    day_name = datetime.datetime.now().strftime("%a")
+    return os.path.join(tmpdir, f"pgcli-{day_name}.log")
+
+
+@dbtest
+def test_log_truncate_on_rotation_stale_file(executor):
+    """With log_truncate_on_rotation on, a rotation file last written on a
+    PREVIOUS day (last week's same-weekday slot) is truncated, not appended."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        day_name = datetime.datetime.now().strftime("%a")
+        log_path = os.path.join(tmpdir, f"pgcli-{day_name}.log")
+        with open(log_path, "w") as f:
+            f.write("STALE CONTENT FROM LAST WEEK\n")
+        week_ago = datetime.datetime.now() - datetime.timedelta(days=7)
+        os.utime(log_path, (week_ago.timestamp(), week_ago.timestamp()))
+
+        result = _init_logging_with(executor, tmpdir, {"log_truncate_on_rotation": "on"})
+
+        assert result == log_path
+        with open(log_path) as f:
+            assert "STALE CONTENT" not in f.read()
+
+
+@dbtest
+def test_log_truncate_on_rotation_same_day_appends(executor):
+    """Same-day reopens keep appending even with truncation enabled."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        day_name = datetime.datetime.now().strftime("%a")
+        log_path = os.path.join(tmpdir, f"pgcli-{day_name}.log")
+        with open(log_path, "w") as f:
+            f.write("EARLIER SESSION TODAY\n")
+
+        _init_logging_with(executor, tmpdir, {"log_truncate_on_rotation": "on"})
+
+        with open(log_path) as f:
+            assert "EARLIER SESSION TODAY" in f.read()
+
+
+@dbtest
+def test_log_truncate_on_rotation_default_off(executor):
+    """Without the option (default off), stale files keep accumulating
+    (backwards compatible behavior)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        day_name = datetime.datetime.now().strftime("%a")
+        log_path = os.path.join(tmpdir, f"pgcli-{day_name}.log")
+        with open(log_path, "w") as f:
+            f.write("STALE CONTENT FROM LAST WEEK\n")
+        week_ago = datetime.datetime.now() - datetime.timedelta(days=7)
+        os.utime(log_path, (week_ago.timestamp(), week_ago.timestamp()))
+
+        _init_logging_with(executor, tmpdir, {})
+
+        with open(log_path) as f:
+            assert "STALE CONTENT" in f.read()
+
+
 @dbtest
 def test_log_rotation_date(executor):
     """Test log rotation by date (YYYYMMDD)"""

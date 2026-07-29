@@ -844,6 +844,15 @@ class PGCli:
         # Get log rotation mode and destination
         log_rotation_mode = self.config["main"].get("log_rotation_mode", "none")
         log_destination = self.config["main"].get("log_destination", "default")
+        # PostgreSQL-style log_truncate_on_rotation (default off): when a
+        # rotation slot's filename comes around again (same weekday next week /
+        # same day-of-month next month), truncate the stale file instead of
+        # appending forever. Accepts on/off/true/false like postgresql.conf.
+        truncate_raw = self.config["main"].get("log_truncate_on_rotation", False)
+        if isinstance(truncate_raw, str):
+            log_truncate_on_rotation = truncate_raw.strip().lower() in ("1", "true", "yes", "on")
+        else:
+            log_truncate_on_rotation = bool(truncate_raw)
 
         # Handle log_destination
         if log_destination == "default":
@@ -884,7 +893,18 @@ class PGCli:
         if log_level.upper() == "NONE":
             handler = logging.NullHandler()
         else:
-            handler = logging.FileHandler(os.path.expanduser(log_file_path))
+            expanded_log_path = os.path.expanduser(log_file_path)
+            # Truncate a STALE rotation file (last written on a previous day),
+            # so pgcli-Wed.log starts fresh next Wednesday instead of piling up
+            # week after week. Same-day reopens keep appending, and only the
+            # recycling modes are affected: "date" filenames are unique and
+            # "none" is the legacy single file.
+            file_mode = "a"
+            if log_truncate_on_rotation and log_rotation_mode in ("day-of-week", "day-of-month") and os.path.exists(expanded_log_path):
+                mtime_date = dt.date.fromtimestamp(os.path.getmtime(expanded_log_path))
+                if mtime_date != dt.date.today():
+                    file_mode = "w"
+            handler = logging.FileHandler(expanded_log_path, mode=file_mode)
 
         level_map = {
             "CRITICAL": logging.CRITICAL,

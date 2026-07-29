@@ -1,6 +1,17 @@
 Unreleased - upstream: 4.5.0
 ============================
 
+Features:
+---------
+* New ``log_truncate_on_rotation`` config option (default ``off``), like
+  PostgreSQL's setting of the same name. With ``day-of-week`` /
+  ``day-of-month`` log rotation, when a slot's filename comes around again
+  (same weekday next week, same day number next month) and the existing file
+  was last written on a previous day, it is truncated instead of appended
+  forever -- previously ``pgcli-Wed.log`` accumulated every Wednesday since
+  the feature existed, despite the docs claiming it "overwrites weekly".
+  Same-day reopens still append; ``date`` and ``none`` modes are unaffected.
+
 Bug fixes:
 ----------
 * Restore cursor shape behaviour for Emacs mode: ``ModalCursorShapeConfig`` is

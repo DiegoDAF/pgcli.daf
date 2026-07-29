@@ -104,9 +104,10 @@ log_file = default
 # Log rotation mode. Determines how log files are rotated.
 # Possible values:
 #   "none"         - No rotation, single log file (default, backwards compatible)
-#   "day-of-week"  - Rotate by day name (Mon-Sun), overwrites weekly
-#   "day-of-month" - Rotate by day number (01-31), overwrites monthly
-#   "date"         - Rotate by date (YYYYMMDD), never overwrites
+#   "day-of-week"  - One file per day name (Mon-Sun); the slot is recycled
+#                    weekly (see log_truncate_on_rotation below, off = append)
+#   "day-of-month" - One file per day number (01-31); recycled monthly
+#   "date"         - One file per date (YYYYMMDD), never recycled
 log_rotation_mode = none
 
 # log_destination - Directory where log files are stored.
@@ -115,6 +116,14 @@ log_rotation_mode = none
 # Example: log_destination = /var/log/pgcli
 # Leave as "default" to use the standard config location
 log_destination = default
+
+# log_truncate_on_rotation - Like PostgreSQL's setting of the same name.
+# When a recycling rotation slot comes around again (same weekday next week
+# with "day-of-week", same day number next month with "day-of-month") and the
+# existing file was last written on a PREVIOUS day, truncate it instead of
+# appending forever. Reopens on the same day keep appending. Has no effect on
+# "date" (unique filenames) or "none" (legacy single file). Default off.
+log_truncate_on_rotation = off
 
 # keyword casing preference. Possible values: "lower", "upper", "auto"
 keyword_casing = auto
