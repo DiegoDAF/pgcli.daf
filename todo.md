@@ -1,26 +1,6 @@
 Upcoming
 ==============
 
-### FEATURE: namedqueries.d versionados por server (pedido Diego 2026-07-29)
-# Objetivo: queries por-version estilo .psqlrc-10 / .psqlrc-12 / .psqlrc-17 de psql
-- [ ] namedqueries.d pasa de "archivo = grupo de queries" a "archivo = UNA query"
-- [ ] Version del server en el NOMBRE del archivo: `activity.conf` (sin version =
-      siempre se carga) vs `activity-10.conf`, `activity-17.conf` (variantes por version)
-- [ ] pgcli carga solo las variantes que soporta el server CONECTADO, y el nombre
-      expuesto queda limpio: `\n activity` ejecuta la variante correcta segun el server
-- [ ] Decisiones de disenio a cerrar al implementar:
-      1. Semantica del sufijo: psql usa match EXACTO de version, pero para queries de
-         catalogo lo util es "minimo requerido": elegir la variante con mayor version
-         <= version del server, fallback a la sin version (ej: server PG15 con
-         activity-10 y activity-17 -> usa activity-10). PROPUESTA: best-fit <=.
-      2. Formato del archivo: mantener `name = "sql"` (configobj, cambio minimo) o
-         pasar a SQL crudo con nombre = filename (adios quoting de una linea,
-         multilinea natural). PROPUESTA: SQL crudo, con compat hacia atras para los
-         .conf agrupados existentes.
-      3. Recarga: la version se conoce recien al conectar -> filtrar en connect y
-         re-filtrar en \c (cambio de server) y \nr (reload)
-- [ ] Compat: los namedqueries.d agrupados existentes siguen funcionando como hoy
-
 ### FORK: features inspiradas en pgadmin4 (analisis 2026-07-15)
 # Lista completa (47) + detalle en notas LOCALES (no en este repo publico):
 #   ../pgadmin-feature-ideas.md  (los 47, con valor/portabilidad/esfuerzo)
@@ -87,6 +67,16 @@ Upcoming
 - [ ] Branches feature/stream-results y feature/ssh-tunnel-keyring: ya estan en main; se pueden borrar o conservar si los queremos para PRs upstream separados
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
+
+2026-07-31
+===================
+- [x] FEATURE namedqueries.d versionados por server, estilo .psqlrc-NN (pedido Diego 2026-07-29; LOCAL commit a0621ec, sin push)
+  - Sufijo de version en el filename: `activity-17.conf` = requiere server >= 17; sin sufijo = fallback universal. Best-fit: gana la variante con mayor version <= server; si TODAS las variantes piden server mas nuevo, la query desaparece de \n. Soporta punteadas pre-10 (`-9.6`). Antes de conectar se ofrece la variante mas alta
+  - Filtro aplicado post-connect (_filter_named_queries_for_server) y preservado en \nr (que recreaba la instancia y lo perdia). \c no cambia de server en pgcli -> sin re-filtro extra
+  - Compat total: archivos agrupados legacy siguen andando (el sufijo aplica a todas las queries del archivo)
+  - 8 tests nuevos en test_namedqueries.py; suite 3118 con DB; ruff+mypy limpios. Instalado en nb
+  - Config PERSONAL de Diego migrada: 13 .conf agrupados -> 59 archivos query-por-archivo (originales en papelera via gio trash; set cargado verificado IDENTICO). Unica variante real creada: index_create_progress-12.conf (pg_stat_progress_create_index es PG12+; en <12 desaparece, chau stub "requiere PG12+")
+  - HALLAZGO: los ~/.psqlrc-9.6..18 fueron regenerados 2026-07-31 10:30 y sus diferencias entre versiones son SOLO formato (case/espacios) para las queries que mapean a namedqueries -> no habia variantes reales que crear (se probaron 7 y se revirtieron). Cuando Diego tenga SQL genuinamente distinto por version (ej: activity con query_id PG14+), crear <name>-<ver>.conf y listo
 
 2026-07-16
 ===================
