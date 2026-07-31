@@ -3,6 +3,15 @@ Unreleased - upstream: 4.5.0
 
 Features:
 ---------
+* ``namedqueries.d`` files can now carry a server-version suffix in the
+  filename, like psql's ``~/.psqlrc-17`` / ``~/.psqlrc-9.6``: the queries in
+  ``activity-17.conf`` are only offered when the connected server is version
+  17 or newer, and among several variants of the same query name the one with
+  the highest version <= the server's wins (best-fit; a suffix-less file is
+  the always-available fallback). The filter is applied on connect and kept
+  across ``\nr`` reloads; version-gated queries whose requirements the server
+  does not meet disappear from ``\n`` entirely. Recommended layout: one query
+  per file, named after it.
 * New ``log_truncate_on_rotation`` config option (default ``off``), like
   PostgreSQL's setting of the same name. With ``day-of-week`` /
   ``day-of-month`` log rotation, when a slot's filename comes around again

@@ -321,6 +321,16 @@ output.null = "#808080"
 #       activity.conf    # queries for monitoring activity
 #       vacuum.conf      # queries for vacuum/maintenance
 #
+# Files can carry a server-version suffix, like psql's ~/.psqlrc-17 /
+# ~/.psqlrc-9.6: the queries in "activity-17.conf" are only offered when the
+# connected server is version 17 or newer, and among variants of the same
+# query name the highest version <= the server's wins (a file without suffix
+# is the always-available fallback). Recommended: one query per file, named
+# after it:
+#       activity.conf     # fallback, any version
+#       activity-10.conf  # servers 10..16 (given the -17 file below)
+#       activity-17.conf  # servers 17+
+#
 # Queries here take precedence over those in includedir.
 # Default includedir is 'namedqueries.d' in the config directory.
 [named queries]

@@ -1,7 +1,7 @@
 from zoneinfo import ZoneInfoNotFoundError
 from configobj import ConfigObj, ParseError
 from pgspecial.namedqueries import NamedQueries
-from .namedqueries import ExtendedNamedQueries
+from .namedqueries import ExtendedNamedQueries, server_major_version
 from .dsnaliases import DsnAliases
 from .config import skip_initial_comment
 
@@ -637,8 +637,9 @@ class PGCli:
         # Re-read config file to catch any changes
         self.config_writer = load_config(get_config_filename(self.pgclirc_file))
 
-        # Re-create NamedQueries instance
+        # Re-create NamedQueries instance and re-apply the server-version filter
         NamedQueries.instance = ExtendedNamedQueries.from_config(self.config_writer)
+        self._filter_named_queries_for_server()
 
         # Count loaded queries
         count = len(NamedQueries.instance.list())
@@ -1186,6 +1187,17 @@ class PGCli:
             pgexecute.auto_commit = False
             if pgexecute.conn is not None:
                 pgexecute.conn.autocommit = False
+
+        self._filter_named_queries_for_server()
+
+    def _filter_named_queries_for_server(self):
+        """Offer only the namedqueries.d variants the connected server supports
+        (psql .psqlrc-NN style; see ExtendedNamedQueries)."""
+        try:
+            if hasattr(NamedQueries.instance, "set_server_version") and self.pgexecute is not None and self.pgexecute.conn is not None:
+                NamedQueries.instance.set_server_version(server_major_version(self.pgexecute.conn.info.server_version))
+        except Exception as e:
+            self.logger.warning("Could not filter named queries by server version: %s", e)
 
     @staticmethod
     def _external_editor():

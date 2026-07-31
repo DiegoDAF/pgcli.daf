@@ -313,3 +313,92 @@ class TestExtendedNamedQueries:
         nq = ExtendedNamedQueries.from_config(config)
 
         assert nq.get("abs_query") == "SELECT 1"
+
+
+class TestVersionedNamedQueries:
+    """Version-suffixed namedqueries.d files (.psqlrc-NN style)."""
+
+    def setup_method(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.config_file = os.path.join(self.temp_dir, "config")
+        self.include_dir = os.path.join(self.temp_dir, "namedqueries.d")
+
+    def teardown_method(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _create_config(self, queries=None):
+        config = ConfigObj(self.config_file, encoding="utf-8")
+        if queries:
+            config["named queries"] = queries
+        config.write()
+        return ConfigObj(self.config_file, encoding="utf-8")
+
+    def _create_include_file(self, filename, queries):
+        os.makedirs(self.include_dir, exist_ok=True)
+        filepath = os.path.join(self.include_dir, filename)
+        config = ConfigObj(filepath, encoding="utf-8")
+        config["named queries"] = queries
+        config.write()
+
+    def _nq_with_variants(self):
+        self._create_include_file("activity.conf", {"activity": "V0"})
+        self._create_include_file("activity-10.conf", {"activity": "V10"})
+        self._create_include_file("activity-17.conf", {"activity": "V17"})
+        return ExtendedNamedQueries.from_config(self._create_config())
+
+    def test_version_from_filename(self):
+        parse = ExtendedNamedQueries._version_from_filename
+        assert parse("activity.conf") == 0.0
+        assert parse("activity-17.conf") == 17.0
+        assert parse("activity-9.6.conf") == 9.6
+        assert parse("my-query.conf") == 0.0  # non-numeric suffix is part of the name
+
+    def test_best_fit_per_server_version(self):
+        nq = self._nq_with_variants()
+        assert nq.get("activity") == "V17"  # not connected yet: highest variant
+        nq.set_server_version(17)
+        assert nq.get("activity") == "V17"
+        nq.set_server_version(15)
+        assert nq.get("activity") == "V10"  # best fit <= 15
+        nq.set_server_version(9.6)
+        assert nq.get("activity") == "V0"  # fallback to version-less file
+
+    def test_unsupported_only_variants_hidden(self):
+        self._create_include_file("newstats-17.conf", {"newstats": "SELECT 17"})
+        nq = ExtendedNamedQueries.from_config(self._create_config())
+        nq.set_server_version(15)
+        assert "newstats" not in nq.list()
+        assert nq.get("newstats") is None
+        nq.set_server_version(17)
+        assert nq.get("newstats") == "SELECT 17"
+
+    def test_dotted_pre10_suffix(self):
+        self._create_include_file("walq-9.6.conf", {"walq": "SELECT 96"})
+        nq = ExtendedNamedQueries.from_config(self._create_config())
+        nq.set_server_version(9.4)
+        assert "walq" not in nq.list()
+        nq.set_server_version(9.6)
+        assert nq.get("walq") == "SELECT 96"
+
+    def test_reload_includes_keeps_filter(self):
+        nq = self._nq_with_variants()
+        nq.set_server_version(15)
+        assert nq.get("activity") == "V10"
+        self._create_include_file("newstats-17.conf", {"newstats": "SELECT 17"})
+        nq.reload_includes()
+        assert nq.get("activity") == "V10"  # filter survived the reload
+        assert "newstats" not in nq.list()  # new file also filtered
+
+    def test_main_config_still_wins(self):
+        self._create_include_file("activity-10.conf", {"activity": "V10"})
+        nq = ExtendedNamedQueries.from_config(self._create_config({"activity": "MAIN"}))
+        nq.set_server_version(17)
+        assert nq.get("activity") == "MAIN"
+
+    def test_server_major_version_helper(self):
+        from pgcli.namedqueries import server_major_version
+
+        assert server_major_version(170004) == 17
+        assert server_major_version(100001) == 10
+        assert server_major_version(90624) == 9.6
+        assert server_major_version(140005) == 14
