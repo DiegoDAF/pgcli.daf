@@ -68,6 +68,16 @@ Upcoming
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
 
+2026-08-03
+===================
+- [x] CONVERSION COMPLETA ~/.psqlrc-9.6..18 -> namedqueries.d versionados (pedido Diego; psqlrc INTACTOS, solo lectura)
+  - 104 \set SQL detectados (111 menos prompts/menu). Resultado: 133 archivos, 120 queries en servers modernos, gating real: 117 en 9.6 / 119 en 12 / 120 en 16+
+  - Variantes creadas: checkpoints-17 y node0-17 (pg_stat_checkpointer), vacuum_current_activity_{full,min}-17, pg_stat_statements_human-13 (total_time->total_exec_time), pg_stat_io-16, index_create_progress-12, partitions-10, y -10 para replication/pg_sessions*/slotDistance/sequences
+  - Stubs de psqlrc ("requiere PG12+", "particionado declarativo no existe en 9.6", select de literal) tratados como AUSENTES -> la query desaparece en servers viejos en vez de mostrar el cartelito
+  - 19 archivos existentes reemplazados por la version psqlrc (mas fresca, regenerada 07-31); 23 identicos se conservaron; 16 nombres solo-pgcli intactos. Todo lo reemplazado en papelera via gio trash
+  - E2E PG18: 122 en \n; checkpoints/pg_stat_io/bloat ejecutan OK
+  - PENDIENTE curado por Diego: quedaron duplicados semanticos con nombre distinto (activity1minute vs activity_1min, slotDistance vs slot_distance, pg_sessions_blocked vs sessions_blocked, etc.) - podar cuando decida con cual quedarse
+
 2026-07-31
 ===================
 - [x] FEATURE namedqueries.d versionados por server, estilo .psqlrc-NN (pedido Diego 2026-07-29; LOCAL commit a0621ec, sin push)
