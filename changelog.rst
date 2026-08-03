@@ -36,6 +36,9 @@ Bug fixes:
   ``user=test2``).
 * Suggest columns, not datatypes, after a column literally named ``type`` in a
   ``SELECT`` list (upstream #1611, cherry-picked).
+* Fix ``TypeError: cannot use a string pattern on a bytes-like object`` when
+  completion metadata comes back as bytes, e.g. with ``SQL_ASCII`` client
+  encoding (upstream #1612, cherry-picked).
 * Suggest columns after ``GROUP BY``, like ``ORDER BY`` already does
   (upstream #1599, cherry-picked).
 
