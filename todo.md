@@ -21,11 +21,15 @@ Upcoming
 - [ ] -f/--file               -> PR #1543 OPEN (style arreglado; 1 flake del test del editor en 3.10, pedirle re-run a j-bennet)
 - [ ] -y/--yes                -> PR #1544 OPEN (CLEAN, refactor de review aplicado)
 - [ ] -t/--tuples-only        -> PR #1545 OPEN (CLEAN, al dia con upstream 2026-07-21)
-- [ ] \ne editar named query  -> PR #1609 OPEN (conflicto por merge de #1546 resuelto 2026-07-24, MERGEABLE de nuevo)
 
 ## MERGED
 - [x] trailing SQL comments   -> #1559 (en upstream 4.5.0)
 - [x] .pgpass + SSH tunnel    -> PR #1546 MERGED 2026-07-24 (d69ecbe en upstream main)! Nuestro fork ya lo tenia; nada que cherry-pickear
+- [x] \ne editar named query  -> PR #1609 MERGED 2026-08-03 (5d5e082)! Fork ya tiene version propia mas rica (namedqueries.d/get_source); nada que cherry-pickear
+
+## CHERRY-PICKS PENDIENTES desde upstream (mergeados 2026-08-03, fixes de Sanjays2402)
+- [ ] #1611 ea6c30d: sugerir columnas tras una columna llamada "type" (fixes #1412) - nos pega (columnas type abundan)
+- [ ] #1612 4beae47: decodificar identifiers bytes en completion metadata (fixes #1405, SQL_ASCII) - edge case
 
 ## BUG DE UPSTREAM que arreglamos nosotros (PR-worthy, aislado en commit 5d60b80)
 - [ ] explain mode (F5) rompe special commands: `if explain_mode / elif pgspecial` en pgexecute.run() -> los meta-comandos nunca se detectan con F5 ON. Fix nuestro en 4.5.7. original/main tiene el bug identico (commit 372da81, 2022). EXCELENTE candidato a PR upstream (self-contained, con tests). Ademas arregla \G en explain mode y el guard de restrict-mode
