@@ -70,6 +70,11 @@ Upcoming
 
 2026-08-03
 ===================
+- [x] CURADO FINAL namedqueries.d: baseline PG12 + nombres psqlrc como canon (decision Diego)
+  - Baseline PG12: fuera los fallbacks 9.6/-10; el contenido valido en 12 pasa a ser el archivo base sin sufijo. Quedan SOLO 6 versionados: pg_stat_statements_human-13, pg_stat_io-16, checkpoints-17, node0-17, vacuum_current_activity_{full,min}-17
+  - Dedupe: ganan los nombres del psqlrc; 13 renombres de enero a papelera (activity_1min->activity1minute, sessions_*->pg_sessions_*, slot_distance->slotDistance, cache_hit_index->cache_hit_cache_index, cache_hit_ratio->cache_hit_ratio_buffers, pg_stat_statements_top->pg_stat_statements_human, idles_5min->activesidles5minutes, actives_5min/activity_5min/activity_full_query/search_path->sp, etc.)
+  - Custom sin contraparte psqlrc que QUEDAN: idle_txn, locks_who_waiting, vacuum_progress, index_create_progress
+  - Estado final: 112 archivos, 107 queries (106 en PG12-15, pg_stat_io suma en 16+). E2E PG18 OK. ~/.psqlrc-* intactos
 - [x] CONVERSION COMPLETA ~/.psqlrc-9.6..18 -> namedqueries.d versionados (pedido Diego; psqlrc INTACTOS, solo lectura)
   - 104 \set SQL detectados (111 menos prompts/menu). Resultado: 133 archivos, 120 queries en servers modernos, gating real: 117 en 9.6 / 119 en 12 / 120 en 16+
   - Variantes creadas: checkpoints-17 y node0-17 (pg_stat_checkpointer), vacuum_current_activity_{full,min}-17, pg_stat_statements_human-13 (total_time->total_exec_time), pg_stat_io-16, index_create_progress-12, partitions-10, y -10 para replication/pg_sessions*/slotDistance/sequences
