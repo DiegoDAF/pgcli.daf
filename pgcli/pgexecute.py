@@ -434,7 +434,30 @@ class PGExecute:
                                 yield result
                         continue
                     except special.CommandNotFound:
-                        pass
+                        # An unrecognized backslash command would be shipped to
+                        # the server as SQL and die with a confusing
+                        # 'syntax error at or near "\"'. Fail it client-side
+                        # with a friendly message instead (psql meta-commands
+                        # like \set / \i / \echo are client features pgcli does
+                        # not implement). Note a missing semicolon glues the
+                        # next statement onto it, so show only the command word.
+                        if sql.startswith("\\"):
+                            cmd_name = sql.split()[0].splitlines()[0]
+                            yield (
+                                None,
+                                None,
+                                None,
+                                f"Unrecognized command: {cmd_name}. psql meta-commands (\\set, \\i, \\echo, ...) "
+                                "are not supported by pgcli. Try \\? for available commands.",
+                                sql,
+                                False,
+                                True,
+                            )
+                            # Honor on_error semantics like a server error would:
+                            # with STOP, nothing after the bad command runs.
+                            if not on_error_resume:
+                                break
+                            continue
 
                 # Not a special command, so execute as normal sql. The EXPLAIN
                 # prefix is applied ONLY here, to real SQL, so special commands

@@ -1852,3 +1852,19 @@ def test_show_query_history_truncates_long_query(tmpdir):
     assert len(shown) == 60
     assert shown.endswith("...")
     assert "\n" not in shown
+
+
+def test_on_error_cli_override(tmpdir):
+    """--on-error overrides the config file's on_error value."""
+    rcfile = str(tmpdir.join("rcfile"))
+    assert PGCli(pgclirc_file=rcfile).on_error == "STOP"  # config default
+    assert PGCli(pgclirc_file=rcfile, on_error="resume").on_error == "RESUME"
+    assert PGCli(pgclirc_file=rcfile, on_error="STOP").on_error == "STOP"
+
+
+def test_cli_on_error_passed_to_pgcli():
+    """--on-error reaches PGCli normalized to upper case."""
+    runner = CliRunner()
+    with patch.object(PGCli, "__init__", autospec=True, return_value=None) as mock_pgcli:
+        runner.invoke(cli, ["--on-error", "resume", "mydb"])
+        assert mock_pgcli.call_args[1]["on_error"] == "RESUME"

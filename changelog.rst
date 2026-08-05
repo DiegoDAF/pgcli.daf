@@ -21,8 +21,19 @@ Features:
   the feature existed, despite the docs claiming it "overwrites weekly".
   Same-day reopens still append; ``date`` and ``none`` modes are unaffected.
 
+Features:
+---------
+* New ``--on-error [STOP|RESUME]`` command line option to override the
+  ``on_error`` config value, choosing whether execution stops or resumes after
+  an error in multi-statement input (handy for ``-f`` migration scripts).
+
 Bug fixes:
 ----------
+* Unrecognized backslash commands now fail client-side with a friendly message
+  ("Unrecognized command: \\set. psql meta-commands are not supported...")
+  instead of being shipped to the server as SQL and dying with a confusing
+  ``syntax error at or near "\"``. The failure honors ``on_error = STOP``, so a
+  psql script run with ``-f`` stops at the first unsupported meta-command.
 * Restore cursor shape behaviour for Emacs mode: ``ModalCursorShapeConfig`` is
   only applied when vi mode is on, so Emacs mode keeps the terminal's own
   cursor shape (upstream #1610, cherry-picked).

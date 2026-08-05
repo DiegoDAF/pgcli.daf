@@ -185,6 +185,7 @@ class PGCli:
         tuples_only=None,
         no_timings=False,
         no_status=False,
+        on_error: Optional[str] = None,
     ):
         self.force_passwd_prompt = force_passwd_prompt
         self.never_passwd_prompt = never_passwd_prompt
@@ -279,7 +280,8 @@ class PGCli:
         self.null_string = c["main"].get("null_string", "<null>")
         self.prompt_format = prompt if prompt is not None else c["main"].get("prompt", self.default_prompt)
         self.prompt_dsn_format = prompt_dsn
-        self.on_error = c["main"]["on_error"].upper()
+        # --on-error on the command line overrides the config file value.
+        self.on_error = (on_error or c["main"]["on_error"]).upper()
         self.decimal_format = c["data_formats"]["decimal"]
         self.float_format = c["data_formats"]["float"]
         self.column_date_formats = c["column_date_formats"]
@@ -1970,6 +1972,13 @@ class PGCli:
     help="Send query results to file (or |pipe).",
 )
 @click.option(
+    "--on-error",
+    "on_error",
+    type=click.Choice(["STOP", "RESUME"], case_sensitive=False),
+    default=None,
+    help="Whether to STOP or RESUME after an error in multi-statement input. Overrides the on_error config value.",
+)
+@click.option(
     "-W",
     "--password",
     "prompt_passwd",
@@ -2087,6 +2096,7 @@ def cli(
     no_timings: bool,
     no_status: bool,
     output_file: str,
+    on_error: Optional[str],
 ):
     if version:
         print("Version:", __version__)
@@ -2152,6 +2162,7 @@ def cli(
         tuples_only=tuples_only,
         no_timings=no_timings,
         no_status=no_status,
+        on_error=on_error,
     )
 
     # Assign command and file options

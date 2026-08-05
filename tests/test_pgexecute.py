@@ -843,3 +843,30 @@ def test_virtual_database(executor):
     with patch.object(executor, "conn", virtual_connection):
         result = run(executor, "select 1")
         assert "Command not supported" in result
+
+
+@dbtest
+def test_unknown_backslash_command_friendly_error(executor, pgspecial):
+    """An unrecognized backslash command fails client-side with a friendly
+    message instead of being shipped to the server as SQL."""
+    with patch.object(executor, "execute_normal_sql") as normal_sql:
+        result = list(executor.run("\\set ON_ERROR_STOP on", pgspecial=pgspecial))
+
+    normal_sql.assert_not_called()  # never sent to the server
+    title, rows, headers, status, sql, success, is_special = result[0]
+    assert success is False
+    assert is_special is True
+    assert "Unrecognized command: \\set" in status
+    assert "not supported by pgcli" in status
+
+
+@dbtest
+def test_unknown_backslash_command_stops_multi_statement(executor, pgspecial):
+    """A psql meta-command glued to the next statement (no semicolon) fails as
+    one unit, and with on_error_resume=False nothing else runs."""
+    with patch.object(executor, "execute_normal_sql") as normal_sql:
+        result = list(executor.run("\\set FOO bar\n\nbegin; select 1;", pgspecial=pgspecial, on_error_resume=False))
+
+    normal_sql.assert_not_called()
+    assert len(result) == 1  # the select never ran
+    assert "Unrecognized command: \\set" in result[0][3]

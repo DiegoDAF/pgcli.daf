@@ -205,6 +205,7 @@ vi = False
 # When one of multiple SQL statements causes an error, choose to either
 # continue executing the remaining statements, or stopping
 # Possible values "STOP" or "RESUME"
+# Can be overridden per invocation with the --on-error command line option.
 on_error = STOP
 
 # Set threshold for row limit. Use 0 to disable limiting.
