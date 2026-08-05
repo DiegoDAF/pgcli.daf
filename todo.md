@@ -72,6 +72,12 @@ Upcoming
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
 
+2026-08-05
+===================
+- [x] Error amigable para \comandos desconocidos (pedido Diego tras el caso \set ON_ERROR_STOP en -f): en vez de mandar el meta-comando al server como SQL (syntax error confuso), pgcli falla client-side con mensaje claro. Respeta on_error=STOP (el primer intento con `continue` seguia ejecutando el resto del archivo; lo cazo el test). Commit 2d15a04, LOCAL sin push
+- [x] Flag --on-error [STOP|RESUME]: override por invocacion del on_error de la config (util para -f). Mismo commit
+  - 4 tests nuevos; suite 3129 con DB; instalado en nb. Smoke: archivo con \set -> error amigable y para; con --on-error RESUME sigue
+
 2026-08-03
 ===================
 - [x] CURADO FINAL namedqueries.d: baseline PG12 + nombres psqlrc como canon (decision Diego)
