@@ -72,6 +72,12 @@ Upcoming
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
 
+2026-08-07
+===================
+- [x] FIX -o/--output escribia la QUERY en el archivo de salida (reporte Diego: -t -c "select 'vacuum...'" -o vac.sql dejaba el archivo sucio). Regla nueva alineada a psql: el transcript de la query queda SOLO en \o interactivo; con --tuples-only o en modo -c/-f van solo las filas. Commit 49d7947, LOCAL sin push. 3 tests (2 fallan sin el fix); suite 3132 con DB; instalado en nb
+  - Nota para Diego: su archivo ademas estaba VACIO de filas porque el filtro era pg_total_relation_size < 3000 (BYTES, nada mide eso; una pagina ya son 8192). Seguramente queria < 3 GB
+  - Candidato a PR upstream (el transcript en -o es de ellos)
+
 2026-08-05
 ===================
 - [x] Error amigable para \comandos desconocidos (pedido Diego tras el caso \set ON_ERROR_STOP en -f): en vez de mandar el meta-comando al server como SQL (syntax error confuso), pgcli falla client-side con mensaje claro. Respeta on_error=STOP (el primer intento con `continue` seguia ejecutando el resto del archivo; lo cazo el test). Commit 2d15a04, LOCAL sin push
