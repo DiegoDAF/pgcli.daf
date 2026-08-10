@@ -14,7 +14,7 @@ Upcoming
 #      Bonus: adios al infierno de una-linea para queries largas
 #   c) strip de comentarios en el momento de la conversion (lo que hice a mano hoy)
 # PROPUESTA: (b) como fix de fondo + (a) como salvaguarda en \ns/\ne al guardar
-- [ ] Arreglar manejo de `--` en named queries aplanadas (ver bloque de arriba)
+- [x] HECHO 2026-08-10: multilinea soportado punta a punta (ConfigObj triple-quote, doc en pgclirc) + save() de \ns/\ne convierte `-- x` a `/* x */` token-aware (sqlparse; literales intactos). 5 tests
 
 ### FORK: features inspiradas en pgadmin4 (analisis 2026-07-15)
 # Lista completa (47) + detalle en notas LOCALES (no en este repo publico):
