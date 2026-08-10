@@ -402,3 +402,58 @@ class TestVersionedNamedQueries:
         assert server_major_version(100001) == 10
         assert server_major_version(90624) == 9.6
         assert server_major_version(140005) == 14
+
+
+class TestMultilineAndCommentSafety:
+    """Multiline namedqueries.d values + save-time defusal of -- comments."""
+
+    def setup_method(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.config_file = os.path.join(self.temp_dir, "config")
+        self.include_dir = os.path.join(self.temp_dir, "namedqueries.d")
+
+    def teardown_method(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _config(self):
+        config = ConfigObj(self.config_file, encoding="utf-8")
+        config.write()
+        return ConfigObj(self.config_file, encoding="utf-8")
+
+    def test_multiline_include_file_preserves_newlines(self):
+        os.makedirs(self.include_dir, exist_ok=True)
+        sql = "select 1 -- first line note\n  + 2 as total\nfrom generate_series(1, 3)"
+        cfg = ConfigObj(os.path.join(self.include_dir, "multi.conf"), encoding="utf-8")
+        cfg["multi"] = sql
+        cfg.write()
+
+        nq = ExtendedNamedQueries.from_config(self._config())
+        got = nq.get("multi")
+        assert got == sql  # newlines intact
+        assert "\n" in got  # the -- comment still ends at ITS line
+
+    def test_save_keeps_multiline(self):
+        nq = ExtendedNamedQueries.from_config(self._config())
+        nq.save("q", "select 1\nfrom x")
+        reread = ConfigObj(self.config_file, encoding="utf-8")
+        assert reread["named queries"]["q"] == "select 1\nfrom x"
+
+    def test_save_converts_line_comments_to_block(self):
+        nq = ExtendedNamedQueries.from_config(self._config())
+        nq.save("q", "select 1 -- nota\nfrom x")
+        assert nq.get("q") == "select 1 /* nota */\nfrom x"
+
+    def test_save_leaves_string_literals_alone(self):
+        nq = ExtendedNamedQueries.from_config(self._config())
+        sql = "select 'a--b' as tricky"
+        nq.save("q", sql)
+        assert nq.get("q") == sql
+
+    def test_line_comments_to_block_helper(self):
+        from pgcli.namedqueries import line_comments_to_block
+
+        assert line_comments_to_block("select 1") == "select 1"
+        assert line_comments_to_block("select 1 -- x") == "select 1 /* x */"
+        assert line_comments_to_block("select 1 --") == "select 1 "
+        assert line_comments_to_block("select 1 -- a\n+ 2 -- b\n") == "select 1 /* a */\n+ 2 /* b */\n"
+        assert line_comments_to_block("select '--no'") == "select '--no'"

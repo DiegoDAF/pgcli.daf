@@ -332,6 +332,14 @@ output.null = "#808080"
 #       activity-10.conf  # servers 10..16 (given the -17 file below)
 #       activity-17.conf  # servers 17+
 #
+# Values can span MULTIPLE LINES using triple quotes, which keeps -- line
+# comments bounded to their own line:
+#       activity = '''select pid, usename -- who
+#       from pg_stat_activity
+#       where state <> 'idle''''
+# When saving with \ns or \ne, -- comments are converted to /* */ so the
+# stored query survives being flattened to a single line.
+#
 # Queries here take precedence over those in includedir.
 # Default includedir is 'namedqueries.d' in the config directory.
 [named queries]

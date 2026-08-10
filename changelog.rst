@@ -29,6 +29,12 @@ Features:
 
 Bug fixes:
 ----------
+* Named queries with embedded ``--`` line comments are no longer silently
+  truncated. Multiline values are fully supported in ``namedqueries.d`` and the
+  main config (ConfigObj triple quotes), keeping ``--`` comments bounded to
+  their own line, and ``\ns``/``\ne`` now convert ``-- x`` line comments to
+  ``/* x */`` block comments at save time (string literals are left alone), so
+  a stored query survives being flattened to a single line.
 * ``-o``/``--output`` no longer writes the query text into the output file when
   ``--tuples-only`` is set or when running in ``-c``/``-f`` mode: only the
   result rows are written, matching psql, so generated ``.sql`` scripts come

@@ -8,10 +8,40 @@ named queries from files in a `namedqueries.d` directory.
 import os
 import re
 import logging
+import sqlparse
+from sqlparse import tokens as sqlparse_tokens
 from configobj import ConfigObj
 from pgspecial.namedqueries import NamedQueries
 
 logger = logging.getLogger(__name__)
+
+
+def line_comments_to_block(sql):
+    """Convert ``-- x`` line comments into ``/* x */`` block comments.
+
+    A ``--`` comment is only bounded by its newline; if the query is ever
+    collapsed to one line (single-line ``name = "sql"`` values, copy/paste,
+    exports), everything after it silently becomes part of the comment. Block
+    comments survive flattening, so queries are defused at save time.
+
+    Token-aware via sqlparse: ``--`` inside string literals is left alone.
+    """
+    if "--" not in sql:
+        return sql
+    parsed = sqlparse.parse(sql)
+    if not parsed:
+        return sql
+    out = []
+    for tok in parsed[0].flatten():
+        if tok.ttype in sqlparse_tokens.Comment.Single:
+            body = tok.value.rstrip("\r\n")
+            trailing = tok.value[len(body) :]
+            body = body[2:].strip() if body.startswith("--") else body.strip()
+            out.append(f"/* {body} */{trailing}" if body else trailing)
+        else:
+            out.append(tok.value)
+    return "".join(out)
+
 
 # Trailing "-<version>" in a filename stem marks a server-version variant,
 # psql-style (.psqlrc-17, .psqlrc-9.6): "activity-17.conf", "activity-9.6.conf".
@@ -303,6 +333,16 @@ class ExtendedNamedQueries(NamedQueries):
         if name in self._included_queries:
             return "include"
         return None
+
+    def save(self, name, query):
+        """Save a named query (\\ns and \\ne go through here).
+
+        Multiline queries are stored as-is (ConfigObj writes them
+        triple-quoted), and ``--`` line comments are converted to ``/* */``
+        block comments first, so the stored query stays intact even if it is
+        later flattened to a single line.
+        """
+        super().save(name, line_comments_to_block(query))
 
     def reload_includes(self):
         """Reload named queries from the include directory.
