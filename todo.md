@@ -72,6 +72,11 @@ Upcoming
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
 
+2026-08-10
+===================
+- [x] row_limit = 0 en la config personal de Diego (chau "The result was limited to 1000 rows" para el; el default del producto queda 1000, cero cambio de codigo)
+- [x] 4 named queries wraparround_* nuevas (pedido Diego): wraparround_db (edad xid por database), wraparround_top10/top1000 (relaciones por edad de relfrozenxid, limit 10/1000), wraparround_top10_gexec (generador de vacuum freeze). En namedqueries.d (un archivo c/u, sin sufijo = todas las versiones) Y como \set en ~/.psqlrc + los 10 ~/.psqlrc-XX (backups .bak-<ts> hechos). OJO al aplanar: se saco el comentario -- embebido de la query original (comentaba el resto de la linea). Verificado: \n en pgcli + :var en psql + gexec con -t -o genera .sql limpio
+
 2026-08-07
 ===================
 - [x] FIX -o/--output escribia la QUERY en el archivo de salida (reporte Diego: -t -c "select 'vacuum...'" -o vac.sql dejaba el archivo sucio). Regla nueva alineada a psql: el transcript de la query queda SOLO en \o interactivo; con --tuples-only o en modo -c/-f van solo las filas. Commit 49d7947, LOCAL sin push. 3 tests (2 fallan sin el fix); suite 3132 con DB; instalado en nb
