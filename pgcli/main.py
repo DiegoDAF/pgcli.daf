@@ -1304,7 +1304,13 @@ class PGCli:
                                 and query.successful
                                 and self._is_named_query_execution(text)
                             )
-                            if not should_hide:
+                            # psql writes ONLY results to the output file. Keep
+                            # the query-text transcript solely for interactive
+                            # \o sessions: with --tuples-only or in -c/-f mode
+                            # the file must stay clean (e.g. generated .sql
+                            # scripts), so the query text is omitted.
+                            in_command_or_file_mode = bool(getattr(self, "commands", None)) or bool(getattr(self, "input_files", None))
+                            if not should_hide and not self.tuples_only and not in_command_or_file_mode:
                                 click.echo(text, file=f)
                             click.echo("\n".join(output), file=f)
                             click.echo("", file=f)  # extra newline

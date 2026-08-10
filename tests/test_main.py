@@ -1868,3 +1868,46 @@ def test_cli_on_error_passed_to_pgcli():
     with patch.object(PGCli, "__init__", autospec=True, return_value=None) as mock_pgcli:
         runner.invoke(cli, ["--on-error", "resume", "mydb"])
         assert mock_pgcli.call_args[1]["on_error"] == "RESUME"
+
+
+def _exec_with_output_file(tmpdir, tuples_only=False, commands=None):
+    """Drive execute_command with -o set and return the file contents."""
+    rcfile = str(tmpdir.join("rcfile"))
+    cli_obj = PGCli(pgclirc_file=rcfile)
+    cli_obj.tuples_only = tuples_only
+    if commands is not None:
+        cli_obj.commands = commands
+    outfile = str(tmpdir.join("out.sql"))
+    cli_obj.output_file = outfile
+    cli_obj.pgexecute = mock.Mock()
+
+    def _rows():
+        yield (None, [("vacuum (freeze, verbose) public.t1;",)], ["?column?"], "SELECT 1", "select 1", True, False)
+
+    cli_obj.pgexecute.run.return_value = _rows()
+    with mock.patch.object(cli_obj, "_should_limit_output", return_value=False):
+        cli_obj.execute_command("select 'the query text'")
+    with open(outfile) as f:
+        return f.read()
+
+
+def test_output_file_tuples_only_omits_query_text(tmpdir):
+    """With --tuples-only, -o writes ONLY the rows (a generated .sql must not
+    start with the SELECT that produced it)."""
+    content = _exec_with_output_file(tmpdir, tuples_only=True)
+    assert "the query text" not in content
+    assert "vacuum (freeze, verbose) public.t1;" in content
+
+
+def test_output_file_command_mode_omits_query_text(tmpdir):
+    """In -c/-f mode, -o writes only results, matching psql -c ... -o file."""
+    content = _exec_with_output_file(tmpdir, commands=["select 1"])
+    assert "the query text" not in content
+    assert "vacuum (freeze, verbose) public.t1;" in content
+
+
+def test_output_file_interactive_keeps_transcript(tmpdir):
+    """Interactive \\o keeps the query-text transcript (upstream behavior)."""
+    content = _exec_with_output_file(tmpdir)
+    assert "the query text" in content
+    assert "vacuum (freeze, verbose) public.t1;" in content

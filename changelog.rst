@@ -29,6 +29,11 @@ Features:
 
 Bug fixes:
 ----------
+* ``-o``/``--output`` no longer writes the query text into the output file when
+  ``--tuples-only`` is set or when running in ``-c``/``-f`` mode: only the
+  result rows are written, matching psql, so generated ``.sql`` scripts come
+  out clean and executable. Interactive ``\o`` sessions keep the query-text
+  transcript (upstream behavior).
 * Unrecognized backslash commands now fail client-side with a friendly message
   ("Unrecognized command: \\set. psql meta-commands are not supported...")
   instead of being shipped to the server as SQL and dying with a confusing
