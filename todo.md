@@ -1,6 +1,21 @@
 Upcoming
 ==============
 
+### BUG anotado 2026-08-10: `--` en named queries de una linea comenta el RESTO de la query
+# Sintoma: al aplanar una query multilinea a `name = "sql"` (formato namedqueries.d),
+# un comentario `-- ...` embebido deja de comentar "su linea" y comenta todo lo que
+# sigue. Y no es solo al convertir: pgexecute.run() hace sqlparse.format(strip_comments)
+# sobre el statement ya aplanado, asi que cualquier named query de una linea con `--`
+# adentro pierde el resto al EJECUTARSE.
+# Opciones de fix (evaluar al implementar):
+#   a) al aplanar/guardar: convertir `-- x` a `/* x */` (seguro, preserva el comentario)
+#   b) soportar valores MULTILINEA en namedqueries.d (ConfigObj banca triple-quote):
+#      la query conserva sus saltos de linea y el `--` vuelve a comentar solo su linea.
+#      Bonus: adios al infierno de una-linea para queries largas
+#   c) strip de comentarios en el momento de la conversion (lo que hice a mano hoy)
+# PROPUESTA: (b) como fix de fondo + (a) como salvaguarda en \ns/\ne al guardar
+- [ ] Arreglar manejo de `--` en named queries aplanadas (ver bloque de arriba)
+
 ### FORK: features inspiradas en pgadmin4 (analisis 2026-07-15)
 # Lista completa (47) + detalle en notas LOCALES (no en este repo publico):
 #   ../pgadmin-feature-ideas.md  (los 47, con valor/portabilidad/esfuerzo)
