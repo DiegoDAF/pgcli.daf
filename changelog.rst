@@ -64,6 +64,14 @@ Bug fixes:
 * Suggest columns after ``GROUP BY``, like ``ORDER BY`` already does
   (upstream #1599, cherry-picked).
 
+Internal:
+---------
+* De-flake the behave editor scenarios: the pexpect ``expect_exact`` timeouts in
+  ``tests/features/steps/iocommands.py`` (2s/1s/5s) intermittently expired on
+  slow CI runners ("edit sql in file with external editor" errored on 3.10 in
+  both upstream's CI and ours). All bumped to 10s; passing runs are unaffected
+  since pexpect returns as soon as the expected text appears.
+
 4.5.7 (2026-07-21) - upstream: 4.5.0
 =====================================
 
