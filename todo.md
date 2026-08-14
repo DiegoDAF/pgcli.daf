@@ -42,6 +42,14 @@ Upcoming
 - [x] .pgpass + SSH tunnel    -> PR #1546 MERGED 2026-07-24 (d69ecbe en upstream main)! Nuestro fork ya lo tenia; nada que cherry-pickear
 - [x] \ne editar named query  -> PR #1609 MERGED 2026-08-03 (5d5e082)! Fork ya tiene version propia mas rica (namedqueries.d/get_source); nada que cherry-pickear
 
+## EN OBSERVACION: PR #1613 (dcavalcante, ABIERTO 2026-08-12) - cherry-pick cuando mergee
+- [ ] "Add filesystem meta-commands and path completion" (+150/-7): agrega \cd y \ls, y extiende
+      el path completion (hoy SOLO existe para \i) a \e, \i, \log-file, \ls, \o.
+      UTIL para nosotros: completar rutas en \o y \e es lo que mas usamos. \cd/\ls es de yapa.
+      NO pickear todavia: esta sin mergear, es de un contribuidor nuevo, el CI de builds ni corrio
+      (codex-review fail; primer PR necesita aprobacion de workflow) y cambia la firma del
+      namedtuple Path (Path(only_directories=False)), asi que puede moverse en el review
+
 ## CHERRY-PICKS desde upstream: HECHOS 2026-08-03 (f0b0733 + d195baa, pusheados)
 - [x] #1611: sugerir columnas tras una columna llamada "type" (fixes #1412)
 - [x] #1612: decodificar identifiers bytes en completion metadata (fixes #1405)
