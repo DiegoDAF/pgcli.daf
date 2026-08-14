@@ -87,6 +87,13 @@ Upcoming
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
 
+2026-08-11
+===================
+- [x] De-flake behave: timeouts de pexpect en iocommands.py (2s/1s/5s -> 10s). El escenario del editor externo erroraba intermitente en runners lentos (upstream #1543/#1544/#1609 y nuestro propio CI en cee716d). Commit 1c4c4c8, CI del fork verde de nuevo. Mismo parche ofrecido a j-bennet en el hilo de #1543
+- [x] FIX -l/--ping descartaban el connection string (reporte Diego): cli() reemplazaba el argumento posicional por "postgres" siempre que se pasara --list/--ping, tirando la URI/conninfo entera (host, user, port, sslmode) y cayendo a socket local con el usuario del SO. Ahora solo se descarta un nombre de base pelado; los connection strings pasan intactos. Sub-caso: si el connstring no nombra base, se inyecta "postgres" para el listado (como psql) en vez del default de libpq (nombre del usuario del SO). Commit c23353a, 8 tests (5 fallan sin el fix), suite 3145 con DB, instalado en nb
+  - Nota: sus pruebas 1 y 2 fallaban por OTRA cosa (sin sslrootcert en la forma -h/-U, y en la 2 uso sintaxis de query URL `&` en vez de conninfo con ESPACIOS). Con el fix, `pgcli -h <host> -U <user> -l "sslmode=verify-ca sslrootcert=/path"` ya funciona
+  - Candidato a PR upstream (el clobber es de ellos)
+
 2026-08-10
 ===================
 - [x] row_limit = 0 en la config personal de Diego (chau "The result was limited to 1000 rows" para el; el default del producto queda 1000, cero cambio de codigo)
