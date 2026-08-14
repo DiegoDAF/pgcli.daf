@@ -2192,8 +2192,13 @@ def cli(
         explicit_dbname = ""
     elif os.getenv("PGSERVICE") is not None:
         service = os.getenv("PGSERVICE")
-    # because option --ping, --list or -l are not supposed to have a db name
-    if list_databases or ping_database:
+    # because option --ping, --list or -l are not supposed to have a db name.
+    # A CONNECTION STRING is not a db name though: a URI or a key=value conninfo
+    # carries the whole connection (host, user, port, sslmode, ...), so replacing
+    # it with "postgres" would throw all of that away and fall back to a local
+    # socket connection as the OS user. Only a plain db name is discarded here.
+    is_conn_string = "://" in database or ("=" in database and service is None)
+    if (list_databases or ping_database) and not is_conn_string:
         database = "postgres"
 
     # psql/libpq precedence: for a --dsn / URI connection, only connection
@@ -2213,6 +2218,18 @@ def cli(
     ov_port = str(port) if _from_cmdline("port") else ""
     ov_user = user if _from_cmdline("username_opt", "username") else ""
     ov_dbname = explicit_dbname if _from_cmdline("dbname_opt", "dbname") else ""
+
+    # --list/--ping still need SOME database to connect to. When the connection
+    # string does not name one, libpq would fall back to the OS user name (which
+    # is rarely a real database), so use "postgres" like psql does. A connection
+    # string that names its own database keeps it.
+    list_fallback_dbname = ""
+    if (list_databases or ping_database) and is_conn_string:
+        try:
+            if not conninfo_to_dict(database).get("dbname"):
+                list_fallback_dbname = "postgres"
+        except Exception:
+            pass  # invalid conninfo: let the connection attempt report it
 
     cfg = load_config(pgclirc, config_full_path)
     if dsn != "":
@@ -2236,7 +2253,7 @@ def cli(
         pgcli.dsn_alias = dsn
         pgcli.connect_uri(dsn_config, user=ov_user, host=ov_host, port=ov_port, dbname=ov_dbname)
     elif "://" in database:
-        pgcli.connect_uri(database, user=ov_user, host=ov_host, port=ov_port)
+        pgcli.connect_uri(database, user=ov_user, host=ov_host, port=ov_port, dbname=list_fallback_dbname)
     elif "=" in database and service is None:
         # key=value conninfo strings go through connect_uri too: it bakes the
         # explicit CLI overrides into the connstring (otherwise -U/-h/-p are
@@ -2244,7 +2261,7 @@ def cli(
         # components as kwargs, so the password prompt / keyring / .pgpass use
         # the connstring's user instead of the OS login name. No dbname
         # override here: the connstring itself IS the -d / positional value.
-        pgcli.connect_uri(database, user=ov_user, host=ov_host, port=ov_port)
+        pgcli.connect_uri(database, user=ov_user, host=ov_host, port=ov_port, dbname=list_fallback_dbname)
     elif service is not None:
         pgcli.connect_service(service, user)
     else:

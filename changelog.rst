@@ -29,6 +29,14 @@ Features:
 
 Bug fixes:
 ----------
+* ``-l``/``--list`` and ``--ping`` no longer discard the connection string. The
+  positional argument was unconditionally replaced with ``postgres`` ("these
+  options do not take a db name"), which also threw away a connection URI or
+  ``key=value`` conninfo -- host, user, port, ``sslmode``, everything -- and
+  silently fell back to a local socket connection as the OS user. Only a plain
+  database name is discarded now; a connection string is preserved, and if it
+  does not name a database, ``postgres`` is used for the listing (like psql)
+  instead of libpq's default of the OS user name.
 * Named queries with embedded ``--`` line comments are no longer silently
   truncated. Multiline values are fully supported in ``namedqueries.d`` and the
   main config (ConfigObj triple quotes), keeping ``--`` comments bounded to

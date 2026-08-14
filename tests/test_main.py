@@ -1215,7 +1215,7 @@ def test_cli_kv_connstring_forwards_overrides(tmpdir):
     assert args[0] == kv  # the connstring is passed through as-is
     assert kwargs["user"] == "userb"  # explicit -U forwarded
     assert kwargs["port"] == ""  # click default (5432) NOT forwarded
-    assert "dbname" not in kwargs  # the connstring itself is the -d value
+    assert kwargs.get("dbname", "") == ""  # no db override: the connstring itself is the -d value
 
 
 def test_cli_kv_connstring_no_flags_no_overrides(tmpdir):
@@ -1911,3 +1911,85 @@ def test_output_file_interactive_keeps_transcript(tmpdir):
     content = _exec_with_output_file(tmpdir)
     assert "the query text" in content
     assert "vacuum (freeze, verbose) public.t1;" in content
+
+
+def _cli_conn_target(argv, tmpdir):
+    """Run cli() with argv and report which connect_* path it took."""
+    rc = tmpdir.join("rcfile")
+    rc.write("[main]\n")
+    runner = CliRunner()
+    with (
+        patch.object(PGCli, "connect_uri", side_effect=RuntimeError("stop")) as mock_uri,
+        patch.object(PGCli, "connect", side_effect=RuntimeError("stop")) as mock_plain,
+    ):
+        runner.invoke(cli, argv + ["--pgclirc", str(rc)])
+    if mock_uri.called:
+        return "uri", mock_uri.call_args
+    if mock_plain.called:
+        return "plain", mock_plain.call_args
+    return "none", None
+
+
+def test_list_databases_keeps_uri(tmpdir):
+    """-l must not discard a connection URI: doing so used to fall back to a
+    local socket connection as the OS user."""
+    uri = "postgresql://someuser@somehost:6000/somedb"
+    path, call = _cli_conn_target([uri, "-l"], tmpdir)
+    assert path == "uri"
+    assert call.args[0] == uri
+
+
+def test_list_databases_keeps_kv_conninfo(tmpdir):
+    """Same for a key=value conninfo string (which carries sslmode etc)."""
+    kv = "host=somehost port=6000 user=someuser sslmode=verify-ca"
+    path, call = _cli_conn_target([kv, "-l"], tmpdir)
+    assert path == "uri"
+    assert call.args[0] == kv
+
+
+def test_ping_keeps_uri(tmpdir):
+    """--ping has the same connection-string handling as -l."""
+    uri = "postgresql://someuser@somehost:6000/somedb"
+    path, call = _cli_conn_target([uri, "--ping"], tmpdir)
+    assert path == "uri"
+    assert call.args[0] == uri
+
+
+def test_list_databases_without_conn_string_uses_postgres(tmpdir):
+    """Without a connection string, -l still connects to the postgres db."""
+    path, call = _cli_conn_target(["-h", "somehost", "-U", "someuser", "-l"], tmpdir)
+    assert path == "plain"
+    assert call.args[0] == "postgres"  # database
+
+
+def test_list_databases_discards_plain_dbname(tmpdir):
+    """A plain db name is still discarded by -l (unchanged behavior)."""
+    path, call = _cli_conn_target(["mydb", "-l"], tmpdir)
+    assert path == "plain"
+    assert call.args[0] == "postgres"
+
+
+def test_list_databases_conn_string_without_dbname_falls_back(tmpdir):
+    """A connection string with no database of its own gets "postgres" for -l:
+    libpq would otherwise default to the OS user name, which rarely exists."""
+    kv = "host=somehost user=someuser sslmode=verify-ca"
+    path, call = _cli_conn_target([kv, "-l"], tmpdir)
+    assert path == "uri"
+    assert call.args[0] == kv  # connection string preserved
+    assert call.kwargs["dbname"] == "postgres"  # only the missing db is filled in
+
+
+def test_list_databases_conn_string_keeps_its_own_dbname(tmpdir):
+    """A connection string that names a database keeps it under -l."""
+    uri = "postgresql://someuser@somehost:6000/somedb"
+    path, call = _cli_conn_target([uri, "-l"], tmpdir)
+    assert path == "uri"
+    assert call.kwargs["dbname"] == ""  # no override
+
+
+def test_conn_string_without_list_gets_no_dbname_override(tmpdir):
+    """Outside -l/--ping the fallback must not kick in."""
+    kv = "host=somehost user=someuser"
+    path, call = _cli_conn_target([kv], tmpdir)
+    assert path == "uri"
+    assert call.kwargs["dbname"] == ""
