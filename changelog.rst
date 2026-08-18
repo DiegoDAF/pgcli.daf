@@ -29,6 +29,14 @@ Features:
 
 Bug fixes:
 ----------
+* Security: allow (and require) a ``sqlparse`` release that is not affected by
+  the 0.5.x advisories. The dependency was capped at ``<0.6``, which prevented
+  installing 0.6.0 -- the release that fixes CVE-2026-59893 (quadratic regex
+  handling of dollar-quoted literals), CVE-2026-71491 (quadratic DoS in
+  ``group_comments``), CVE-2026-54284 (``TokenList.__init__`` materializing
+  O(subtree) values) and CVE-2026-59894 (SQL string escaping in generated
+  snippets). The floor is raised to ``>=0.5.0`` and the cap to ``<0.7``.
+  Verified against 0.6.0: full unit suite and all 61 behave scenarios pass.
 * Detect an unconditional ``UPDATE`` with sqlparse instead of splitting on
   whitespace, so a ``WHERE`` appearing inside a string literal, a comment or a
   subquery no longer suppresses the destructive-statement warning: e.g.
