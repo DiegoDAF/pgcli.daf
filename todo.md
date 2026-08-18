@@ -89,9 +89,8 @@ Upcoming
 # Anotar cada uno en la discussion #1603 a medida que se mandan.
 #
 # TIER 1 - bugs de UPSTREAM, chicos y aislados (mayor chance de merge rapido)
-- [ ] 1. behave de-flake: timeouts de pexpect 2s/1s/5s -> 10s en iocommands.py. SOLO tests, ~10 lineas.
-        Upstream lo tiene (4 ocurrencias de timeout=2). j-bennet ya pregunto por ese fallo en #1543
-        y ya se lo ofrecimos en el comentario del 18/08. EMPEZAR POR ACA
+- [x] 1. behave de-flake -> PR #1619 MANDADO 2026-08-18 (rama upstream/deflake-editor-timeouts).
+        Solo tests + changelog, 2 archivos. Linkeado a la pregunta de j-bennet en #1543
 - [ ] 2. explain mode (F5) rompe los special commands: `if explain_mode / elif pgspecial` en
         pgexecute.run(). ~12 lineas + tests. Bug de upstream desde 2022 (commit 372da81). Alto valor:
         con F5 encendido no se puede ni salir. De yapa arregla \G y el guard de restrict-mode
