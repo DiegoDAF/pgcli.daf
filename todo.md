@@ -84,6 +84,55 @@ Upcoming
 ## BUG DE UPSTREAM que arreglamos nosotros (PR-worthy, aislado en commit 5d60b80)
 - [ ] explain mode (F5) rompe special commands: `if explain_mode / elif pgspecial` en pgexecute.run() -> los meta-comandos nunca se detectan con F5 ON. Fix nuestro en 4.5.7. original/main tiene el bug identico (commit 372da81, 2022). EXCELENTE candidato a PR upstream (self-contained, con tests). Ademas arregla \G en explain mode y el guard de restrict-mode
 
+## PLAN DE PRs A UPSTREAM (armado 2026-08-18, de SIMPLE a COMPLEJO)
+# Regla de siempre: 1 PR = 1 cosa, con tests y changelog, rama limpia desde original/main.
+# Anotar cada uno en la discussion #1603 a medida que se mandan.
+#
+# TIER 1 - bugs de UPSTREAM, chicos y aislados (mayor chance de merge rapido)
+- [ ] 1. behave de-flake: timeouts de pexpect 2s/1s/5s -> 10s en iocommands.py. SOLO tests, ~10 lineas.
+        Upstream lo tiene (4 ocurrencias de timeout=2). j-bennet ya pregunto por ese fallo en #1543
+        y ya se lo ofrecimos en el comentario del 18/08. EMPEZAR POR ACA
+- [ ] 2. explain mode (F5) rompe los special commands: `if explain_mode / elif pgspecial` en
+        pgexecute.run(). ~12 lineas + tests. Bug de upstream desde 2022 (commit 372da81). Alto valor:
+        con F5 encendido no se puede ni salir. De yapa arregla \G y el guard de restrict-mode
+- [ ] 3. -l/--ping descartan el connection string: `if list_databases or ping_database: database =
+        "postgres"` pisa la URI/conninfo entera. ~6 lineas + tests. Confirmado en upstream (main.py
+        ~1638). Mandar solo la guarda `is_conn_string`; el fallback de dbname necesita que connect_uri
+        acepte dbname (que es nuestro), asi que va aparte o simplificado
+- [ ] 4. error amigable para \comandos desconocidos (hoy se mandan al server y vuelve
+        'syntax error at or near "\"'). ~15 lineas + tests
+#
+# TIER 2 - features chicas y autocontenidas
+- [ ] 5. --no-timings / --no-status
+- [ ] 6. SET ROLE <role> autocomplete
+- [ ] 7. --on-error [STOP|RESUME] (util sobre todo con -f, pero se sostiene solo)
+- [ ] 8. SET <param> autocomplete desde pg_settings vivo (core de pgcli, buena aceptacion esperable)
+#
+# TIER 3 - features medianas
+- [ ] 9. streaming NOTICE output (VACUUM/ANALYZE VERBOSE linea por linea)
+- [ ] 10. -o/--output
+- [ ] 11. \restrict / \unrestrict (mitigacion CVE-2025-8714)
+- [ ] 12. paste_mode + F6
+- [ ] 13. stream_results
+#
+# TIER 4 - grandes, hay que partirlos
+- [ ] 14. namedqueries.d/ + \nr
+- [ ] 15. EXPLAIN summary
+- [ ] 16. Query-tool bundle: partir en 3 (\autocommit / \hist / F9 run-selection)
+- [ ] 17. namedqueries versionadas por server (DEPENDE del 14)
+- [ ] 18. pgcli_dump / pgcli_dumpall (el mas grande: necesita SSHTunnelManager reusable)
+#
+# BLOQUEADOS (esperar que mergeen otros PRs nuestros primero)
+- [~] fix de -o con --tuples-only / -c / -f: upstream no tiene -t ni -c/-f todavia (#1542/#1543/#1545)
+- [~] log_truncate_on_rotation: depende de que entre log rotation (que ya rebotaron una vez)
+- [~] multilinea + defusal de `--` en named queries: depende del 14
+#
+# NO UPSTREAMEABLES (decidido con evidencia)
+- [~] fixes de override de DSN (--dsn / URI / key=value): entrelazados con nuestro ruteo dsn=, que
+      upstream no tiene. Ver auditoria 2026-07-21
+- [~] dsn.d/: ademas ahora #1617 esta arreglando #1489 por otro camino; evaluar cuando mergee
+- [~] ssh_tunnel_save_password / paramiko nativo: ver seccion DESCARTADOS
+
 ## GENUINAMENTE PENDIENTE (nuestro, confirmado NO en upstream, SIN PR)
 # Buenos candidatos (self-contained, aditivos, no entrelazados con sshtunnel):
 - [ ] dsn.d/ (DSN aliases drop-in) - ademas resuelve issue abierto #1489. BUEN candidato
