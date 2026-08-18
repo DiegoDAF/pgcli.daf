@@ -42,6 +42,33 @@ Upcoming
 - [x] .pgpass + SSH tunnel    -> PR #1546 MERGED 2026-07-24 (d69ecbe en upstream main)! Nuestro fork ya lo tenia; nada que cherry-pickear
 - [x] \ne editar named query  -> PR #1609 MERGED 2026-08-03 (5d5e082)! Fork ya tiene version propia mas rica (namedqueries.d/get_source); nada que cherry-pickear
 
+## !! ACCION: #1543 esta trabado por una PREGUNTA SIN RESPONDER de j-bennet (25/07)
+- [ ] j-bennet pregunto: "There seems to be a persistent failure in the integration scenario:
+      `Scenario: edit sql in file with external editor`. Does that pass for you locally?"
+      NUNCA se respondio (Diego mando la respuesta anterior, sobre destructive commands, pero no esta).
+      Por eso el PR no se movio. Tenemos LA respuesta: pasa local, es el flake de pexpect timeout=2,
+      y ya lo arreglamos en nuestro fork (commit 1c4c4c8, timeouts -> 10s, verificado verde).
+      Ofrecer ese parche como PR chico aparte
+
+## PRs NUEVOS en upstream (revisado 2026-08-18) - utilidad para nosotros
+- [ ] #1614 (VXNCXNX, ABIERTO): detectar UPDATE incondicional con sqlparse en vez de split por espacios.
+      ARREGLA UN BUG REAL NUESTRO (verificado): `update t set a = 'x where y', b = 2` NO dispara el
+      warning porque el `where` suelto adentro del string literal enga~na al split ingenuo. Es un
+      agujero de seguridad para laburo en prod con destructive_warning. CHERRY-PICK cuando mergee
+      (o implementarlo nosotros si tarda)
+- [ ] #1615 + issue #1618: soporte sqlparse 0.6.x. Tenemos pin `sqlparse >=0.3.0,<0.6` (0.5.5 instalado).
+      No urge, pero hay que seguirlo para cuando salga 0.6
+- [~] #1617 (ChrisJr404, ABIERTO): fix de deteccion de alias_dsn para --list-dsn y -D (root cause de
+      #1489: usan load_config pelado en vez de get_config). REDUNDANTE PARA NOSOTROS: probado en home
+      fresco, nuestro refactor de DsnAliases ya no tiene el sintoma (--list-dsn sale limpio con exit 0,
+      --dsn inexistente da el mensaje correcto). Revisar por si trae algun matiz al mergear
+- [x] #1616 (ChrisJr404) MERGEADO 2026-08-18: honrar PSQL_EDITOR. ERA NUESTRA FEATURE (la tenemos desde
+      v4.5.3 pero nunca la mandamos). Nada que pickear: misma semantica neta (ellos devuelven
+      EDITOR/VISUAL explicito, nosotros None y deja que click caiga solo). Leccion: lo que no
+      mandamos, lo manda otro
+# NOTA: #1616 lo mergeo dbaty, NO j-bennet (j-bennet sin actividad desde el 3/8). Hay revisor nuevo
+# moviendo cosas (49 minutos de abierto a mergeado). Buen momento para destrabar nuestros PRs
+
 ## EN OBSERVACION: PR #1613 (dcavalcante, ABIERTO 2026-08-12) - cherry-pick cuando mergee
 - [ ] "Add filesystem meta-commands and path completion" (+150/-7): agrega \cd y \ls, y extiende
       el path completion (hoy SOLO existe para \i) a \e, \i, \log-file, \ls, \o.
