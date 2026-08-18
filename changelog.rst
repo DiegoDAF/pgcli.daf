@@ -29,6 +29,12 @@ Features:
 
 Bug fixes:
 ----------
+* Detect an unconditional ``UPDATE`` with sqlparse instead of splitting on
+  whitespace, so a ``WHERE`` appearing inside a string literal, a comment or a
+  subquery no longer suppresses the destructive-statement warning: e.g.
+  ``update t set a = 'x where y'`` used to run without warning under
+  ``destructive_warning = unconditional_update`` (upstream #1614,
+  cherry-picked before merge).
 * ``-l``/``--list`` and ``--ping`` no longer discard the connection string. The
   positional argument was unconditionally replaced with ``postgres`` ("these
   options do not take a db name"), which also threw away a connection URI or
