@@ -91,13 +91,12 @@ Upcoming
 # TIER 1 - bugs de UPSTREAM, chicos y aislados (mayor chance de merge rapido)
 - [x] 1. behave de-flake -> PR #1619 MANDADO 2026-08-18 (rama upstream/deflake-editor-timeouts).
         Solo tests + changelog, 2 archivos. Linkeado a la pregunta de j-bennet en #1543
-- [ ] 2. explain mode (F5) rompe los special commands: `if explain_mode / elif pgspecial` en
-        pgexecute.run(). ~12 lineas + tests. Bug de upstream desde 2022 (commit 372da81). Alto valor:
-        con F5 encendido no se puede ni salir. De yapa arregla \G y el guard de restrict-mode
-- [ ] 3. -l/--ping descartan el connection string: `if list_databases or ping_database: database =
-        "postgres"` pisa la URI/conninfo entera. ~6 lineas + tests. Confirmado en upstream (main.py
-        ~1638). Mandar solo la guarda `is_conn_string`; el fallback de dbname necesita que connect_uri
-        acepte dbname (que es nuestro), asi que va aparte o simplificado
+- [x] 2. explain mode rompe special commands -> PR #1620 MANDADO 2026-08-18
+        (rama upstream/explain-mode-special-commands). 4 tests (3 fallan sin el fix), suite 2734
+- [x] 3. -l/--ping descartan el connection string -> PR #1621 MANDADO 2026-08-18
+        (rama upstream/list-keeps-connection-string). Salio MAS SIMPLE que en nuestro fork: upstream
+        ya importa make_conninfo, asi que el fallback de dbname se resuelve ahi mismo sin tocar
+        connect_uri. 5 tests (4 fallan sin el fix), suite 2735
 - [ ] 4. error amigable para \comandos desconocidos (hoy se mandan al server y vuelve
         'syntax error at or near "\"'). ~15 lineas + tests
 #
