@@ -84,6 +84,16 @@ Upcoming
 ## BUG DE UPSTREAM que arreglamos nosotros (PR-worthy, aislado en commit 5d60b80)
 - [ ] explain mode (F5) rompe special commands: `if explain_mode / elif pgspecial` en pgexecute.run() -> los meta-comandos nunca se detectan con F5 ON. Fix nuestro en 4.5.7. original/main tiene el bug identico (commit 372da81, 2022). EXCELENTE candidato a PR upstream (self-contained, con tests). Ademas arregla \G en explain mode y el guard de restrict-mode
 
+## ESTADO CI DE NUESTROS PRs (18/08) - leer antes de asustarse por rojos
+# 1) `codex-review` FALLA EN TODOS los PRs del repo, incluso en los YA MERGEADOS (#1616). Es su bot,
+#    no es nuestro. Ignorar ese check.
+# 2) `gh pr checks` muestra los jobs CANCELLED (por fail-fast) como "fail". Siempre mirar las
+#    conclusiones reales por job: gh run view <id> --json jobs
+# 3) #1619 y #1621: TODOS los builds en verde
+# 4) #1620: el unico fallo real fue build 3.14 -> el flake del editor externo (iocommands.feature:3).
+#    En el MISMO commit, 3.10 dio 22 scenarios passed / 0 failed. Justamente lo que arregla #1619.
+#    Comentado en el PR; si #1619 entra primero, rebasar #1620 encima
+
 ## PLAN DE PRs A UPSTREAM (armado 2026-08-18, de SIMPLE a COMPLEJO)
 # Regla de siempre: 1 PR = 1 cosa, con tests y changelog, rama limpia desde original/main.
 # Anotar cada uno en la discussion #1603 a medida que se mandan.
