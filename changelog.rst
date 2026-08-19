@@ -28,9 +28,6 @@ Features:
   forever -- previously ``pgcli-Wed.log`` accumulated every Wednesday since
   the feature existed, despite the docs claiming it "overwrites weekly".
   Same-day reopens still append; ``date`` and ``none`` modes are unaffected.
-
-Features:
----------
 * New ``--on-error [STOP|RESUME]`` command line option to override the
   ``on_error`` config value, choosing whether execution stops or resumes after
   an error in multi-statement input (handy for ``-f`` migration scripts).
