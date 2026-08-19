@@ -91,8 +91,19 @@ Upcoming
 # connect_timeout=5 corta exacto a los 5s. PGCONNECT_TIMEOUT tambien funciona (passthrough libpq).
 # Lo unico que SI tiene timeout propio es el handshake del tunel SSH: 10s hardcodeado en
 # ssh_tunnel.py (_base_connect_kwargs).
-- [ ] Evaluar: agregar connect_timeout a los dsn.d de Diego (fix practico, sin codigo), y/o una
-      opcion de config con default sensato (upstream tampoco tiene una)
+- [x] HECHO 2026-08-19 (commit 8f460ef): opcion --timeout + config connect_timeout (default 30).
+      Precedencia: --timeout > connect_timeout del connstring > $PGCONNECT_TIMEOUT > config.
+      El valor resuelto viaja como PARAMETRO aparte (no se mergea al dsn), asi el connstring del
+      usuario llega intacto; PGExecute lo preserva junto al dsn igual que hostaddr.
+      8 tests + medicion e2e por cada nivel. Candidato a PR upstream (no tienen nada de esto)
+- [x] HECHO 2026-08-19: los 104 DSN de Diego en dsn.d/ ahora llevan connect_timeout=15
+      (backup en ~/.config/pgcli/dsn.d.bak-<ts>). 3 de ellos estaban SIN comillas y necesitaron
+      un segundo pase; los 104 parsean OK
+# HALLAZGO de test isolation: tests que dejan correr connect() con PGExecute mockeado ESCRIBEN en el
+# keyring REAL del sistema (auth.keyring_set_password tras "conectar" con exito). Encontradas y
+# borradas 2 entradas basura: 'bar@baz.com@' y 'b_user@b_host@5435' (esta ultima con la password de
+# test 'very_secure'). Ademas test_pg_service_file setea PGPASSWORD y solo lo borra si PASA: si falla,
+# la variable se filtra y hace fallar tests posteriores en cascada. Vale aislar esto en algun momento
 
 ## ESTADO CI DE NUESTROS PRs (18/08) - leer antes de asustarse por rojos
 # 1) `codex-review` FALLA EN TODOS los PRs del repo, incluso en los YA MERGEADOS (#1616). Es su bot,
