@@ -186,6 +186,7 @@ class PGCli:
         no_timings=False,
         no_status=False,
         on_error: Optional[str] = None,
+        connect_timeout: Optional[int] = None,
     ):
         self.force_passwd_prompt = force_passwd_prompt
         self.never_passwd_prompt = never_passwd_prompt
@@ -282,6 +283,13 @@ class PGCli:
         self.prompt_dsn_format = prompt_dsn
         # --on-error on the command line overrides the config file value.
         self.on_error = (on_error or c["main"]["on_error"]).upper()
+        # Connection timeout, in seconds. --timeout wins; otherwise the value in
+        # the connection string (or $PGCONNECT_TIMEOUT) is left alone, and this
+        # config default only applies when nothing else specifies one. libpq's
+        # own default is 0, which waits until the OS gives up on the TCP
+        # connection (minutes), so we ship a saner one.
+        self.connect_timeout = connect_timeout
+        self.default_connect_timeout = c["main"].get("connect_timeout", "30")
         self.decimal_format = c["data_formats"]["decimal"]
         self.float_format = c["data_formats"]["float"]
         self.column_date_formats = c["column_date_formats"]
@@ -1062,6 +1070,26 @@ class PGCli:
             database = user
 
         kwargs.setdefault("application_name", self.application_name)
+
+        # Connection timeout precedence, highest first:
+        #   1. --timeout on the command line (overrides everything)
+        #   2. connect_timeout in the connection string
+        #   3. $PGCONNECT_TIMEOUT
+        #   4. the connect_timeout config value (default 30)
+        # libpq's own default is 0 (wait until the OS gives up on the TCP
+        # connection, which can take minutes), hence the config default.
+        timeout = self.connect_timeout
+        if timeout is None:
+            in_dsn = "connect_timeout" in conninfo_to_dict(dsn) if dsn else False
+            if not in_dsn and "connect_timeout" not in kwargs and not os.environ.get("PGCONNECT_TIMEOUT"):
+                try:
+                    timeout = int(self.default_connect_timeout)
+                except (TypeError, ValueError):
+                    timeout = None
+        if timeout is not None:
+            # Passed as a separate parameter rather than merged into the dsn, so
+            # the user's connection string reaches PGExecute exactly as given.
+            kwargs["connect_timeout"] = str(timeout)
 
         # If password prompt is not forced but no password is provided, try
         # getting it from environment variable.
@@ -1985,6 +2013,13 @@ class PGCli:
     help="Whether to STOP or RESUME after an error in multi-statement input. Overrides the on_error config value.",
 )
 @click.option(
+    "--timeout",
+    "connect_timeout",
+    type=click.INT,
+    default=None,
+    help="Seconds to wait for a connection before giving up (0 waits forever). Overrides the connection string and $PGCONNECT_TIMEOUT.",
+)
+@click.option(
     "-W",
     "--password",
     "prompt_passwd",
@@ -2103,6 +2138,7 @@ def cli(
     no_status: bool,
     output_file: str,
     on_error: Optional[str],
+    connect_timeout: Optional[int],
 ):
     if version:
         print("Version:", __version__)
@@ -2169,6 +2205,7 @@ def cli(
         no_timings=no_timings,
         no_status=no_status,
         on_error=on_error,
+        connect_timeout=connect_timeout,
     )
 
     # Assign command and file options

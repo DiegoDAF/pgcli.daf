@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock, mock_open
 
 import paramiko
 import pytest
+from psycopg.conninfo import conninfo_to_dict
 from configobj import ConfigObj
 from click.testing import CliRunner
 
@@ -307,7 +308,11 @@ def test_connect_uri_without_ssh_tunnel(mock_pgexecute: MagicMock) -> None:
     mock_pgexecute.assert_called_once()
     call_args, call_kwargs = mock_pgexecute.call_args
     dsn_arg = call_args[5]
-    assert uri == dsn_arg
+    # The dsn carries the same connection, possibly normalized (pgcli adds a
+    # default connect_timeout), so compare the parameters rather than the text.
+    parsed = conninfo_to_dict(dsn_arg)
+    for key, value in conninfo_to_dict(uri).items():
+        assert parsed[key] == value
     assert "hostaddr" not in call_kwargs
 
 

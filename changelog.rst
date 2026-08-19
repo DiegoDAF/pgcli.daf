@@ -3,6 +3,14 @@ Unreleased - upstream: 4.5.0
 
 Features:
 ---------
+* New ``--timeout`` command line option and ``connect_timeout`` config value
+  (default 30 seconds) for the connection timeout. Precedence, highest first:
+  ``--timeout``, then a ``connect_timeout`` in the connection string, then
+  ``$PGCONNECT_TIMEOUT``, then the config value. libpq's own default is 0,
+  which waits until the operating system gives up on the TCP connection (that
+  can take minutes), so an unreachable host now fails in seconds instead of
+  hanging. The resolved value is passed as a connection parameter, leaving the
+  user's connection string untouched.
 * ``namedqueries.d`` files can now carry a server-version suffix in the
   filename, like psql's ``~/.psqlrc-17`` / ``~/.psqlrc-9.6``: the queries in
   ``activity-17.conf`` are only offered when the connected server is version

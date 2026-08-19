@@ -229,6 +229,10 @@ class PGExecute:
             preserved_params = {"dsn": new_params["dsn"], "password": new_params["password"]}
             if "hostaddr" in new_params:
                 preserved_params["hostaddr"] = new_params["hostaddr"]
+            # connect_timeout is resolved by PGCli (--timeout / config default) and
+            # must survive alongside the dsn, like hostaddr.
+            if "connect_timeout" in new_params:
+                preserved_params["connect_timeout"] = new_params["connect_timeout"]
             new_params = preserved_params
 
             if new_params["password"]:

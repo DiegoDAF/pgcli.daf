@@ -985,6 +985,7 @@ def test_pg_service_file(tmpdir):
         "",
         notify_callback,
         application_name="pgcli",
+        connect_timeout="30",
     )
     del os.environ["PGPASSWORD"]
     del os.environ["PGSERVICEFILE"]
@@ -1038,7 +1039,7 @@ def test_application_name_db_uri(tmpdir):
         uri = "postgres://bar@baz.com/?application_name=cow"
         cli.connect_uri(uri)
     # connect_uri now passes the URI as dsn
-    mock_pgexecute.assert_called_with("bar", "bar", "", "baz.com", "", uri, notify_callback, application_name="cow")
+    mock_pgexecute.assert_called_with("bar", "bar", "", "baz.com", "", uri, notify_callback, application_name="cow", connect_timeout="30")
 
 
 def test_jdbc_uri_error(tmpdir):
@@ -1993,3 +1994,71 @@ def test_conn_string_without_list_gets_no_dbname_override(tmpdir):
     path, call = _cli_conn_target([kv], tmpdir)
     assert path == "uri"
     assert call.kwargs["dbname"] == ""
+
+
+def _effective_connect_timeout(tmpdir, cli_timeout=None, dsn_timeout=None, env=None, cfgval=None):
+    """The connect_timeout that actually reaches the connection."""
+    rc = str(tmpdir.join("rcfile"))
+    with open(rc, "w") as f:
+        f.write("[main]\n" + (f"connect_timeout = {cfgval}\n" if cfgval else ""))
+    environ = {k: v for k, v in os.environ.items() if k != "PGCONNECT_TIMEOUT"}
+    if env:
+        environ["PGCONNECT_TIMEOUT"] = env
+    with mock.patch.dict(os.environ, environ, clear=True):
+        cli_obj = PGCli(pgclirc_file=rc, connect_timeout=cli_timeout)
+        dsn = "postgresql://u@h:5432/db" + (f"?connect_timeout={dsn_timeout}" if dsn_timeout else "")
+        captured = {}
+
+        def fake(*a, **k):
+            captured["dsn"] = k.get("dsn") or (a[5] if len(a) > 5 else None)
+            captured["kwargs"] = k
+            raise RuntimeError("stop")
+
+        # connect() turns a failed connection into sys.exit(1); let it.
+        with mock.patch("pgcli.main.PGExecute", side_effect=fake), pytest.raises(SystemExit):
+            cli_obj.connect(dsn=dsn, host="h", port="5432", user="u", database="db")
+        # pgcli passes its resolved timeout as a parameter and leaves the dsn
+        # untouched; a timeout that came in the dsn stays there.
+        from_kwargs = captured.get("kwargs", {}).get("connect_timeout")
+        return from_kwargs or conninfo_to_dict(captured.get("dsn") or "").get("connect_timeout")
+
+
+def test_connect_timeout_config_default(tmpdir):
+    """With nothing else set, the config default (30) is applied: libpq's own
+    default of 0 waits until the OS gives up, which takes minutes."""
+    assert _effective_connect_timeout(tmpdir) == "30"
+
+
+def test_connect_timeout_config_value_used(tmpdir):
+    assert _effective_connect_timeout(tmpdir, cfgval=45) == "45"
+
+
+def test_connect_timeout_connection_string_wins_over_config(tmpdir):
+    assert _effective_connect_timeout(tmpdir, dsn_timeout=15) == "15"
+
+
+def test_connect_timeout_connection_string_wins_over_env(tmpdir):
+    """libpq precedence: an explicit connect_timeout beats $PGCONNECT_TIMEOUT."""
+    assert _effective_connect_timeout(tmpdir, dsn_timeout=15, env="7") == "15"
+
+
+def test_connect_timeout_env_left_to_libpq(tmpdir):
+    """With only $PGCONNECT_TIMEOUT set, nothing is injected: libpq reads the
+    environment variable itself, so the config default must not override it."""
+    assert _effective_connect_timeout(tmpdir, env="7") is None
+
+
+def test_connect_timeout_cli_overrides_everything(tmpdir):
+    assert _effective_connect_timeout(tmpdir, cli_timeout=3, dsn_timeout=15, env="7") == "3"
+
+
+def test_connect_timeout_cli_zero_waits_forever(tmpdir):
+    """--timeout 0 is meaningful (wait forever) and must not be treated as unset."""
+    assert _effective_connect_timeout(tmpdir, cli_timeout=0, dsn_timeout=15) == "0"
+
+
+def test_cli_timeout_flag_passed_to_pgcli():
+    runner = CliRunner()
+    with patch.object(PGCli, "__init__", autospec=True, return_value=None) as mock_pgcli:
+        runner.invoke(cli, ["--timeout", "12", "mydb"])
+        assert mock_pgcli.call_args[1]["connect_timeout"] == 12
