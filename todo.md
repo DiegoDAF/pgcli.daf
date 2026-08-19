@@ -84,6 +84,16 @@ Upcoming
 ## BUG DE UPSTREAM que arreglamos nosotros (PR-worthy, aislado en commit 5d60b80)
 - [ ] explain mode (F5) rompe special commands: `if explain_mode / elif pgspecial` en pgexecute.run() -> los meta-comandos nunca se detectan con F5 ON. Fix nuestro en 4.5.7. original/main tiene el bug identico (commit 372da81, 2022). EXCELENTE candidato a PR upstream (self-contained, con tests). Ademas arregla \G en explain mode y el guard de restrict-mode
 
+### TIMEOUTS de conexion (consulta Diego 2026-08-19, medido)
+# pgcli NO setea ningun connect_timeout para la conexion a Postgres: usa el default de libpq, que es
+# 0 = esperar indefinidamente (en la practica hasta que el SO abandone el TCP, ~2 min en Linux).
+# Medido contra 192.0.2.1 (traga los SYN): sin connect_timeout seguia colgado a los 30s; con
+# connect_timeout=5 corta exacto a los 5s. PGCONNECT_TIMEOUT tambien funciona (passthrough libpq).
+# Lo unico que SI tiene timeout propio es el handshake del tunel SSH: 10s hardcodeado en
+# ssh_tunnel.py (_base_connect_kwargs).
+- [ ] Evaluar: agregar connect_timeout a los dsn.d de Diego (fix practico, sin codigo), y/o una
+      opcion de config con default sensato (upstream tampoco tiene una)
+
 ## ESTADO CI DE NUESTROS PRs (18/08) - leer antes de asustarse por rojos
 # 1) `codex-review` FALLA EN TODOS los PRs del repo, incluso en los YA MERGEADOS (#1616). Es su bot,
 #    no es nuestro. Ignorar ese check.
@@ -171,7 +181,14 @@ Upcoming
 - [ ] #1398 [easy] (respetar PSQL_EDITOR env var) - quick win ajeno, por si sumamos PRs
 
 ### Discussion #1603 (features sobre upstream)
-- [ ] Eventual: sumar ssh_tunnel_save_password como feature a ofrecer en la lista (#stream_results ya posteado por Diego)
+- [x] 2026-08-19: CROSS-LINK hecho en las dos direcciones. En la #1603: item 4 marcado como MERGED
+      (#1546), item 7 -> #1542 + #1543, item 9 -> #1544, item 10 -> #1545, y una seccion de status al
+      final que ademas lista los 3 PRs de bugs de upstream (#1619/#1620/#1621) aclarando que NO son
+      items del catalogo. En cada PR: footer diciendo que item es. Ojo: `gh pr edit` NO sirve
+      (rompe por el deprecation de Projects classic); usar `gh api -X PATCH repos/.../pulls/N`
+- [x] Numeracion arreglada: habia DOS items 18 (stream_results y EXPLAIN summary). stream_results
+      paso a ser el 22 para que los numeros sean unicos (la discussion dice "pick a number")
+- [ ] Eventual: sumar ssh_tunnel_save_password como feature a ofrecer en la lista
 
 ### Bookkeeping / nice-to-have
 - [ ] Evaluar cherry-pick upstream #1601 (licencia SPDX BSD-3-Clause + saca dynamic version, migran a setuptools_scm) - toca como versionamos, revisar con calma
