@@ -105,6 +105,13 @@ Upcoming
 # test 'very_secure'). Ademas test_pg_service_file setea PGPASSWORD y solo lo borra si PASA: si falla,
 # la variable se filtra y hace fallar tests posteriores en cascada. Vale aislar esto en algun momento
 
+## RELEASE v4.5.8 (2026-08-19) - PUBLICADO
+# tag v4.5.8 + GitHub release con wheel, pusheado a fork/main, instalado en nb.
+# 37 commits y 16 items de changelog desde v4.5.7. Destacados: --timeout/connect_timeout,
+# namedqueries versionadas, sqlparse 0.6.x (4 CVEs), UPDATE incondicional con sqlparse,
+# fix de explain mode, fix de -l, fix de -o, error amigable de \cmd, log_truncate_on_rotation.
+# 8 PRs abiertos en upstream: #1542 #1543 #1544 #1545 #1619 #1620 #1621 #1622
+
 ## ESTADO CI DE NUESTROS PRs (18/08) - leer antes de asustarse por rojos
 # 1) `codex-review` FALLA EN TODOS los PRs del repo, incluso en los YA MERGEADOS (#1616). Es su bot,
 #    no es nuestro. Ignorar ese check.
@@ -130,6 +137,8 @@ Upcoming
         connect_uri. 5 tests (4 fallan sin el fix), suite 2735
 - [ ] 4. error amigable para \comandos desconocidos (hoy se mandan al server y vuelve
         'syntax error at or near "\"'). ~15 lineas + tests
+- [x] EXTRA. --timeout + connect_timeout config -> PR #1622 MANDADO 2026-08-19
+        (rama upstream/connect-timeout). Item 23 de la #1603. 7 tests, suite 2737
 #
 # TIER 2 - features chicas y autocontenidas
 - [ ] 5. --no-timings / --no-status
