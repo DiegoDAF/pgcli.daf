@@ -1,3 +1,14 @@
+Upcoming
+========
+
+Internal:
+---------
+
+* The ``connect_timeout`` config value is now read with ``as_int()`` when the
+  configuration is loaded, so a non-numeric value is reported instead of being
+  silently ignored, and the precedence rules moved into a ``get_connect_timeout()``
+  helper that is unit tested directly. Follows review feedback on upstream #1622.
+
 4.5.8 (2026-08-19) - upstream: 4.5.0
 =====================================
 

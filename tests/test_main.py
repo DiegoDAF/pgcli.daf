@@ -20,6 +20,7 @@ from pgcli.main import (
     obfuscate_process_password,
     duration_in_words,
     format_output,
+    get_connect_timeout,
     notify_callback,
     PGCli,
     MetaQuery,
@@ -2023,9 +2024,34 @@ def _effective_connect_timeout(tmpdir, cli_timeout=None, dsn_timeout=None, env=N
         return from_kwargs or conninfo_to_dict(captured.get("dsn") or "").get("connect_timeout")
 
 
-def test_connect_timeout_config_default(tmpdir):
-    """With nothing else set, the config default (30) is applied: libpq's own
-    default of 0 waits until the OS gives up, which takes minutes."""
+DSN_WITH_TIMEOUT = "postgresql://u@h:5432/db?connect_timeout=15"
+DSN_PLAIN = "postgresql://u@h:5432/db"
+
+
+@pytest.mark.parametrize(
+    "explicit, dsn, kwargs, env, expected, why",
+    [
+        (None, DSN_PLAIN, {}, None, 30, "nothing else set, so the config default applies"),
+        (None, DSN_WITH_TIMEOUT, {}, None, None, "the connection string already says so"),
+        (None, DSN_PLAIN, {"connect_timeout": "9"}, None, None, "the caller already says so"),
+        (None, DSN_PLAIN, {}, "7", None, "libpq reads $PGCONNECT_TIMEOUT itself"),
+        (None, DSN_WITH_TIMEOUT, {}, "7", None, "the connection string beats the environment"),
+        (3, DSN_WITH_TIMEOUT, {}, "7", 3, "--timeout beats everything"),
+        (0, DSN_WITH_TIMEOUT, {}, None, 0, "--timeout 0 is meaningful, not unset"),
+        (None, None, {}, None, 30, "no dsn at all"),
+    ],
+)
+def test_get_connect_timeout(explicit, dsn, kwargs, env, expected, why):
+    environ = {k: v for k, v in os.environ.items() if k != "PGCONNECT_TIMEOUT"}
+    if env:
+        environ["PGCONNECT_TIMEOUT"] = env
+    with mock.patch.dict(os.environ, environ, clear=True):
+        assert get_connect_timeout(explicit, dsn, kwargs, 30) == expected, why
+
+
+def test_connect_timeout_config_default_reaches_the_connection(tmpdir):
+    """The helper is actually wired into connect(): libpq's own default of 0
+    waits until the OS gives up, which takes minutes."""
     assert _effective_connect_timeout(tmpdir) == "30"
 
 
@@ -2033,28 +2059,17 @@ def test_connect_timeout_config_value_used(tmpdir):
     assert _effective_connect_timeout(tmpdir, cfgval=45) == "45"
 
 
-def test_connect_timeout_connection_string_wins_over_config(tmpdir):
-    assert _effective_connect_timeout(tmpdir, dsn_timeout=15) == "15"
-
-
-def test_connect_timeout_connection_string_wins_over_env(tmpdir):
-    """libpq precedence: an explicit connect_timeout beats $PGCONNECT_TIMEOUT."""
-    assert _effective_connect_timeout(tmpdir, dsn_timeout=15, env="7") == "15"
-
-
-def test_connect_timeout_env_left_to_libpq(tmpdir):
-    """With only $PGCONNECT_TIMEOUT set, nothing is injected: libpq reads the
-    environment variable itself, so the config default must not override it."""
-    assert _effective_connect_timeout(tmpdir, env="7") is None
-
-
-def test_connect_timeout_cli_overrides_everything(tmpdir):
+def test_connect_timeout_cli_reaches_the_connection(tmpdir):
     assert _effective_connect_timeout(tmpdir, cli_timeout=3, dsn_timeout=15, env="7") == "3"
 
 
-def test_connect_timeout_cli_zero_waits_forever(tmpdir):
-    """--timeout 0 is meaningful (wait forever) and must not be treated as unset."""
-    assert _effective_connect_timeout(tmpdir, cli_timeout=0, dsn_timeout=15) == "0"
+def test_connect_timeout_config_value_must_be_a_number(tmpdir):
+    """A typo in the config is reported instead of being silently ignored."""
+    rc = str(tmpdir.join("rcfile"))
+    with open(rc, "w") as f:
+        f.write("[main]\nconnect_timeout = soon\n")
+    with pytest.raises(ValueError):
+        PGCli(pgclirc_file=rc)
 
 
 def test_cli_timeout_flag_passed_to_pgcli():

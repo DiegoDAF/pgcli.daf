@@ -216,6 +216,22 @@ Upcoming
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
 
+2026-08-21
+===================
+- [x] PR #1622 (--timeout): review de dbaty ("Nice addition, thanks!") con 3 pedidos, los 3 aplicados y pusheados (97696ea) + respuesta en el PR
+  - (1) leer el config con `c["main"].as_int("connect_timeout")` en __init__ en vez de `.get()` + try/except int en connect(): es el patron del proyecto (row_limit, min_num_menu_lines), la clave siempre existe porque `connect_timeout = 30` viene en el pgclirc default, y un valor mal tipeado se reporta en vez de ignorarse en silencio
+  - (2) extraido `get_connect_timeout(explicit, dsn, kwargs, default)`: la tabla de precedencia es ahora un test parametrizado que lo llama directo, mas 2 tests end-to-end que prueban que esta enganchado en connect()
+  - (3) comentario desactualizado en pgexecute (solo aplicaba upstream; nuestro fork ya lo tenia correcto porque su implementacion es distinta)
+  - Portado (1) y (2) a nuestro fork. Suite: 3142 + 27 passed, 0 failed. Verificacion adversarial: el test de validacion falla con el codigo viejo
+  - OJO: exportar PGHOST/PGPORT/PGUSER para habilitar los @dbtest rompe 2 tests de test_isready.py (leen el entorno real). Correr esa suite aparte con `env -u PGHOST -u PGPORT -u PGUSER`. Es aislamiento flojo preexistente, no un bug nuestro
+- [x] Deploy de 4.5.8 en la maquina `d` (Linux Mint 22.2), dejandola identica a `t`. Estado inicial: ya tenia el CODIGO 4.5.8 pero con dependencias VIEJAS (paramiko 3.5.1, sqlparse 0.5.3 con los 4 CVEs, psycopg 3.2.13, cli_helpers 2.7.0) porque `uv tool install --force` NO refresca deps que sigan satisfaciendo el rango: hace falta `--reinstall`
+  - Reinstalado con `uv tool install --force --reinstall --python 3.12 "dist/pgcli-4.5.8-py3-none-any.whl[sshtunnel,keyring]"` (el venv corria 3.10.17, ahora 3.12 como en `t`). Las 28 deps coinciden una a una
+  - Instalado el bash completion (no estaba): copia estable en ~/.local/share/bash-completion/completions/pgcli + source en ~/.bashrc. 103 alias en el tab de --dsn
+  - Copiados los 11 ~/.psqlrc* (en `d` solo estaba ~/.psqlrc y desactualizado: le faltaban 44 \set). Backup previo
+  - dsn.d: `d` tenia un alias que no estaba en `t` (creado el 20/08 ahi mismo). Le agregue connect_timeout=15 y lo copie a `t`. Ahora 104 archivos, md5 identico en las dos
+  - Repo: HEAD estaba en ef9c378 con 8 archivos "modificados" que en realidad YA eran el contenido de 9d6d114 (syncthing sincroniza el working tree pero NO el .git). Verificado archivo por archivo contra fork/main y realineado con `git reset --mixed fork/main` (no toca el working tree). Limpio en v4.5.8
+  - Test funcional en ambas maquinas contra un DSN de dev: PONG, query real, 110 named queries cargadas de 116 (filtro por version del server andando), --timeout, error amigable de \cmd invalido, y el fix de -l con connection string. Salida identica
+
 2026-08-11
 ===================
 - [x] De-flake behave: timeouts de pexpect en iocommands.py (2s/1s/5s -> 10s). El escenario del editor externo erroraba intermitente en runners lentos (upstream #1543/#1544/#1609 y nuestro propio CI en cee716d). Commit 1c4c4c8, CI del fork verde de nuevo. Mismo parche ofrecido a j-bennet en el hilo de #1543

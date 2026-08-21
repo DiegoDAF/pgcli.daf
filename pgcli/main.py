@@ -137,6 +137,35 @@ def notify_callback(notify: Notify):
     )
 
 
+def get_connect_timeout(explicit, dsn, kwargs, default):
+    """Pick the connection timeout to apply, in seconds.
+
+    Precedence, highest first:
+
+    1. ``explicit``, i.e. ``--timeout`` on the command line
+    2. ``connect_timeout`` in the connection string, or in ``kwargs``
+    3. ``$PGCONNECT_TIMEOUT``
+    4. ``default``, the ``connect_timeout`` config value
+
+    Returns ``None`` when the user already stated a timeout by one of the
+    means we must not override, in which case the caller leaves the
+    connection parameters alone and libpq reads it from where it already is.
+
+    A default matters because libpq's own is 0, which waits until the
+    operating system gives up on the TCP connection, so an unreachable host
+    hangs for minutes.
+    """
+    if explicit is not None:
+        return explicit
+    if "connect_timeout" in kwargs:
+        return None
+    if dsn and "connect_timeout" in conninfo_to_dict(dsn):
+        return None
+    if os.environ.get("PGCONNECT_TIMEOUT"):
+        return None
+    return default
+
+
 class PGCli:
     default_prompt = "\\u@\\h:\\d> "
     max_len_prompt = 30
@@ -289,7 +318,7 @@ class PGCli:
         # own default is 0, which waits until the OS gives up on the TCP
         # connection (minutes), so we ship a saner one.
         self.connect_timeout = connect_timeout
-        self.default_connect_timeout = c["main"].get("connect_timeout", "30")
+        self.default_connect_timeout = c["main"].as_int("connect_timeout")
         self.decimal_format = c["data_formats"]["decimal"]
         self.float_format = c["data_formats"]["float"]
         self.column_date_formats = c["column_date_formats"]
@@ -1071,21 +1100,7 @@ class PGCli:
 
         kwargs.setdefault("application_name", self.application_name)
 
-        # Connection timeout precedence, highest first:
-        #   1. --timeout on the command line (overrides everything)
-        #   2. connect_timeout in the connection string
-        #   3. $PGCONNECT_TIMEOUT
-        #   4. the connect_timeout config value (default 30)
-        # libpq's own default is 0 (wait until the OS gives up on the TCP
-        # connection, which can take minutes), hence the config default.
-        timeout = self.connect_timeout
-        if timeout is None:
-            in_dsn = "connect_timeout" in conninfo_to_dict(dsn) if dsn else False
-            if not in_dsn and "connect_timeout" not in kwargs and not os.environ.get("PGCONNECT_TIMEOUT"):
-                try:
-                    timeout = int(self.default_connect_timeout)
-                except (TypeError, ValueError):
-                    timeout = None
+        timeout = get_connect_timeout(self.connect_timeout, dsn, kwargs, self.default_connect_timeout)
         if timeout is not None:
             # Passed as a separate parameter rather than merged into the dsn, so
             # the user's connection string reaches PGExecute exactly as given.
