@@ -4,6 +4,14 @@ Upcoming
 Internal:
 ---------
 
+* Recorded upstream 4.6.0 as merged. Every item in that release was already
+  present here, so nothing changed in the tree: the Emacs cursor shape fix,
+  bytes identifiers in completion metadata, columns after a column named
+  ``type``, ``sqlparse`` 0.6.x, ``PSQL_EDITOR``, force-quit during a
+  transaction, ``MAX_GROUPING_DEPTH``, the port in the keyring key and columns
+  after ``GROUP BY``. Two of the release's items originated in this fork
+  (``\ne`` and ``.pgpass`` over SSH tunnels).
+
 * The ``connect_timeout`` config value is now read with ``as_int()`` when the
   configuration is loaded, so a non-numeric value is reported instead of being
   silently ignored, and the precedence rules moved into a ``get_connect_timeout()``
