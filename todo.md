@@ -1,6 +1,30 @@
 Upcoming
 ==============
 
+### PLAN DE PRs A UPSTREAM (decidido 2026-08-27)
+# ESPERAR a que bajen los PRs abiertos antes de sumar mas. Hoy hay 6 abiertos
+# (#1542 -c, #1543 -f, #1544 -y, #1545 -t, #1620 explain, #1621 -l), todos CLEAN
+# con 7/7 checks. dbaty mergea a buen ritmo (2 en dos dias), pero no saturarlo:
+# esperar a estar en 3 o 4 abiertos.
+# Orden acordado para los proximos, uno por vez:
+- [ ] 1) Item 11 del #1603: `--no-timings` / `--no-status`
+      # Va PRIMERO porque es el primitivo que le da coherencia al -t del #1545 (en vuelo)
+      # y porque ESQUIVA la objecion original de j-bennet (2025-12-25: "estas agregando
+      # una opcion para un knob que ya existe"): estos NO duplican nada, exponen dos
+      # knobs que hoy no se pueden apagar. Estimado: ~70-80 lineas con tests, media sesion.
+      # Adaptacion a upstream: OutputSettings alla es namedtuple (agregar campo), el
+      # timing sale de pgspecial.timing_enabled, el status de un `if status:` en format_output.
+      # OJO: nuestro -t esta atado a --no-timings/--no-status; hay que desacoplarlo.
+- [ ] 2) Item 8 del #1603: `-o/--output`
+      # Misma familia de scripting que los 4 en vuelo. Chico y autocontenido.
+- [ ] 3) Item 5 del #1603: `dsn.d/`
+      # Argumento extra fuerte: resuelve el issue #1489 que YA esta abierto en upstream.
+- [ ] 4) Item 6 del #1603: namedqueries.d + sufijo de version (estilo psqlrc-NN)
+      # El mas grande de los cuatro. La version del server sale del startup packet
+      # (conn.info.server_version), sin round-trip extra.
+# NO mandar por ahora: item 21 (log_truncate_on_rotation) depende de la rotacion de
+# logs del item 12, que upstream ya pospuso una vez ("revisit" en los #1541/#1547).
+
 ### BUG anotado 2026-08-10: `--` en named queries de una linea comenta el RESTO de la query
 # Sintoma: al aplanar una query multilinea a `name = "sql"` (formato namedqueries.d),
 # un comentario `-- ...` embebido deja de comentar "su linea" y comenta todo lo que
