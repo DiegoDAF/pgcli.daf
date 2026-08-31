@@ -1,6 +1,23 @@
 Upcoming
 ==============
 
+### 2026-08-31: fix \watch en -f/-c (bug encontrado por j-bennet en #1543)
+- [x] j-bennet volvio (mergeo #1619, #1620 y #1622; dbaty revisa, ella mergea) y probando #1543
+      encontro que `pgcli -f archivo` con `\watch` al final repetia el ARCHIVO ENTERO
+      (el regex de get_watch_command captura todo el texto previo, es DOTALL)
+- [x] Fix en NUESTRO fork (cede0f6): -f y -c pasan por _execute_statements() que splitea con
+      sqlparse.split() y ejecuta de a un statement, como psql. \watch queda scoped a su statement;
+      \watch pelado usa query_history. BONUS: -f/-c ahora salen con exit 1 si fallo un statement
+      con on_error=STOP (como psql con ON_ERROR_STOP); RESUME mantiene exit 0.
+      9 tests (5 fallan sin el fix). Wheel 4.6.1 recompilado e instalado con el fix.
+- [x] Fix portado al PR #1543 (c724219, sin el cambio de exit codes para mantener el PR minimo)
+      + merge de main + respuesta a j-bennet
+- [x] #1621: aceptada la sugerencia de j-bennet (simplificar el override de -l). VERIFICADO contra
+      psql real: `psql -l dbinexistente` falla con "database does not exist", o sea psql CONSERVA
+      el nombre posicional; su version es mas fiel que la nuestra. Aplicado manteniendo el
+      try/except (conninfo malformado -> error limpio de conexion, no traceback). bfea2cb
+- [x] #1542/#1544/#1545 re-mergeados (conflicto solo en changelog por el Upcoming del #1620)
+
 ### PLAN DE PRs A UPSTREAM (decidido 2026-08-27)
 # ESPERAR a que bajen los PRs abiertos antes de sumar mas. Hoy hay 6 abiertos
 # (#1542 -c, #1543 -f, #1544 -y, #1545 -t, #1620 explain, #1621 -l), todos CLEAN
