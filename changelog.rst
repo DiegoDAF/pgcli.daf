@@ -1,5 +1,5 @@
-4.6.1 (2026-08-27) - upstream: 4.6.0
-====================================
+Upcoming
+========
 
 Bug fixes:
 ----------
@@ -11,6 +11,9 @@ Bug fixes:
   ``\watch`` picks up the one before it). A failed statement now also makes
   ``-f``/``-c`` exit non-zero when ``on_error`` is STOP, like psql with
   ``ON_ERROR_STOP``.
+
+4.6.1 (2026-08-27) - upstream: 4.6.0
+====================================
 
 Internal:
 ---------
