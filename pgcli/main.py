@@ -1452,10 +1452,14 @@ class PGCli:
         # Multiple -c options are executed sequentially
         if hasattr(self, 'commands') and self.commands:
             try:
+                all_ok = True
                 for command in self.commands:
                     logger.debug("Running command: %s", command)
-                    # Execute the command using the same logic as interactive mode
-                    self.handle_watch_command(command)
+                    # Same path as typing it at the prompt, one statement at
+                    # a time so \watch only repeats its own statement.
+                    all_ok = self._execute_statements(command)
+                    if not all_ok and self.on_error != "RESUME":
+                        break
             except PgCliQuitError:
                 # Normal exit from quit command
                 sys.exit(0)
@@ -1464,20 +1468,26 @@ class PGCli:
                 logger.error("traceback: %r", traceback.format_exc())
                 click.secho(str(e), err=True, fg="red")
                 sys.exit(1)
-            # Exit successfully after executing all commands
-            sys.exit(0)
+            # Like psql with ON_ERROR_STOP: a failed statement means a
+            # non-zero exit. With on_error = RESUME errors keep exit code 0.
+            sys.exit(0 if all_ok or self.on_error == "RESUME" else 1)
 
         # Handle file mode (-f flag) - execute SQL from files
         # Multiple -f options are executed sequentially
         if hasattr(self, 'input_files') and self.input_files:
             try:
+                all_ok = True
                 for input_file in self.input_files:
                     logger.debug("Reading commands from file: %s", input_file)
                     with open(input_file, 'r', encoding='utf-8') as f:
                         file_content = f.read()
                     if file_content.strip():
                         logger.debug("Executing commands from file: %s", input_file)
-                        self.handle_watch_command(file_content)
+                        # Statement by statement, like psql -f: \watch only
+                        # repeats its own statement, not the whole file.
+                        all_ok = self._execute_statements(file_content)
+                        if not all_ok and self.on_error != "RESUME":
+                            break
             except PgCliQuitError:
                 # Normal exit from quit command
                 sys.exit(0)
@@ -1486,8 +1496,9 @@ class PGCli:
                 logger.error("traceback: %r", traceback.format_exc())
                 click.secho(str(e), err=True, fg="red")
                 sys.exit(1)
-            # Exit successfully after executing all files
-            sys.exit(0)
+            # Like psql with ON_ERROR_STOP: a failed statement means a
+            # non-zero exit. With on_error = RESUME errors keep exit code 0.
+            sys.exit(0 if all_ok or self.on_error == "RESUME" else 1)
 
         history_file = self.config["main"]["history_file"]
         if history_file == "default":
@@ -1567,6 +1578,30 @@ class PGCli:
             query = self.execute_command(text)
 
         self.query_history.append(query)
+        return query
+
+    def _execute_statements(self, text):
+        r"""Run a block of SQL the way psql -c/-f does: one statement at a time.
+
+        get_watch_command()'s regex captures ALL the text before a \watch, so
+        feeding a whole file (or -c block) to handle_watch_command would make
+        \watch repeat every statement in it. Splitting first keeps \watch
+        scoped to its own statement, and a bare \watch picks up the previous
+        statement through query_history, exactly like psql.
+
+        Honors on_error: with STOP (the default), the first failed statement
+        stops the run. Returns True when every statement succeeded.
+        """
+        ok = True
+        for statement in sqlparse.split(text):
+            if not statement.strip():
+                continue
+            query = self.handle_watch_command(statement)
+            if query is not None and not query.successful:
+                ok = False
+                if self.on_error != "RESUME":
+                    break
+        return ok
 
     def _build_cli(self, history):
         key_bindings = pgcli_bindings(self)

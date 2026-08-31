@@ -1,6 +1,17 @@
 4.6.1 (2026-08-27) - upstream: 4.6.0
 ====================================
 
+Bug fixes:
+----------
+
+* Fix ``-f``/``-c`` repeating the whole block when it ends in ``\watch``: the
+  watch regex captures all the text before it, so a multi-statement file ended
+  up re-running every statement. Files and commands now run one statement at a
+  time, like psql, so ``\watch`` only repeats its own statement (and a bare
+  ``\watch`` picks up the one before it). A failed statement now also makes
+  ``-f``/``-c`` exit non-zero when ``on_error`` is STOP, like psql with
+  ``ON_ERROR_STOP``.
+
 Internal:
 ---------
 
