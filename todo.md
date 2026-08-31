@@ -18,6 +18,16 @@ Upcoming
       try/except (conninfo malformado -> error limpio de conexion, no traceback). bfea2cb
 - [x] #1542/#1544/#1545 re-mergeados (conflicto solo en changelog por el Upcoming del #1620)
 
+### 2026-09-01: metacomandos por linea en -f/-c (repregunta de j-bennet en #1543)
+- [x] j-bennet pregunto como maneja sqlparse.split los metacomandos. Diego anticipo el agujero:
+      interactivo submitea apenas el buffer arranca con \ (pgbuffer.py:53), pero en archivo
+      `\echo hola` + select en la linea siguiente viajaban como UN chunk y el metacomando se
+      TRAGABA el SQL (igual en el codigo viejo: pgexecute.run usa el mismo sqlparse.split adentro)
+- [x] Fix (fork ae445f0+a7a1397, rama #1543 6f3bb1d): regla de psql, un backslash command abarca
+      solo su linea; el resto del chunk vuelve al splitter. 3 tests (los 3 fallan sin el fix,
+      tras endurecer el assert: el \echo tragon repite el texto del select en su salida, asi
+      que assertar solo por texto no probaba nada). Wheel 4.6.1 recompilado e instalado
+
 ### PLAN DE PRs A UPSTREAM (decidido 2026-08-27)
 # ESPERAR a que bajen los PRs abiertos antes de sumar mas. Hoy hay 6 abiertos
 # (#1542 -c, #1543 -f, #1544 -y, #1545 -t, #1620 explain, #1621 -l), todos CLEAN
@@ -236,6 +246,16 @@ Upcoming
 # Nota: el archivo `TODO` (mayusculas) en el repo es de UPSTREAM (dbcli/pgcli lo trae), no es nuestro tracking. El nuestro es este todo.md
 
 ### Issues upstream - triage (que podemos hacer)
+- [ ] #1518 / #1484 (crash de arranque con client encoding SQL_ASCII: `TypeError: replace() argument 2 must be str, not bytes`)
+      # REPRODUCIDO e2e 2026-08-31 (ver seccion de fecha). Root cause: con SQL_ASCII el TextLoader de
+      # psycopg (3.2.3 Y 3.3.4) devuelve los text como bytes; pgcli los mete en self.host
+      # (get_socket_directory, SOLO cuando se conecta por socket sin -h), en el mensaje de timezone
+      # (show time zone) y en search_path. La 4.3.0 cae en los DOS paths (prompt + completion thread).
+      # NUESTRA FORK: el path de completion YA esta guardado (escape_name decodifica bytes, PR #1612),
+      # pero SIGUE cayendo en el prompt por get_socket_directory() (pgexecute.py:759, sin defensa) y
+      # get_timezone() (pgexecute.py ~992) hace str(bytes) -> mensaje verde con b'...' (no crashea, feo).
+      # PENDIENTE (decision Diego): fix de decodificacion defensiva en esas dos funciones + tests.
+      # El PR upstream queda en cola segun el PLAN DE PRs (WAIT hasta 3-4 abiertos)
 - [ ] #1590 (completion_refresh KeyError) - YA lo arreglamos via cherry-pick #1591 (v4.4.8). El PR #1591 (de shgol) esta abierto pero CONFLICTING. Postear comentario confirmando el fix + empujar rebase (texto listo en la conversacion)
 - [ ] #1497 (log/history a $XDG_STATE_HOME en vez de $XDG_CONFIG_HOME) - NO AHORA. Requiere: nueva funcion state_location() en config.py + cambiar resolucion de "default" de log_file/history_file (main.py:700-701 y 1169-1170) + fallback de log_destination (main.py:708-715) + MIGRACION (mover archivos viejos al arrancar, camino recomendado (a)) + tests + changelog + bump
 - [ ] #1489 (alias dsn no detectado) - NO se reproduce en 4.5.1. Era 4.1.0 en Windows. El fix vive en NUESTRO refactor de DsnAliases (dsn.d/), no upstreameado: item #5 de la discussion #1603. Comentar pidiendo retest y/o linkear al #5
@@ -256,6 +276,16 @@ Upcoming
 - [ ] Branches feature/stream-results y feature/ssh-tunnel-keyring: ya estan en main; se pueden borrar o conservar si los queremos para PRs upstream separados
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
+
+2026-08-31
+===================
+- [x] Triage upstream: REPRODUCCION e2e de #1518/#1484 (crash de bytes con SQL_ASCII). Resumen en la seccion de triage de Upcoming
+  - Setup: venv con el stack exacto del reporter (pgcli 4.3.0 + psycopg 3.2.3 en /tmp/repro430) + cluster PG 18.6 SQL_ASCII desechable en /tmp/repro-sqla (puerto 15532, socket en /var/run/postgresql, corriendo como postgres). pty via `script -qc` porque 4.3.0 no tiene -c/-f
+  - 4.3.0: los DOS tracebacks del issue, identicos (prompt: main.py:1323 get_prompt en el replace de \\H; completion thread: escape_name en set_search_path). Captura en /tmp/repro430_e2e.out
+  - Fork instalada contra el mismo cluster: MISMO crash de prompt (main.py:1908) + mensaje de timezone con b'...' (get_timezone hace str() sobre bytes). Captura en /tmp/fork_e2e.out
+  - El mensaje verde que no aparecia en NUESTRO repro: la config real de Diego trae `use_local_timezone = False` y la 4.3.0 mergea la config real via load_config aun con --pgclirc apuntando a vacio, asi que el bloque entero se saltea. El reporter tenia el default True. En la prueba de la fork se uso XDG_CONFIG_HOME aislado con el flag en True
+  - Descartado red herring: ConnectionInfo.get_parameters() decodifica todo a str, no es la fuente de los bytes
+  - Cluster detenido; scratch en /tmp (repro430, repro-sqla, forkcfg, los dos .out) sin limpiar
 
 2026-08-21
 ===================
