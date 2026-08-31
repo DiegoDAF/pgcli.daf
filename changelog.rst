@@ -10,7 +10,9 @@ Bug fixes:
   time, like psql, so ``\watch`` only repeats its own statement (and a bare
   ``\watch`` picks up the one before it). A failed statement now also makes
   ``-f``/``-c`` exit non-zero when ``on_error`` is STOP, like psql with
-  ``ON_ERROR_STOP``.
+  ``ON_ERROR_STOP``. A backslash command in a file also spans only its
+  own line, like in psql, so a metacommand followed by SQL on the next line no
+  longer swallows the SQL.
 
 4.6.1 (2026-08-27) - upstream: 4.6.0
 ====================================
