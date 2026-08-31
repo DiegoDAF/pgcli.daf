@@ -998,8 +998,13 @@ def test_execute_statements_metacommand_spans_only_its_line(executor):
         ok = cli._execute_statements("\\echo hola\nselect 42 as x;")
     assert ok is True
     outputs = [c[0][0] for c in mock_echo.call_args_list]
-    assert any("hola" in out for out in outputs)
-    assert any("42" in out and "x" in out for out in outputs), "the select after the metacommand did not run"
+    # Two separate outputs: the echo, then a real result table. Without the
+    # line cut there is a single output where \echo swallowed the select and
+    # repeated its text, which is why the select text alone proves nothing.
+    assert len(outputs) == 2
+    assert "hola" in outputs[0]
+    assert "42" in outputs[1] and "hola" not in outputs[1]
+    assert "SELECT 1" in outputs[1], "the select did not actually run"
 
 
 @dbtest
