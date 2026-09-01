@@ -65,6 +65,17 @@ def _decode_if_bytes(value):
     return value
 
 
+def _decode_row(row):
+    """psycopg returns text columns as raw bytes when the client encoding
+    cannot be decoded (e.g. SQL_ASCII); decode every scalar value and every
+    array element so callers can treat the whole row as regular str values.
+    See issues #1484 and #1518."""
+    return [
+        [_decode_if_bytes(item) for item in value] if isinstance(value, list) else _decode_if_bytes(value)
+        for value in row
+    ]
+
+
 # pg3: I don't know what is this
 class ProtocolSafeCursor(psycopg.Cursor):
     """This class wraps and suppresses Protocol Errors with pgbouncer database.
@@ -900,7 +911,7 @@ class PGExecute:
             _logger.debug("Functions Query. sql: %r", query)
             cur.execute(query)
             for row in cur:
-                yield FunctionMetadata(*row)
+                yield FunctionMetadata(*_decode_row(row))
 
     def datatypes(self):
         """Yields tuples of (schema_name, type_name)"""

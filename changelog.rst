@@ -13,13 +13,16 @@ Bug fixes:
   ``ON_ERROR_STOP``. A backslash command in a file also spans only its
   own line, like in psql, so a metacommand followed by SQL on the next line no
   longer swallows the SQL.
-* Fix a prompt crash and garbled timezone output when the client encoding
-  cannot decode text (e.g. SQL_ASCII), where psycopg returns text columns as
-  raw bytes: the socket directory and timezone query results are now decoded
-  defensively, so the prompt no longer raises a ``TypeError`` on Unix socket
-  connections and the timezone startup message no longer shows a
-  ``b'...'``-prefixed value. Same guard as the completion metadata fix for
-  issue #1405; see upstream issues #1484 and #1518.
+* Fix a prompt crash, garbled timezone output and a completion-refresh crash
+  when the client encoding cannot decode text (e.g. SQL_ASCII), where psycopg
+  returns text columns as raw bytes: the socket directory and timezone query
+  results are now decoded defensively (so the prompt no longer raises a
+  ``TypeError`` on Unix socket connections and the timezone startup message no
+  longer shows a ``b'...'``-prefixed value), and the function metadata rows
+  are decoded before building completions (so the background completion
+  refresh no longer dies in ``parse_defaults`` with a ``TypeError``). Same
+  guard as the completion metadata fix for issue #1405; see upstream issues
+  #1484 and #1518.
 
 4.6.1 (2026-08-27) - upstream: 4.6.0
 ====================================
