@@ -18,6 +18,20 @@ Upcoming
       try/except (conninfo malformado -> error limpio de conexion, no traceback). bfea2cb
 - [x] #1542/#1544/#1545 re-mergeados (conflicto solo en changelog por el Upcoming del #1620)
 
+### 2026-09-01: PR #1628 (SQL_ASCII bytes) + merge del #1621
+- [x] #1621 MERGEADO por j-bennet (9da9c8d). Van 8 PRs nuestros mergeados
+- [x] Revisado el prototipo local `pr-sql-ascii-clean` (2 pasadas): fix de los issues #1518/#1484
+      (psycopg devuelve bytes con encoding SQL_ASCII; crash de prompt, timezone b'...', muerte del
+      refresh de completions en parse_defaults). Guards en socket dir, timezone y function metadata,
+      mismo decode("utf-8","replace") del #1612. 6 tests (3 fallan sin fix), suite 2758 verde,
+      adversarial ok. Primera pasada: fallaba ruff format y habia 2 commits; el prototipo lo
+      squasheo y formateo (b9c9c56)
+- [x] PR #1628 abierto con la nota de alcance deliberado (function_definition/search_path/schemata/
+      databases sin guard, no involucrados en los crashes reportados). Respuestas pegadas en
+      #1518 y #1484 con el link. #1603 actualizado (1621 merged + 1628 en la lista de bugs)
+- [ ] Los guards ya estan en nuestro main (61f8102+63be76c); evaluar guardar tambien los 4 paths
+      restantes en NUESTRO fork (alla no hace falta PR chico)
+
 ### 2026-09-01: metacomandos por linea en -f/-c (repregunta de j-bennet en #1543)
 - [x] j-bennet pregunto como maneja sqlparse.split los metacomandos. Diego anticipo el agujero:
       interactivo submitea apenas el buffer arranca con \ (pgbuffer.py:53), pero en archivo
