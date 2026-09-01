@@ -870,3 +870,37 @@ def test_unknown_backslash_command_stops_multi_statement(executor, pgspecial):
     normal_sql.assert_not_called()
     assert len(result) == 1  # the select never ran
     assert "Unrecognized command: \\set" in result[0][3]
+
+
+# When the client encoding is one psycopg cannot decode (e.g. SQL_ASCII),
+# text columns come back as raw bytes. See issues #1484 and #1518.
+
+
+@dbtest
+def test_get_socket_directory_decodes_sql_ascii_bytes(executor):
+    with patch.object(executor.conn, "cursor") as mock_cursor:
+        mock_cursor.return_value.__enter__.return_value.fetchone.return_value = (b"/var/run/postgresql",)
+        assert executor.get_socket_directory() == "/var/run/postgresql"
+
+
+@dbtest
+def test_get_socket_directory_str_unchanged(executor):
+    with patch.object(executor.conn, "cursor") as mock_cursor:
+        mock_cursor.return_value.__enter__.return_value.fetchone.return_value = ("/var/run/postgresql",)
+        assert executor.get_socket_directory() == "/var/run/postgresql"
+
+
+@dbtest
+def test_get_timezone_decodes_sql_ascii_bytes(executor):
+    with patch.object(executor.conn, "cursor") as mock_cursor:
+        mock_cursor.return_value.__enter__.return_value.fetchone.return_value = (
+            b"America/Argentina/Buenos_Aires",
+        )
+        assert executor.get_timezone() == "America/Argentina/Buenos_Aires"
+
+
+@dbtest
+def test_get_timezone_str_unchanged(executor):
+    with patch.object(executor.conn, "cursor") as mock_cursor:
+        mock_cursor.return_value.__enter__.return_value.fetchone.return_value = ("UTC",)
+        assert executor.get_timezone() == "UTC"

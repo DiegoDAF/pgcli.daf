@@ -56,6 +56,15 @@ def register_typecasters(connection):
         connection.adapters.register_loader(forced_text_type, psycopg.types.string.TextLoader)
 
 
+def _decode_if_bytes(value):
+    """psycopg returns text columns as raw bytes when the client encoding
+    cannot be decoded (e.g. SQL_ASCII); decode defensively so callers can
+    treat the value as a regular str. See issues #1484 and #1518."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return value
+
+
 # pg3: I don't know what is this
 class ProtocolSafeCursor(psycopg.Cursor):
     """This class wraps and suppresses Protocol Errors with pgbouncer database.
@@ -761,7 +770,7 @@ class PGExecute:
             _logger.debug("Socket directory Query. sql: %r", self.socket_directory_query)
             cur.execute(self.socket_directory_query)
             result = cur.fetchone()
-            return result[0] if result else ""
+            return _decode_if_bytes(result[0]) if result else ""
 
     def foreignkeys(self):
         """Yields ForeignKey named tuples"""
@@ -994,7 +1003,7 @@ class PGExecute:
         with self.conn.cursor() as cur:  # type: ignore[union-attr]
             cur.execute(query)
             result = cur.fetchone()
-            return str(result[0]) if result else ""
+            return _decode_if_bytes(result[0]) if result else ""
 
     def set_timezone(self, timezone: str):
         query = psycopg.sql.SQL("set time zone {}").format(psycopg.sql.Identifier(timezone))
