@@ -42,11 +42,9 @@ Upcoming
       tras endurecer el assert: el \echo tragon repite el texto del select en su salida, asi
       que assertar solo por texto no probaba nada). Wheel 4.6.1 recompilado e instalado
 
-### PLAN DE PRs A UPSTREAM (decidido 2026-08-27)
-# ESPERAR a que bajen los PRs abiertos antes de sumar mas. Hoy hay 6 abiertos
-# (#1542 -c, #1543 -f, #1544 -y, #1545 -t, #1620 explain, #1621 -l), todos CLEAN
-# con 7/7 checks. dbaty mergea a buen ritmo (2 en dos dias), pero no saturarlo:
-# esperar a estar en 3 o 4 abiertos.
+### PLAN DE PRs A UPSTREAM (revisado 2026-09-03: el item 5 BAJA de prioridad)
+# Estado: 4 abiertos (#1542 -c, #1544 -y, #1545 -t, #1628 SQL_ASCII), todos CLEAN.
+# Ya van 9 mergeados. j-bennet volvio y mergea a buen ritmo; igual no saturarla.
 # Orden acordado para los proximos, uno por vez:
 - [ ] 1) Item 11 del #1603: `--no-timings` / `--no-status`
       # Va PRIMERO porque es el primitivo que le da coherencia al -t del #1545 (en vuelo)
@@ -57,14 +55,31 @@ Upcoming
       # timing sale de pgspecial.timing_enabled, el status de un `if status:` en format_output.
       # OJO: nuestro -t esta atado a --no-timings/--no-status; hay que desacoplarlo.
 - [ ] 2) Item 8 del #1603: `-o/--output`
-      # Misma familia de scripting que los 4 en vuelo. Chico y autocontenido.
-- [ ] 3) Item 5 del #1603: `dsn.d/`
-      # Argumento extra fuerte: resuelve el issue #1489 que YA esta abierto en upstream.
-- [ ] 4) Item 6 del #1603: namedqueries.d + sufijo de version (estilo psqlrc-NN)
-      # El mas grande de los cuatro. La version del server sale del startup packet
-      # (conn.info.server_version), sin round-trip extra.
+      # Misma familia de scripting que los que estan en vuelo. Chico y autocontenido,
+      # y no pisa codigo que upstream acabe de tocar.
+- [ ] 3) Item 6 del #1603: namedqueries.d + sufijo de version (estilo psqlrc-NN)
+      # La version del server sale del startup packet (conn.info.server_version),
+      # sin round-trip extra.
+- [ ] 4) Item 5 del #1603: `dsn.d/`  <-- BAJADO de la posicion 3 a la 4 (2026-09-03)
+      # POR QUE BAJO: perdio su mejor argumento. El issue #1489 ("alias dsn is not
+      # detected"), que era el respaldo del pitch, lo CERRO j-bennet el 2026-09-03 al
+      # mergear el #1617 de ChrisJr404 (72c5f91). Ese fix es mas chico y por otra via:
+      # no reescribe el config default en un comando de solo lectura y resuelve -D
+      # desde el config ya cargado. NO agrega archivos drop-in.
+      # Consecuencias para cuando lo mandemos:
+      #   a) Hay que REBASAR sobre la forma nueva: el #1617 reescribio exactamente las
+      #      dos lineas de main.py donde engancha nuestro DsnAliases (--list-dsn y -D).
+      #   b) El pitch tiene que pararse solo en el valor de la feature (aliases como
+      #      archivos sueltos; Diego tiene 104), sin issue que cerrar.
+      #   c) j-bennet ya mostro opinion fuerte contra opciones que "duplican un knob
+      #      que ya existe" -> conviene PREGUNTAR en el #1603 si les interesa el formato
+      #      drop-in ANTES de invertir en el PR, para no repetir el rediseño del -t.
+      # Tamaño: pgcli/dsnaliases.py son 243 lineas + 22 tests en tests/test_dsnaliases.py.
 # NO mandar por ahora: item 21 (log_truncate_on_rotation) depende de la rotacion de
 # logs del item 12, que upstream ya pospuso una vez ("revisit" en los #1541/#1547).
+# PENDIENTE APARTE: en el issue #1489 hay un comentario del 2026-06-25 firmado con la
+# cuenta de TRABAJO (diego-feito-stori) apuntando al fork personal y al #1603. Es publico
+# y cruza identidades. Decidir si se borra y se repone desde DiegoDAF.
 
 ### BUG anotado 2026-08-10: `--` en named queries de una linea comenta el RESTO de la query
 # Sintoma: al aplanar una query multilinea a `name = "sql"` (formato namedqueries.d),
