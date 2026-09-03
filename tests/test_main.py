@@ -2121,9 +2121,18 @@ def test_list_databases_without_conn_string_uses_postgres(tmpdir):
     assert call.args[0] == "postgres"  # database
 
 
-def test_list_databases_discards_plain_dbname(tmpdir):
-    """A plain db name is still discarded by -l (unchanged behavior)."""
+def test_list_databases_keeps_plain_dbname(tmpdir):
+    """psql -l connects to the named database and lists from there
+    (psql -l nonexistent fails with "database does not exist"), so a
+    plain db name is kept."""
     path, call = _cli_conn_target(["mydb", "-l"], tmpdir)
+    assert path == "plain"
+    assert call.args[0] == "mydb"
+
+
+def test_list_databases_no_dbname_gets_postgres(tmpdir):
+    """With no database at all, -l connects to "postgres"."""
+    path, call = _cli_conn_target(["-l"], tmpdir)
     assert path == "plain"
     assert call.args[0] == "postgres"
 

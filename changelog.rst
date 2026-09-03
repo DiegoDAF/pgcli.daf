@@ -4,6 +4,12 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``-l``/``--list`` and ``--ping`` now keep a plain database name instead of
+  replacing it with ``postgres``. psql connects to the named database and lists
+  from there (``psql -l nonexistent`` fails with "database does not exist"), so
+  only the case where no database is given at all falls back to ``postgres``.
+  Follows the review of upstream #1621.
+
 * Fix ``-f``/``-c`` repeating the whole block when it ends in ``\watch``: the
   watch regex captures all the text before it, so a multi-statement file ended
   up re-running every statement. Files and commands now run one statement at a

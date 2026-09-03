@@ -893,9 +893,7 @@ def test_get_socket_directory_str_unchanged(executor):
 @dbtest
 def test_get_timezone_decodes_sql_ascii_bytes(executor):
     with patch.object(executor.conn, "cursor") as mock_cursor:
-        mock_cursor.return_value.__enter__.return_value.fetchone.return_value = (
-            b"America/Argentina/Buenos_Aires",
-        )
+        mock_cursor.return_value.__enter__.return_value.fetchone.return_value = (b"America/Argentina/Buenos_Aires",)
         assert executor.get_timezone() == "America/Argentina/Buenos_Aires"
 
 

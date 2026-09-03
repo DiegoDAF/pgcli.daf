@@ -2298,7 +2298,10 @@ def cli(
     # it with "postgres" would throw all of that away and fall back to a local
     # socket connection as the OS user. Only a plain db name is discarded here.
     is_conn_string = "://" in database or ("=" in database and service is None)
-    if (list_databases or ping_database) and not is_conn_string:
+    if (list_databases or ping_database) and not database:
+        # psql keeps a database argument for --list (psql -l nonexistent fails
+        # with "database does not exist"), so only fall back to "postgres" when
+        # no database was given at all.
         database = "postgres"
 
     # psql/libpq precedence: for a --dsn / URI connection, only connection

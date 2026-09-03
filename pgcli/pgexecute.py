@@ -70,10 +70,7 @@ def _decode_row(row):
     cannot be decoded (e.g. SQL_ASCII); decode every scalar value and every
     array element so callers can treat the whole row as regular str values.
     See issues #1484 and #1518."""
-    return [
-        [_decode_if_bytes(item) for item in value] if isinstance(value, list) else _decode_if_bytes(value)
-        for value in row
-    ]
+    return [[_decode_if_bytes(item) for item in value] if isinstance(value, list) else _decode_if_bytes(value) for value in row]
 
 
 # pg3: I don't know what is this
