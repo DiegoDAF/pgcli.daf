@@ -42,6 +42,28 @@ Upcoming
       tras endurecer el assert: el \echo tragon repite el texto del select en su salida, asi
       que assertar solo por texto no probaba nada). Wheel 4.6.1 recompilado e instalado
 
+### 2026-09-08: PRs de terceros que nos afectan (barrido del repo padre)
+# Upstream quieto desde el 04/09 (8e4aef4). Nuestros 2 abiertos sin novedad:
+# #1542 CLEAN esperando review; #1628 esperando que decidan entre el nuestro y el #1629
+# de dbaty (que sigue en DRAFT desde el 04/09, sin respuesta a nuestra comparacion medida).
+- [ ] #1631 (jackwalkerlabs) "Preserve literal passwords in PostgreSQL service files":
+      ES UN BUG REAL NUESTRO, verificado. parse_service_info() usa ConfigObj, que trata el
+      `#` como comentario inline: un `password=abc#def` en .pg_service.conf se lee como 'abc'.
+      Reproducido en nuestro fork. Su fix cambia a ConfigParser(interpolation=None,
+      delimiters=("=",), comment_prefixes=("#",)). CHERRY-PICK cuando mergee.
+      Impacto practico para Diego HOY: bajo, no tiene ~/.pg_service.conf. Pero tiene 5
+      entradas en .pgpass con `#` en el password, asi que si algun dia migra a service file
+      lo muerde en silencio. dbaty ya lo comento (2 veces el 07/09)
+- [ ] #1633 (MelvinCERBA) "Avoid rewriting passwords loaded from keyring":
+      APLICA A NUESTRO FORK: tenemos identico `if passwd and auth.keyring:
+      auth.keyring_set_password(key, passwd)` (main.py:1219). Reescribimos la pass en el
+      keyring en CADA conexion exitosa, incluso cuando la acabamos de leer de ahi.
+      En macOS eso resetea el "Allow Once" del Keychain; en Linux es solo escritura inutil.
+      Prioridad baja para nosotros, pero cherry-pick candidate
+- [ ] #1632 (jackwalkerlabs) "Show PostgreSQL service names in the prompt": feature nueva
+      (token `\service` en el prompt). No la tenemos. Solo util si usamos service files
+- [~] #1630 (Add Changelog project URL) y #1625 (remove stale xfail): irrelevantes para nosotros
+
 ### PLAN DE PRs A UPSTREAM (revisado 2026-09-03: el item 5 BAJA de prioridad)
 # Estado: 4 abiertos (#1542 -c, #1544 -y, #1545 -t, #1628 SQL_ASCII), todos CLEAN.
 # Ya van 9 mergeados. j-bennet volvio y mergea a buen ritmo; igual no saturarla.
