@@ -2758,7 +2758,11 @@ def parse_service_info(service):
                 source=service_file,
             )
         except configparser.Error as err:
-            raise ParseError(str(err), line_number=getattr(err, "lineno", 0)) from err
+            # The blank lines fed in above keep ConfigParser's line numbers
+            # aligned with the real file, so report the first one it choked on.
+            errors = getattr(err, "errors", None)
+            line_number = errors[0][0] if errors else 0
+            raise ParseError(str(err), line_number=line_number) from err
     if service not in service_file_config:
         return None, service_file
     service_conf = dict(service_file_config[service])

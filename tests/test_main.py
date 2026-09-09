@@ -15,6 +15,7 @@ try:
 except ImportError:
     setproctitle = None
 
+from configobj import ParseError
 from pgcli.main import (
     cli,
     obfuscate_process_password,
@@ -1138,6 +1139,25 @@ def test_pg_service_file_full_line_comments_still_work(tmpdir):
 
     assert conf["host"] == "h"
     assert "# this whole line is a comment" not in conf
+
+
+def test_pg_service_file_unknown_service_returns_none(tmpdir):
+    """An unknown service name keeps returning (None, path) instead of raising."""
+    path = _service_conf(tmpdir, "[known]\nhost=h\n")
+    conf, used = parse_service_info("not_there")
+
+    assert conf is None
+    assert used == path
+
+
+def test_pg_service_file_parse_error_reports_the_real_line(tmpdir):
+    """Line numbers must count the leading junk that psql tolerates, so the
+    number in the error matches what the user sees in an editor."""
+    _service_conf(tmpdir, "a stray line\nanother one\n\n[svc]\nhost=h\nnot a valid entry\n")
+    with pytest.raises(ParseError) as excinfo:
+        parse_service_info("svc")
+
+    assert excinfo.value.line_number == 6
 
 
 def test_pg_service_file_warns_on_apparent_inline_comment(tmpdir, capsys):
