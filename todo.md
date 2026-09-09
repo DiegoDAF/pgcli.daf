@@ -57,6 +57,22 @@ Upcoming
       guc-file.l:95) y el error de libpq ('invalid integer value "5432 # prod"') no los
       menciona. 14 tests, 7 fallan sin el fix. Idea de parche a PG anotada en
       /home/daf/scripts/postgres/todo.md
+- [ ] PR ENCOLADO (no mandar todavia): el WARNING de comentarios inline en service files.
+      Es lo unico nuestro que el #1631 no cubre, y es el workaround real de la limitacion de
+      libpq. DEPENDE del #1631: sin parseo literal el valor ya viene mutilado y el warning
+      nunca se dispara, por eso NO se puede armar la rama sobre el main de upstream de hoy
+      (sigue con ConfigObj). Cuando el #1631 mergee: rama desde original/main y portar de
+      nuestro a617ff2 solo la funcion _warn_on_inline_comments() + sus 2 tests
+      (test_pg_service_file_warns_on_apparent_inline_comment y el _no_warning_without_inline_hash).
+      NO portar el cambio de parseo, ese ya lo hace el #1631.
+- [x] Aportado al #1631 (2026-09-09, issuecomment-5605504837): tabla de los 10 casos medidos
+      contra libpq real, la explicacion de para que sirve el itertools.repeat (dbaty lo
+      cuestionaba: mantiene la numeracion de linea, sin el la linea 6 se reporta como 3),
+      la CORRECCION de que el KeyError que dbaty temia NO existe (la guarda `if service not in`
+      esta y ConfigParser.__contains__ devuelve False; probado con su codigo exacto, y sus
+      comentarios son 4h POSTERIORES al unico commit asi que no es que se agrego despues),
+      y el aviso de que la excepcion cambia de configobj.ParseError a configparser.ParsingError
+      (nadie la captura, solo cambia el traceback). Ofrecidos los tests parametrizados
 - [~] #1631 (jackwalkerlabs) "Preserve literal passwords in PostgreSQL service files":
       ES UN BUG REAL NUESTRO, verificado. parse_service_info() usa ConfigObj, que trata el
       `#` como comentario inline: un `password=abc#def` en .pg_service.conf se lee como 'abc'.
