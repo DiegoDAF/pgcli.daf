@@ -42,6 +42,20 @@ Upcoming
       tras endurecer el assert: el \echo tragon repite el texto del select en su salida, asi
       que assertar solo por texto no probaba nada). Wheel 4.6.1 recompilado e instalado
 
+### 2026-09-09: destrabar los 2 PRs abiertos
+- [x] #1542: j-bennet pidio resolver conflictos el 04/09, los resolvi ese mismo dia pero
+      NUNCA le conteste (misma trampa de julio: pushear el fix no es contestar la review).
+      Comentario mandado (issuecomment-5605732251) avisando que quedo CLEAN 7/7, y de paso
+      documentando los 2 cambios que salieron del merge con el -f ya mergeado: el -c usa
+      _execute_statements (el \watch queda scoped) y -c junto con -f corren LOS DOS como psql
+- [x] #1628: nudge pidiendo decision (issuecomment-5605735480). NO lo cerramos: el #1629 de
+      dbaty sigue en DRAFT sin tocar desde el 04/09 y su propio autor lo llama "not fully
+      tested"; cerrar el nuestro dejaria cero mergeable con los issues #1518/#1484 abiertos.
+      El nudge ofrece 3 salidas (cerramos el nuestro / hacemos la version combinada / #1629
+      primero y el fallback despues) para que elijan sin que parezca defensa de territorio
+- [ ] ESPERAR respuesta. Si eligen la opcion 2, el trabajo es: override_client_encoding como
+      mecanismo primario + decode defensivo como fallback ante CharacterNotInRepertoire
+
 ### 2026-09-08: PRs de terceros que nos afectan (barrido del repo padre)
 # Upstream quieto desde el 04/09 (8e4aef4). Nuestros 2 abiertos sin novedad:
 # #1542 CLEAN esperando review; #1628 esperando que decidan entre el nuestro y el #1629
