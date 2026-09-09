@@ -46,7 +46,18 @@ Upcoming
 # Upstream quieto desde el 04/09 (8e4aef4). Nuestros 2 abiertos sin novedad:
 # #1542 CLEAN esperando review; #1628 esperando que decidan entre el nuestro y el #1629
 # de dbaty (que sigue en DRAFT desde el 04/09, sin respuesta a nuestra comparacion medida).
-- [ ] #1631 (jackwalkerlabs) "Preserve literal passwords in PostgreSQL service files":
+- [x] HECHO 2026-09-09 (a617ff2): workaround propio, NO esperamos el merge del #1631.
+      parse_service_info() pasa de ConfigObj a ConfigParser(interpolation=None,
+      delimiters=("=",), comment_prefixes=("#",), inline_comment_prefixes=None).
+      MAPEADO contra libpq real (10 casos, sonda = dbname que el server devuelve textual):
+      coincidimos 10/10. Antes divergiamos en 5: abc#def -> 'abc', #abc -> '', a,b -> lista,
+      'quoted'/"quoted" -> sin comillas.
+      EXTRA que el #1631 no tiene: warning cuando un valor contiene " #", porque
+      pg_service.conf NO soporta comentarios inline (a diferencia de postgresql.conf, ver
+      guc-file.l:95) y el error de libpq ('invalid integer value "5432 # prod"') no los
+      menciona. 14 tests, 7 fallan sin el fix. Idea de parche a PG anotada en
+      /home/daf/scripts/postgres/todo.md
+- [~] #1631 (jackwalkerlabs) "Preserve literal passwords in PostgreSQL service files":
       ES UN BUG REAL NUESTRO, verificado. parse_service_info() usa ConfigObj, que trata el
       `#` como comentario inline: un `password=abc#def` en .pg_service.conf se lee como 'abc'.
       Reproducido en nuestro fork. Su fix cambia a ConfigParser(interpolation=None,
