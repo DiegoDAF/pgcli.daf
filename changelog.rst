@@ -1,6 +1,25 @@
 Upcoming
 ========
 
+Features:
+---------
+* Add support for forcing destructive commands without confirmation.
+    * Command line option `-y` or `--yes`.
+    * Skips the destructive command confirmation prompt when enabled.
+    * Useful for automated scripts and CI/CD pipelines.
+* Add a ``-t``/``--tuples-only`` command line option that prints the rows and
+  nothing else, matching psql: no column headers, no title, no status footer
+  and no timing line. The configured table format is left untouched, so ``\T``
+  still reports it and can still change it mid-session.
+* Add support for executing SQL commands from file and exit.
+    * Command line option `-f` or `--file`.
+    * Multiple files can be specified.
+    * Files run one statement at a time, like psql, so a ``\watch`` only
+      repeats its own statement (and a bare ``\watch`` re-runs the statement
+      before it), instead of re-running the whole file. A backslash command
+      spans only its own line, also like psql, so a metacommand followed by
+      SQL on the next line does not swallow the SQL.
+
 Bug fixes:
 ----------
 * Fix special commands being broken while explain mode (F5) is on. Every input
@@ -41,6 +60,12 @@ Internal:
 
 Bug fixes:
 ----------
+* Fix ``--list-dsn`` and ``-D``/``--dsn`` not finding ``[alias_dsn]`` entries.
+  On a fresh install (no config written yet) ``--list-dsn`` printed a misleading
+  "Invalid DSNs found" error. ``--list-dsn`` now treats a missing config or
+  ``[alias_dsn]`` section as simply nothing to list, without writing a config
+  file, and ``-D`` resolves the alias from the config already loaded at startup
+  instead of reading it again ([issue 1489](https://github.com/dbcli/pgcli/issues/1489)).
 * Restore cursor shape behaviour for Emacs mode
 * Fix ``TypeError: cannot use a string pattern on a bytes-like object`` when
   completion metadata comes back as bytes (e.g. ``SQL_ASCII`` client encoding).

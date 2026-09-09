@@ -442,6 +442,140 @@ def test_watch_works(executor):
     run_with_watch("\\watch 5", target_call_count=4, expected_output="222", expected_timing=5)
 
 
+@dbtest
+def test_execute_statements_splits_a_block(executor):
+    """A multi-statement block runs one statement at a time, like psql -f."""
+    cli = PGCli(pgexecute=executor)
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo:
+        ok = cli._execute_statements("select 111;\nselect 222;")
+    assert ok is True
+    outputs = [c[0][0] for c in mock_echo.call_args_list]
+    assert len(outputs) == 2
+    assert "111" in outputs[0] and "222" not in outputs[0]
+    assert "222" in outputs[1] and "111" not in outputs[1]
+
+
+@dbtest
+def test_execute_statements_watch_repeats_only_its_own_statement(executor):
+    r"""Regression: \watch at the end of a file repeated the WHOLE file."""
+    cli = PGCli(pgexecute=executor)
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo, mock.patch("pgcli.main.sleep") as mock_sleep:
+        mock_sleep.side_effect = [None, KeyboardInterrupt]
+        cli._execute_statements("select 111;\nselect 222; \\watch 4")
+    outputs = [c[0][0] for c in mock_echo.call_args_list]
+    assert "111" in outputs[0]
+    for out in outputs[1:]:
+        assert "222" in out
+        assert "111" not in out, "\\watch repeated the whole block, not just its statement"
+    assert mock_sleep.call_args_list[0][0][0] == 4
+
+
+@dbtest
+def test_execute_statements_bare_watch_uses_previous_statement(executor):
+    r"""A \watch alone on its line picks up the statement before it."""
+    cli = PGCli(pgexecute=executor)
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo, mock.patch("pgcli.main.sleep") as mock_sleep:
+        mock_sleep.side_effect = [KeyboardInterrupt]
+        cli._execute_statements("select 333;\n\\watch 5")
+    outputs = [c[0][0] for c in mock_echo.call_args_list]
+    assert len(outputs) >= 2
+    for out in outputs:
+        assert "333" in out
+    assert mock_sleep.call_args_list[0][0][0] == 5
+
+
+@dbtest
+def test_execute_statements_on_error_stop_halts(executor):
+    """With on_error = STOP (the default) the first failure stops the block."""
+    cli = PGCli(pgexecute=executor)
+    assert cli.on_error == "STOP"
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo:
+        ok = cli._execute_statements("select boom_not_a_column;\nselect 444;")
+    assert ok is False
+    outputs = [c[0][0] for c in mock_echo.call_args_list]
+    assert not any("444" in out for out in outputs), "the statement after the failure still ran"
+
+
+@dbtest
+def test_execute_statements_on_error_resume_continues(executor):
+    """With on_error = RESUME the block keeps going after a failure."""
+    cli = PGCli(pgexecute=executor)
+    cli.on_error = "RESUME"
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo:
+        ok = cli._execute_statements("select boom_not_a_column;\nselect 444;")
+    assert ok is False
+    outputs = [c[0][0] for c in mock_echo.call_args_list]
+    assert any("444" in out for out in outputs)
+
+
+@dbtest
+@dbtest
+def test_execute_statements_metacommand_spans_only_its_line(executor):
+    """psql cuts a backslash command at its newline: a metacommand followed
+    by SQL must not swallow the SQL (sqlparse only cuts at semicolons)."""
+    cli = PGCli(pgexecute=executor)
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo:
+        ok = cli._execute_statements("\\echo hola\nselect 42 as x;")
+    assert ok is True
+    outputs = [c[0][0] for c in mock_echo.call_args_list]
+    # Two separate outputs: the echo, then a real result table. Without the
+    # line cut there is a single output where \echo swallowed the select and
+    # repeated its text, which is why the select text alone proves nothing.
+    assert len(outputs) == 2
+    assert "hola" in outputs[0]
+    assert "42" in outputs[1] and "hola" not in outputs[1]
+    assert "SELECT 1" in outputs[1], "the select did not actually run"
+
+
+@dbtest
+def test_execute_statements_consecutive_metacommands(executor):
+    """Several backslash commands on consecutive lines each run on their own."""
+    cli = PGCli(pgexecute=executor)
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo:
+        ok = cli._execute_statements("\\echo uno\n\\echo dos\nselect 7 as x;")
+    assert ok is True
+    outputs = [c[0][0] for c in mock_echo.call_args_list]
+    assert any("uno" in out and "dos" not in out for out in outputs)
+    assert any("dos" in out and "uno" not in out for out in outputs)
+    assert any("7" in out for out in outputs)
+
+
+@dbtest
+def test_execute_statements_sql_then_metacommand(executor):
+    """A metacommand after SQL still runs alone, and the SQL after it too."""
+    cli = PGCli(pgexecute=executor)
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo:
+        ok = cli._execute_statements("select 1 as a;\n\\echo medio\nselect 2 as b;")
+    assert ok is True
+    outputs = [c[0][0] for c in mock_echo.call_args_list]
+    assert len(outputs) == 3
+    assert "medio" in outputs[1]
+
+
+def test_execute_statements_does_not_split_inside_literals(executor):
+    """Semicolons inside string literals are not statement boundaries."""
+    cli = PGCli(pgexecute=executor)
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo:
+        ok = cli._execute_statements("select 'a;b' as x;")
+    assert ok is True
+    outputs = [c[0][0] for c in mock_echo.call_args_list]
+    assert len(outputs) == 1
+    assert "a;b" in outputs[0]
+
+
+def test_file_mode_runs_statements(tmpdir):
+    """-f wiring: the file content goes through _execute_statements."""
+    sql_file = tmpdir.join("script.sql")
+    sql_file.write("select 1;\nselect 2;")
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.input_files = [str(sql_file)]
+    with mock.patch.object(cli, "_execute_statements", return_value=True) as mock_exec:
+        with pytest.raises(SystemExit) as e:
+            cli.run_cli()
+    assert e.value.code == 0
+    mock_exec.assert_called_once_with("select 1;\nselect 2;")
+
+
 def test_missing_rc_dir(tmpdir):
     rcfile = str(tmpdir.join("subdir").join("rcfile"))
 
@@ -642,6 +776,55 @@ def test_notifications(executor):
     with mock.patch("pgcli.main.click.secho") as mock_secho:
         run(executor, "notify chan1, 'testing2'")
         mock_secho.assert_not_called()
+
+
+def test_force_destructive_flag():
+    """Test that PGCli can be initialized with force_destructive flag."""
+    cli = PGCli(force_destructive=True)
+    assert cli.force_destructive is True
+
+    cli = PGCli(force_destructive=False)
+    assert cli.force_destructive is False
+
+    cli = PGCli()
+    assert cli.force_destructive is False
+
+
+@dbtest
+def test_force_destructive_skips_confirmation(executor):
+    """Test that force_destructive=True skips confirmation for destructive commands."""
+    cli = PGCli(pgexecute=executor, force_destructive=True)
+    cli.destructive_warning = ["drop", "alter"]
+
+    # The proceed/abort decision lives inside confirm_destructive_query, which is
+    # told to force; what must not happen is the user being prompted.
+    with mock.patch("pgcli.packages.prompt_utils.confirm") as mock_prompt:
+        # Execute a destructive command
+        result = cli.execute_command("ALTER TABLE test_table ADD COLUMN test_col TEXT;")
+
+        # Verify that the user was never prompted
+        mock_prompt.assert_not_called()
+
+        # Verify that the command was attempted (even if it fails due to missing table)
+        assert result is not None
+
+
+@dbtest
+def test_without_force_destructive_calls_confirmation(executor):
+    """Test that without force_destructive, confirmation is called for destructive commands."""
+    cli = PGCli(pgexecute=executor, force_destructive=False)
+    cli.destructive_warning = ["drop", "alter"]
+
+    # Mock confirm_destructive_query to return True (user confirms)
+    with mock.patch("pgcli.main.confirm_destructive_query", return_value=True) as mock_confirm:
+        # Execute a destructive command
+        result = cli.execute_command("ALTER TABLE test_table ADD COLUMN test_col TEXT;")
+
+        # Verify that confirm_destructive_query WAS called
+        mock_confirm.assert_called_once()
+
+        # Verify that the command was attempted
+        assert result is not None
 
 
 def test_edit_named_query():
