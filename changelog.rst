@@ -4,6 +4,16 @@ Upcoming
 Bug fixes:
 ----------
 
+* Read ``.pg_service.conf`` values literally, the way libpq does. They were
+  parsed with ConfigObj, which strips an inline ``# ...`` as a comment, removes
+  surrounding quotes and turns ``a,b`` into a list, so a password such as
+  ``abc#def`` silently arrived as ``abc``. libpq only treats ``#`` as a comment
+  at the start of a line and trims nothing but trailing whitespace, and pgcli
+  now matches it on all ten cases that were compared against a live server.
+  pgcli also warns when a value contains `` #``, because ``pg_service.conf``
+  has no end-of-line comments (unlike ``postgresql.conf``) and libpq's own
+  error for, say, ``port=5432 # prod`` never mentions comments at all.
+
 * ``-l``/``--list`` and ``--ping`` now keep a plain database name instead of
   replacing it with ``postgres``. psql connects to the named database and lists
   from there (``psql -l nonexistent`` fails with "database does not exist"), so

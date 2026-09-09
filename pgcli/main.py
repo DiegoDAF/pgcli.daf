@@ -1,5 +1,7 @@
 from zoneinfo import ZoneInfoNotFoundError
-from configobj import ConfigObj, ParseError
+from configobj import ParseError
+import configparser
+from configparser import ConfigParser
 from pgspecial.namedqueries import NamedQueries
 from .namedqueries import ExtendedNamedQueries, server_major_version
 from .dsnaliases import DsnAliases
@@ -2738,15 +2740,50 @@ def parse_service_info(service):
         return None, service_file
     with open(service_file, newline="") as f:
         skipped_lines = skip_initial_comment(f)
+        # libpq takes everything after the "=" literally: "#" only starts a
+        # comment at the beginning of a line, quotes and commas are part of the
+        # value, and only trailing whitespace is trimmed. ConfigObj would strip
+        # inline "# ..." as a comment, unquote 'x', and turn "a,b" into a list,
+        # silently mangling passwords. See parseServiceFile() in
+        # src/interfaces/libpq/fe-connect.c.
+        service_file_config = ConfigParser(
+            interpolation=None,
+            delimiters=("=",),
+            comment_prefixes=("#",),
+            inline_comment_prefixes=None,
+        )
         try:
-            service_file_config = ConfigObj(f)
-        except ParseError as err:
-            err.line_number += skipped_lines
-            raise err
+            service_file_config.read_file(
+                itertools.chain(itertools.repeat("\n", skipped_lines), f),
+                source=service_file,
+            )
+        except configparser.Error as err:
+            raise ParseError(str(err), line_number=getattr(err, "lineno", 0)) from err
     if service not in service_file_config:
         return None, service_file
-    service_conf = service_file_config.get(service)
+    service_conf = dict(service_file_config[service])
+    _warn_on_inline_comments(service, service_conf, service_file)
     return service_conf, service_file
+
+
+def _warn_on_inline_comments(service, service_conf, service_file):
+    """Warn about values that look like they carry an end-of-line comment.
+
+    pg_service.conf has no inline comments, unlike postgresql.conf, so
+    ``port=5432 # prod`` makes libpq report `invalid integer value
+    "5432 # prod"`, which does not mention comments at all. Values really
+    containing " #" are legal, hence a warning rather than an error.
+    """
+    for key, value in service_conf.items():
+        if isinstance(value, str) and " #" in value:
+            click.secho(
+                f'Warning: in {service_file}, service "{service}" has '
+                f'{key}={value!r}. pg_service.conf has no end-of-line comments: '
+                '"#" only starts a comment at the beginning of a line, so this '
+                "is used as the literal value.",
+                err=True,
+                fg="yellow",
+            )
 
 
 def duration_in_words(duration_in_seconds: float) -> str:

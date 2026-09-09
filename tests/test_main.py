@@ -21,6 +21,7 @@ from pgcli.main import (
     duration_in_words,
     format_output,
     get_connect_timeout,
+    parse_service_info,
     notify_callback,
     PGCli,
     MetaQuery,
@@ -1093,6 +1094,70 @@ def test_quoted_db_uri(tmpdir):
         cli.connect_uri(uri)
     # connect_uri now passes the original URI as dsn for .pgpass support
     mock_connect.assert_called_with(dsn=uri, database="testdb[", host="baz.com", user="bar^", passwd="]foo")
+
+
+def _service_conf(tmpdir, body):
+    """Write a service file and point PGSERVICEFILE at it."""
+    path = tmpdir.join(".pg_service.conf")
+    path.write(body)
+    os.environ["PGSERVICEFILE"] = path.strpath
+    return path.strpath
+
+
+# libpq takes service-file values literally: "#" only opens a comment at the
+# start of a line, quotes and commas belong to the value, and only trailing
+# whitespace is trimmed. Verified against psql on a live server; see
+# parseServiceFile() in src/interfaces/libpq/fe-connect.c.
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("abc#def", "abc#def"),
+        ("#abc", "#abc"),
+        ("abc #def", "abc #def"),
+        ("a,b", "a,b"),
+        ("'quoted'", "'quoted'"),
+        ('"quoted"', '"quoted"'),
+        ("a b", "a b"),
+        ("a%b", "a%b"),
+        ("a=b", "a=b"),
+        ("abc   ", "abc"),
+    ],
+)
+def test_pg_service_file_values_are_literal_like_libpq(tmpdir, raw, expected):
+    path = _service_conf(tmpdir, f"[svc]\nhost=h\npassword={raw}\n")
+    conf, used = parse_service_info("svc")
+
+    assert used == path
+    assert conf["password"] == expected
+
+
+def test_pg_service_file_full_line_comments_still_work(tmpdir):
+    """A "#" at the start of a line is still a comment, as libpq does."""
+    _service_conf(tmpdir, "[svc]\n# this whole line is a comment\nhost=h\n")
+    conf, _ = parse_service_info("svc")
+
+    assert conf["host"] == "h"
+    assert "# this whole line is a comment" not in conf
+
+
+def test_pg_service_file_warns_on_apparent_inline_comment(tmpdir, capsys):
+    """pg_service.conf has no inline comments, unlike postgresql.conf, and
+    libpq's error for the resulting value never mentions them."""
+    _service_conf(tmpdir, "[svc]\nport=5432 # prod\n")
+    conf, _ = parse_service_info("svc")
+
+    assert conf["port"] == "5432 # prod"
+    err = capsys.readouterr().err
+    assert "no end-of-line comments" in err
+    assert "port" in err
+
+
+def test_pg_service_file_no_warning_without_inline_hash(tmpdir, capsys):
+    """The warning must not fire on ordinary values."""
+    _service_conf(tmpdir, "[svc]\nhost=h\npassword=abc#def\n")
+    parse_service_info("svc")
+
+    assert capsys.readouterr().err == ""
 
 
 def test_pg_service_file(tmpdir):
