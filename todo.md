@@ -42,6 +42,25 @@ Upcoming
       tras endurecer el assert: el \echo tragon repite el texto del select en su salida, asi
       que assertar solo por texto no probaba nada). Wheel 4.6.1 recompilado e instalado
 
+### 2026-09-10: #1542 MERGEADO (van 12) + rumbo del #1628 decidido
+- [x] #1542 (-c/--command) MERGEADO por j-bennet: "Sounds good, let's merge." El nudge del dia
+      anterior lo destrabo en menos de 3 horas. Van 12 PRs nuestros mergeados
+- [x] #1628: j-bennet eligio la OPCION 3 del nudge: "get #1629 in first to fix the issue for the
+      plain ASCII users (because we assume this is most users), then follow-up to fix less common
+      problems". Le contestamos aceptando (issuecomment-5618880770) y ofreciendo a dbaty: (a) el
+      fixture y tests de SQL_ASCII (que corren en el container UTF-8 del CI sin tocar el workflow,
+      via `create database ... encoding 'SQL_ASCII' template template0`, al lado del create_db()
+      que ya existe en tests/db_utils.py) y (b) una pasada de review cuando salga de draft
+- [ ] ESPERAR que mergee el #1629 (sigue en DRAFT, sin tocar desde el 04/09) y recien ahi rehacer
+      el #1628 como follow-up: fallback al decode defensivo cuando el server tire
+      CharacterNotInRepertoire, o sea el override de encoding queda como camino primario
+- [x] main sincronizado con upstream hasta 924e7d4 (46fa7df + merge -s ours de360a9). De los 4
+      commits, 3 son nuestros que volvieron (#1542/#1544/#1545); el unico contenido real que
+      faltaba era el #1630 (urls del pyproject), aplicado apuntando a NUESTRO fork.
+      OJO con eso: meter el header [project.urls] en el medio del bloque [project] se traga
+      requires-python y dependencies dentro de esa tabla. Va DESPUES de la ultima clave.
+      Verificado parseando el TOML y leyendo la METADATA del wheel construido
+
 ### 2026-09-09: destrabar los 2 PRs abiertos
 - [x] #1542: j-bennet pidio resolver conflictos el 04/09, los resolvi ese mismo dia pero
       NUNCA le conteste (misma trampa de julio: pushear el fix no es contestar la review).
