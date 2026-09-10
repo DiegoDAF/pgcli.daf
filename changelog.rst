@@ -1,6 +1,16 @@
 Upcoming
 ========
 
+Internal:
+---------
+
+* Drop the stale ``xfail`` on ``test_simple_insert_single_table_schema_qualified``.
+  It was marked for an old ``sqlparse`` that mislabelled schema-qualified
+  ``INSERT``; the test passes on the supported range, so with ``xfail_strict``
+  off the marker only hid a passing test as an unreported XPASS. The remaining
+  ``xfail`` on ``test_sub_select_multiple_col_name_completion`` now carries the
+  reason it is still needed. Follows upstream #1625.
+
 Bug fixes:
 ----------
 
