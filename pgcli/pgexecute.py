@@ -517,6 +517,29 @@ class PGExecute:
         """
         return self.conn.closed != 0  # type: ignore[union-attr]
 
+    def _end_stray_copy(self):
+        """Finish a COPY that cursor.execute() started and then refused.
+
+        Without this the connection stays in the COPY state for the rest of
+        the session.
+        """
+        pgconn = self.conn.pgconn  # type: ignore[union-attr]
+        nonblocking = pgconn.nonblocking
+        # Blocking mode, so libpq waits for the server instead of us polling.
+        pgconn.nonblocking = 0
+        try:
+            try:
+                # COPY FROM STDIN: abort it without sending any data.
+                pgconn.put_copy_end(b"use \\copy instead")
+            except psycopg.OperationalError:
+                # COPY TO STDOUT: drain the rows the server is sending.
+                while pgconn.get_copy_data(0)[0] > 0:
+                    pass
+            while pgconn.get_result() is not None:
+                pass
+        finally:
+            pgconn.nonblocking = nonblocking
+
     def execute_normal_sql(self, split_sql, notice_callback=None):
         """Returns tuple (title, rows, headers, status)
 
@@ -557,7 +580,18 @@ class PGExecute:
             return title, None, None, res.command_status.decode()
 
         cur = self.conn.cursor()  # type: ignore[union-attr]
-        cur.execute(split_sql)
+        try:
+            cur.execute(split_sql)
+        except psycopg.ProgrammingError as e:
+            # psycopg refuses COPY ... TO STDOUT / FROM STDIN here, but only
+            # after the server has already entered the COPY state, which leaves
+            # the connection busy: every later statement then fails with
+            # "another command is already in progress" and pgcli believes a
+            # transaction is open. Close the COPY before reporting the error.
+            if self.conn.info.transaction_status != psycopg.pq.TransactionStatus.ACTIVE:
+                raise
+            self._end_stray_copy()
+            raise psycopg.ProgrammingError("COPY to STDOUT or from STDIN is not supported, use \\copy instead") from e
 
         # cur.description will be None for operations that do not return
         # rows.

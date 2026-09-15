@@ -1,6 +1,16 @@
 Upcoming
 ========
 
+Bug fixes:
+----------
+
+* Fix ``copy ... to stdout`` and ``copy ... from stdin`` leaving the session
+  unusable. psycopg refuses those in ``cursor.execute()``, but only after the
+  server has entered the COPY state, so the connection stayed busy and every
+  later statement failed with "another command is already in progress" until
+  the user reconnected. The COPY is now closed before the error is reported,
+  and the message points at ``\copy``. Follows upstream #1636.
+
 Internal:
 ---------
 

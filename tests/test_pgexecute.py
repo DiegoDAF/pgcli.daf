@@ -876,6 +876,36 @@ def test_unknown_backslash_command_stops_multi_statement(executor, pgspecial):
 # text columns come back as raw bytes. See issues #1484 and #1518.
 
 
+# psycopg rejects COPY ... TO STDOUT / FROM STDIN, but only once the server has
+# entered the COPY state, which used to leave the connection busy for the rest
+# of the session.
+
+
+@dbtest
+@pytest.mark.parametrize("sql", ["copy tbl to stdout", "copy tbl from stdin"])
+def test_copy_stdio_leaves_the_connection_usable(executor, sql):
+    run(executor, "create table tbl(a int)")
+    run(executor, "insert into tbl values (1)")
+
+    with pytest.raises(psycopg.ProgrammingError) as excinfo:
+        run(executor, sql)
+
+    assert "\\copy" in str(excinfo.value)
+    assert executor.conn.info.transaction_status == psycopg.pq.TransactionStatus.IDLE
+    # The real regression: the next statement used to fail with
+    # "another command is already in progress".
+    assert run(executor, "select 42 as still_alive")
+
+
+@dbtest
+def test_other_programming_errors_are_not_swallowed(executor):
+    """Only a COPY that left the connection ACTIVE gets the special handling."""
+    with pytest.raises(psycopg.ProgrammingError) as excinfo:
+        run(executor, "select %s")
+
+    assert "\\copy" not in str(excinfo.value)
+
+
 @dbtest
 def test_get_socket_directory_decodes_sql_ascii_bytes(executor):
     with patch.object(executor.conn, "cursor") as mock_cursor:
