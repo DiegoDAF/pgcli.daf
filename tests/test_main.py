@@ -1,4 +1,5 @@
 import os
+import stat
 import platform
 import re
 import tempfile
@@ -858,6 +859,9 @@ def test_log_rotation_none_backwards_compatible(executor):
         expected_log = os.path.join(tmpdir, "pgcli.log")
 
         assert os.path.exists(expected_log)
+        if os.name == "posix":
+            # The log can carry every statement at DEBUG level: owner-only.
+            assert stat.S_IMODE(os.stat(expected_log).st_mode) == 0o600
 
 
 @dbtest

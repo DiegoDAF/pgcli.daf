@@ -4,7 +4,7 @@ import stat
 
 import pytest
 
-from pgcli.config import ensure_dir_exists, skip_initial_comment
+from pgcli.config import ensure_dir_exists, ensure_private_file, skip_initial_comment, write_default_config
 
 
 def test_ensure_file_parent(tmpdir):
@@ -100,3 +100,33 @@ def test_migrate_state_file_missing_old_is_noop(tmp_path):
 
     assert new == str(st / "history")
     assert not (st / "history").exists()
+
+
+posix_only = pytest.mark.skipif(os.name != "posix", reason="POSIX file modes")
+
+
+@posix_only
+def test_ensure_private_file_creates_owner_only(tmp_path):
+    path = tmp_path / "history"
+    ensure_private_file(str(path))
+    assert path.exists() and path.read_bytes() == b""
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@posix_only
+def test_ensure_private_file_tightens_existing_and_keeps_content(tmp_path):
+    path = tmp_path / "log"
+    path.write_text("select 1\n")
+    path.chmod(0o664)
+    ensure_private_file(str(path))
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert path.read_text() == "select 1\n"
+
+
+@posix_only
+def test_write_default_config_is_owner_only(tmp_path):
+    source = tmp_path / "pgclirc"
+    source.write_text("[main]\n")
+    destination = tmp_path / "config"
+    write_default_config(str(source), str(destination))
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o600

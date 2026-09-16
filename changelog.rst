@@ -15,6 +15,13 @@ Bug fixes:
   or ProxyJump directive read wins when both apply. The DNS error now names
   the host and says whether a proxy applied, instead of a bare errno.
 
+* Create the history, log and config files readable by their owner only
+  (0600), like psql's history and ``.pgpass``: the history records every
+  statement typed, ``alter role ... password`` included, the log can carry
+  the same at DEBUG level and the config can hold DSN passwords. They used
+  to get the umask default (0644, or 0664 on many desktops). Existing files
+  with wider permissions are tightened on the next run.
+
 Internal:
 ---------
 

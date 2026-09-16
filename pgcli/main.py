@@ -5,7 +5,7 @@ from configparser import ConfigParser
 from pgspecial.namedqueries import NamedQueries
 from .namedqueries import ExtendedNamedQueries, server_major_version
 from .dsnaliases import DsnAliases
-from .config import skip_initial_comment
+from .config import ensure_private_file, skip_initial_comment
 
 import os
 import re
@@ -947,6 +947,7 @@ class PGCli:
                 if mtime_date != dt.date.today():
                     file_mode = "w"
             handler = logging.FileHandler(expanded_log_path, mode=file_mode)
+            ensure_private_file(expanded_log_path)
 
         level_map = {
             "CRITICAL": logging.CRITICAL,
@@ -1507,6 +1508,7 @@ class PGCli:
             # History is state, not config: use $XDG_STATE_HOME (~/.local/state),
             # migrating an existing ~/.config/pgcli/history on first run (#1497).
             history_file = migrate_state_file("history")
+        ensure_private_file(history_file)
         history = FileHistory(os.path.expanduser(history_file))
         self.refresh_completions(history=history, persist_priorities="none")
 

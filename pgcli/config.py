@@ -1,6 +1,7 @@
 import shutil
 import os
 import platform
+import stat
 from os.path import expanduser, exists, dirname
 import re
 from typing import TextIO
@@ -74,6 +75,25 @@ def ensure_dir_exists(path):
     os.makedirs(parent_dir, exist_ok=True)
 
 
+def ensure_private_file(path):
+    """Create ``path`` if missing and keep it readable by its owner only.
+
+    The history records every statement typed, ``alter role ... password``
+    included, the log can carry the same at DEBUG level and the config can
+    hold DSN passwords; psql's readline history and libpq's .pgpass are 0600
+    for the same reason. Files that already exist with wider permissions are
+    tightened, and any OSError (read-only media, exotic filesystems) is
+    ignored so a permissions problem never keeps pgcli from starting.
+    """
+    path = expanduser(path)
+    try:
+        os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600))
+        if stat.S_IMODE(os.stat(path).st_mode) & 0o077:
+            os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
 def write_default_config(source, destination, overwrite=False):
     destination = expanduser(destination)
     if not overwrite and exists(destination):
@@ -82,6 +102,7 @@ def write_default_config(source, destination, overwrite=False):
     ensure_dir_exists(destination)
 
     shutil.copyfile(source, destination)
+    ensure_private_file(destination)
 
 
 def upgrade_config(config, def_config):
