@@ -170,14 +170,16 @@ def test_suggested_join_conditions(completer, text):
 @parametrize("completer", completers(filtr=True, casing=False, aliasing=False))
 @parametrize(
     ("query", "tbl"),
-    itertools.product(
-        (
-            "SELECT * FROM public.{0} RIGHT OUTER JOIN ",
-            """SELECT *
-    FROM {0}
-    JOIN """,
-        ),
-        ("users", '"users"', "Users"),
+    list(
+        itertools.product(
+            (
+                "SELECT * FROM public.{0} RIGHT OUTER JOIN ",
+                """SELECT *
+        FROM {0}
+        JOIN """,
+            ),
+            ("users", '"users"', "Users"),
+        )
     ),
 )
 def test_suggested_joins(completer, query, tbl):
