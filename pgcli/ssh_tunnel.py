@@ -36,7 +36,11 @@ def _parse_jump_hop(hop: str) -> Tuple[Optional[str], str, Optional[int]]:
     hop = hop.strip()
     if hop.startswith("ssh://"):
         parsed = urlparse(hop)
-        return parsed.username, parsed.hostname or "", parsed.port
+        try:
+            port = parsed.port
+        except ValueError:  # "ssh://h:abc" or a port out of range; ssh rejects the config
+            port = None
+        return parsed.username, parsed.hostname or "", port
     user: Optional[str] = None
     if "@" in hop:
         user, hop = hop.rsplit("@", 1)
@@ -61,6 +65,8 @@ def _proxy_command_from_proxyjump(proxyjump: str, target_host: str, target_port:
     back to itself as ``-J`` so it recurses through them (ssh.c, "Setting
     implicit ProxyCommand from ProxyJump"). ``none`` yields None.
     """
+    # ssh strips a trailing "# comment" from the value; paramiko keeps it.
+    proxyjump = proxyjump.split("#", 1)[0]
     hops = [h.strip() for h in proxyjump.split(",") if h.strip()]
     if not hops or proxyjump.strip().lower() == "none":
         return None
@@ -88,8 +94,11 @@ def _proxy_command_from_host_config(host_config: "dict[str, Any]", target_host: 
     directly and die on DNS.
     """
     for key, value in host_config.items():
-        if key == "proxycommand" and value:
-            return str(value)
+        if key == "proxycommand":
+            # paramiko stores "ProxyCommand none" as None. Like in ssh it still
+            # wins over a later ProxyJump: that is how one host is excluded
+            # from a wildcard jump, so it must dial directly.
+            return str(value) if value else None
         if key == "proxyjump" and value:
             command = _proxy_command_from_proxyjump(value, target_host, target_port)
             if command:
@@ -446,6 +455,7 @@ class SSHTunnelManager:
         # look_for_keys remains False to prevent blind scanning of ~/.ssh/.
         # Auth order: key_filename (specific->wildcard) -> agent -> password
         ssh_config_path = os.path.expanduser("~/.ssh/config")
+        ssh_config_error = None
         key_filenames = []
         if ssh_hostname and os.path.isfile(ssh_config_path):
             try:
@@ -458,14 +468,15 @@ class SSHTunnelManager:
                     ssh_username = host_config.get("user")
                 if not tunnel_info.port and "port" in host_config:
                     ssh_port = int(host_config["port"])
-                proxycommand = _proxy_command_from_host_config(host_config, ssh_hostname, ssh_port)
-                if proxycommand:
-                    self.logger.debug("SSH proxy command from config: %s", proxycommand)
                 identity_files = host_config.get("identityfile", [])
                 key_filenames = [os.path.expanduser(f) for f in identity_files if os.path.isfile(os.path.expanduser(f))]
                 if key_filenames:
                     self.logger.debug("SSH identity files from config: %s", key_filenames)
+                proxycommand = _proxy_command_from_host_config(host_config, ssh_hostname, ssh_port)
+                if proxycommand:
+                    self.logger.debug("SSH proxy command from config: %s", proxycommand)
             except Exception as e:
+                ssh_config_error = str(e)
                 self.logger.warning("Could not read SSH config: %s", e)
 
         if not ssh_username:
@@ -513,7 +524,17 @@ class SSHTunnelManager:
         except socket.gaierror as e:
             # Name the host: a bare "Name or service not known" sent the last
             # investigation to DNS when the real defect was an unread ProxyJump.
-            hint = "" if proxycommand else " (no ProxyJump/ProxyCommand applies to it in ~/.ssh/config, so it was dialed directly)"
+            if ssh_config_error:
+                hint = f" (~/.ssh/config could not be read: {ssh_config_error}; the host was dialed directly)"
+            elif proxycommand:
+                hint = ""
+            else:
+                # Say what was looked at: paramiko reads ~/.ssh/config only, and
+                # ignores Include, so a ProxyJump living elsewhere is invisible here.
+                hint = (
+                    " (paramiko found no ProxyJump/ProxyCommand for it in ~/.ssh/config;"
+                    " Include directives are not read, so the host was dialed directly)"
+                )
             msg = f"could not resolve SSH host '{ssh_hostname}' from this machine{hint}: {e}"
             self.logger.error("SSH tunnel failed: %s", msg)
             click.secho(f"SSH tunnel error: {msg}", err=True, fg="red")

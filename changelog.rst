@@ -11,9 +11,11 @@ Bug fixes:
   worked fine with plain ``ssh``). The tunnel now builds the exact
   ``ssh -W`` ProxyCommand OpenSSH derives, including ``user@host:port``,
   multi-hop chains (last hop dialed, earlier hops passed as ``-J``), IPv6
-  literals and ``none``, and follows ssh's rule that the first ProxyCommand
-  or ProxyJump directive read wins when both apply. The DNS error now names
-  the host and says whether a proxy applied, instead of a bare errno.
+  literals, trailing comments and ``none``, and follows ssh's rule that the
+  first ProxyCommand or ProxyJump directive read wins when both apply (so a
+  ``ProxyCommand none`` still excludes one host from a wildcard jump). The
+  DNS error now names the host and says what was looked at, instead of a
+  bare errno; note that paramiko does not read ``Include`` directives.
 
 * Create the history, log and config files readable by their owner only
   (0600), like psql's history and ``.pgpass``: the history records every

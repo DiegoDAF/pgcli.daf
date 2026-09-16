@@ -737,7 +737,10 @@ class TestProxyJump:
     verbatim, so before this the tunnel dialed the final host directly and
     failed with "Name or service not known" whenever that name only resolved
     behind the jump host. Expected strings were taken from `ssh -v`
-    ("Setting implicit ProxyCommand from ProxyJump", OpenSSH 9.6)."""
+    ("Setting implicit ProxyCommand from ProxyJump", OpenSSH 9.6) for the
+    values ssh accepts; where ssh rejects the config outright (a bare IPv6
+    literal, a bad port) the helper stays lenient and the test only pins
+    that."""
 
     def test_single_hop(self):
         assert _proxy_command_from_proxyjump("bastion.example", "db.internal", 22) == "ssh -W '[db.internal]:22' bastion.example"
@@ -769,6 +772,20 @@ class TestProxyJump:
     def test_none_disables_the_jump(self):
         assert _proxy_command_from_proxyjump("none", "db.internal", 22) is None
         assert _proxy_command_from_proxyjump("", "db.internal", 22) is None
+
+    def test_trailing_comment_is_stripped_like_ssh_does(self):
+        assert _proxy_command_from_proxyjump("bastion.example # via dmz", "db.internal", 22) == "ssh -W '[db.internal]:22' bastion.example"
+
+    def test_ssh_uri_with_bad_port_does_not_raise(self):
+        # ssh rejects such a config; we must not lose the rest of the block to a ValueError.
+        assert _proxy_command_from_proxyjump("ssh://bastion.example:abc", "db.internal", 22) == "ssh -W '[db.internal]:22' bastion.example"
+        out_of_range = _proxy_command_from_proxyjump("ssh://bastion.example:70000", "db.internal", 22)
+        assert out_of_range == "ssh -W '[db.internal]:22' bastion.example"
+
+    def test_proxycommand_none_excludes_the_host_from_a_wildcard_jump(self):
+        # "Host db / ProxyCommand none" above "Host * / ProxyJump bastion": ssh dials
+        # db directly. paramiko stores that ProxyCommand as None, still first in order.
+        assert _proxy_command_from_host_config({"proxycommand": None, "proxyjump": "bastion.example"}, "db.internal", 22) is None
 
     def test_first_directive_wins_like_openssh(self):
         cmd = "ssh -W db.internal:22 viacmd.example"
@@ -814,16 +831,25 @@ class TestProxyJump:
             self._start_tunnel(mock_native_tunnel, {"hostname": "db.internal.example"})
         err = capsys.readouterr().err
         assert "could not resolve SSH host 'db.internal.example'" in err
-        assert "no ProxyJump/ProxyCommand applies" in err
+        assert "paramiko found no ProxyJump/ProxyCommand" in err
         assert "Name or service not known" in err
 
-    def test_unresolvable_host_error_with_proxy_has_no_hint(self, mock_native_tunnel, capsys):
+    def test_unresolvable_host_error_reports_an_unreadable_config(self, mock_native_tunnel, capsys):
         mock_native_tunnel["client"].connect.side_effect = socket.gaierror(-2, "Name or service not known")
-        with patch("pgcli.ssh_tunnel.paramiko.ProxyCommand"), pytest.raises(SystemExit):
-            self._start_tunnel(mock_native_tunnel, {"hostname": "db.internal.example", "proxyjump": "bastion.example"})
+        mock_ssh_config = MagicMock()
+        mock_ssh_config.lookup.side_effect = Exception("Unparsable line 7")
+        manager = SSHTunnelManager(ssh_tunnel_url="ssh://dbalias", logger=logging.getLogger("test"))
+        with (
+            patch("pgcli.ssh_tunnel.os.path.expanduser", side_effect=lambda p: p),
+            patch("pgcli.ssh_tunnel.os.path.isfile", side_effect=lambda p: p == "~/.ssh/config"),
+            patch("pgcli.ssh_tunnel.paramiko.SSHConfig", return_value=mock_ssh_config),
+            patch("builtins.open", mock_open(read_data="")),
+            pytest.raises(SystemExit),
+        ):
+            manager.start_tunnel(host="db.internal", port=5432)
         err = capsys.readouterr().err
-        assert "could not resolve SSH host 'db.internal.example'" in err
-        assert "no ProxyJump/ProxyCommand applies" not in err
+        assert "could not resolve SSH host 'dbalias'" in err
+        assert "could not be read: Unparsable line 7" in err
 
 
 class TestGetTunnelManagerFromConfig:
