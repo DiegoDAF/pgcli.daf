@@ -6,8 +6,10 @@ Upcoming
       asi que un ProxyJump que viva en `~/.ssh/config.d/*` es invisible para el tunel; y `%r`/`%p`
       dentro de un ProxyJump se expanden con el User/Port del bloque o el usuario LOCAL, nunca con
       los de la URL del tunel. Si molesta: resolver Include a mano antes del lookup
-- [ ] PUSH: hay 14 commits locales en `main` (2db6770 -> HEAD) sin pushear a `fork/main`. Revisar
-      los mensajes con `git log --oneline 2db6770..` y decir "push". Ninguno bumpea `__version__`
+- [x] PUSH HECHO 2026-09-16: `fork/main` = `1cbc87f`, 20 commits despues del tag v4.6.2. Ninguno
+      bumpea `__version__` (sigue 4.6.2, sin release nueva). CI del fork VERDE por primera vez
+      desde antes del 09-10: los 5 jobs de la matriz (3.10 a 3.14) con unit + integration (behave)
+      + ReST + ruff + mypy, y CodeQL en verde con las actions v4/v5 pinneadas por SHA
 - [ ] Cuando se publique una version con el fix de ProxyJump: reinstalar en `t` y volver el
       `~/.ssh/config` a `ProxyJump` (backup `~/.ssh/config.bak-20260916-1139`)
 - [ ] `d` no respondia por tailscale el 2026-09-16 (`ssh d` timeout): sigue en 4.5.8, instalarle 4.6.2+
