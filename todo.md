@@ -2,6 +2,10 @@ Upcoming
 ==============
 
 ### PENDIENTE DE DIEGO (auditoria 2026-09-16): decisiones y pushes
+- [ ] LIMITACION paramiko (follow-up posible): `SSHConfig` NO procesa `Include` (ni /etc/ssh/ssh_config),
+      asi que un ProxyJump que viva en `~/.ssh/config.d/*` es invisible para el tunel; y `%r`/`%p`
+      dentro de un ProxyJump se expanden con el User/Port del bloque o el usuario LOCAL, nunca con
+      los de la URL del tunel. Si molesta: resolver Include a mano antes del lookup
 - [ ] PUSH: hay 14 commits locales en `main` (2db6770 -> HEAD) sin pushear a `fork/main`. Revisar
       los mensajes con `git log --oneline 2db6770..` y decir "push". Ninguno bumpea `__version__`
 - [ ] Cuando se publique una version con el fix de ProxyJump: reinstalar en `t` y volver el
@@ -479,6 +483,14 @@ Upcoming
       B904/ARG (callbacks de prompt_toolkit y params de API, no bugs)
 - [x] CORREO/UPSTREAM: nada nuevo salvo #1614 mergeado y Vincent explicando el rebase; PRs abiertos
       sin cambios respecto al barrido anterior
+- [x] REVISION ADVERSARIAL (un agente, al final) sobre los commits del dia: 11 puntos, 8 aplicados:
+      `ProxyCommand none` en un host especifico debe anular el ProxyJump de `Host *` (paramiko lo
+      guarda como None y lo salteabamos; idioma estandar de exclusion), comentario `#` al final de
+      la linea, `ssh://` con puerto invalido perdia los IdentityFile, hint del error de DNS honesto,
+      `ensure_private_file` con fstat+fchmod (antes `history_file = /dev/null` como root habria
+      dejado /dev/null 0600 y un FIFO colgaba el arranque), log asegurado ANTES del FileHandler,
+      changelog sin prometer el chmod del config existente, codeql.yml pinneado por SHA.
+      Paridad con OpenSSH re-medida: 10/10. Sin aplicar (limitaciones de paramiko, anotadas abajo)
 
 ### FIX: el tunel SSH ignoraba ProxyJump del ~/.ssh/config (encontrado 2026-09-16 en el proyecto vps, arreglado el mismo dia)
 - [x] HECHO: `_proxy_command_from_proxyjump()` + `_proxy_command_from_host_config()` en `pgcli/ssh_tunnel.py`
