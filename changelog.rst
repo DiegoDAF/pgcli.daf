@@ -51,7 +51,8 @@ Internal:
 * Test hygiene: ``test_execute_statements_does_not_split_inside_literals`` was
   missing ``@dbtest`` (it errored instead of skipping without a server), and
   a ``parametrize`` fed an ``itertools.product`` iterator, which pytest 9 will
-  reject (``PytestRemovedIn9Warning``).
+  reject (``PytestRemovedIn9Warning``); ``test_prompt_utils`` used
+  ``click.get_text_stream``, which Click 9 removes (it is ``sys.stdin``).
 
 * CI: test on Python 3.14 as well (the full suite passes on 3.14.0 locally;
   upstream's matrix already includes it).
