@@ -81,17 +81,33 @@ def ensure_private_file(path):
     The history records every statement typed, ``alter role ... password``
     included, the log can carry the same at DEBUG level and the config can
     hold DSN passwords; psql's readline history and libpq's .pgpass are 0600
-    for the same reason. Files that already exist with wider permissions are
-    tightened, and any OSError (read-only media, exotic filesystems) is
-    ignored so a permissions problem never keeps pgcli from starting.
+    for the same reason. A regular file the user owns that already exists
+    with wider permissions is tightened; device nodes (``history_file =
+    /dev/null`` is the usual way to record nothing), FIFOs, directories and
+    files owned by someone else are left alone, and any OSError (read-only
+    media, exotic filesystems) is ignored so a permissions problem never
+    keeps pgcli from starting.
     """
     path = expanduser(path)
+    # O_NONBLOCK: opening a FIFO with no reader must fail, not hang pgcli.
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOCTTY", 0)
     try:
-        os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600))
-        if stat.S_IMODE(os.stat(path).st_mode) & 0o077:
-            os.chmod(path, 0o600)
+        fd = os.open(path, flags, 0o600)
+    except OSError:
+        return
+    try:
+        st = os.fstat(fd)
+        owner = getattr(os, "getuid", lambda: st.st_uid)()
+        if stat.S_ISREG(st.st_mode) and st.st_uid == owner and stat.S_IMODE(st.st_mode) & 0o077:
+            # fchmod on the descriptor we hold: no path lookup between the stat and the chmod.
+            if hasattr(os, "fchmod"):
+                os.fchmod(fd, 0o600)
+            else:
+                os.chmod(path, 0o600)
     except OSError:
         pass
+    finally:
+        os.close(fd)
 
 
 def write_default_config(source, destination, overwrite=False):

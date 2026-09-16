@@ -130,3 +130,29 @@ def test_write_default_config_is_owner_only(tmp_path):
     destination = tmp_path / "config"
     write_default_config(str(source), str(destination))
     assert stat.S_IMODE(destination.stat().st_mode) == 0o600
+
+
+@posix_only
+def test_ensure_private_file_leaves_device_nodes_alone():
+    # history_file = /dev/null is the usual "record nothing"; as root a chmod would stick.
+    before = os.stat("/dev/null").st_mode
+    ensure_private_file("/dev/null")
+    assert os.stat("/dev/null").st_mode == before
+
+
+@posix_only
+def test_ensure_private_file_does_not_block_on_a_fifo(tmp_path):
+    import threading
+
+    fifo = tmp_path / "history"
+    os.mkfifo(fifo)
+    worker = threading.Thread(target=ensure_private_file, args=(str(fifo),), daemon=True)
+    worker.start()
+    worker.join(timeout=5)
+    assert not worker.is_alive(), "open() on a reader-less FIFO must not hang pgcli"
+
+
+@posix_only
+def test_ensure_private_file_ignores_a_directory(tmp_path):
+    ensure_private_file(str(tmp_path))
+    assert tmp_path.is_dir()

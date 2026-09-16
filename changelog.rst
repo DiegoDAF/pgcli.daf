@@ -21,8 +21,10 @@ Bug fixes:
   (0600), like psql's history and ``.pgpass``: the history records every
   statement typed, ``alter role ... password`` included, the log can carry
   the same at DEBUG level and the config can hold DSN passwords. They used
-  to get the umask default (0644, or 0664 on many desktops). Existing files
-  with wider permissions are tightened on the next run.
+  to get the umask default (0644, or 0664 on many desktops). An existing
+  history or log with wider permissions is tightened on the next run (the
+  config only when pgcli creates it); device nodes such as ``/dev/null``,
+  FIFOs and files owned by someone else are left alone.
 
 Internal:
 ---------

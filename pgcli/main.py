@@ -946,8 +946,9 @@ class PGCli:
                 mtime_date = dt.date.fromtimestamp(os.path.getmtime(expanded_log_path))
                 if mtime_date != dt.date.today():
                     file_mode = "w"
-            handler = logging.FileHandler(expanded_log_path, mode=file_mode)
+            # Before the handler creates it with the umask default.
             ensure_private_file(expanded_log_path)
+            handler = logging.FileHandler(expanded_log_path, mode=file_mode)
 
         level_map = {
             "CRITICAL": logging.CRITICAL,
