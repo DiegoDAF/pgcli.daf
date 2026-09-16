@@ -32,6 +32,10 @@ Internal:
   ``pg_dump -F c`` writes a binary dump to stdout, and with ``text=True`` the
   step itself crashed with ``UnicodeDecodeError`` whenever a server answered.
 
+* CI: GitHub now flags the CodeQL run because ``codeql-action@v2`` and
+  ``actions/checkout@v3`` are deprecated; moved to v4 and v5. The test
+  workflow also runs with a read-only token (``permissions: contents: read``).
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 
