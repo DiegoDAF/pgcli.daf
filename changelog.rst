@@ -28,6 +28,10 @@ Internal:
   special-command scenario passed ``\\dt`` with two backslashes, which pgcli
   rejected; the error used to exit 0, so the scenario tested nothing.
 
+* The pgcli_dump/pgcli_dumpall behave steps capture output as bytes:
+  ``pg_dump -F c`` writes a binary dump to stdout, and with ``text=True`` the
+  step itself crashed with ``UnicodeDecodeError`` whenever a server answered.
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 

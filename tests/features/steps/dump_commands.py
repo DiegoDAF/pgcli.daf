@@ -10,16 +10,17 @@ def step_run_pgcli_dump(context, options):
     cmd = f"pgcli_dump {options}"
     context.cmd = cmd
     try:
+        # No text=True: pg_dump -F c writes a binary dump to stdout, which is
+        # not valid UTF-8 and made the step itself crash with UnicodeDecodeError.
         result = subprocess.run(
             cmd,
             shell=True,
             capture_output=True,
-            text=True,
             timeout=30,
         )
         context.exit_code = result.returncode
-        context.stdout = result.stdout
-        context.stderr = result.stderr
+        context.stdout = result.stdout.decode("utf-8", errors="replace")
+        context.stderr = result.stderr.decode("utf-8", errors="replace")
     except subprocess.TimeoutExpired:
         context.exit_code = -1
         context.stdout = ""
@@ -32,16 +33,17 @@ def step_run_pgcli_dumpall(context, options):
     cmd = f"pgcli_dumpall {options}"
     context.cmd = cmd
     try:
+        # No text=True: pg_dump -F c writes a binary dump to stdout, which is
+        # not valid UTF-8 and made the step itself crash with UnicodeDecodeError.
         result = subprocess.run(
             cmd,
             shell=True,
             capture_output=True,
-            text=True,
             timeout=30,
         )
         context.exit_code = result.returncode
-        context.stdout = result.stdout
-        context.stderr = result.stderr
+        context.stdout = result.stdout.decode("utf-8", errors="replace")
+        context.stderr = result.stderr.decode("utf-8", errors="replace")
     except subprocess.TimeoutExpired:
         context.exit_code = -1
         context.stdout = ""
