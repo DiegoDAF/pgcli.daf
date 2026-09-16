@@ -3,7 +3,7 @@ Feature: run the cli with -f/--file option,
   and exit
 
   Scenario: run pgcli with -f and a SQL query file
-     When we create a file with "SELECT 1 as test_diego_column"
+     When we create a file with "SELECT 1 as test_column"
       and we run pgcli with -f and the file
      then we see the query result
       and pgcli exits successfully
@@ -30,7 +30,7 @@ Feature: run the cli with -f/--file option,
      When we create a file with "SELECT invalid_column FROM nonexistent_table"
       and we run pgcli with -f and the file
      then we see an error message
-      and pgcli exits successfully
+      and pgcli exits with error
 
   Scenario: run pgcli with both -c and -f options
      When we create a file with "SELECT 2 as second"

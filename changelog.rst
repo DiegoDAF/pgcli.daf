@@ -22,6 +22,12 @@ Internal:
   and ``PGPORT``: exporting a throwaway server for the dbtests (the documented
   way to run the full suite) made two default-value asserts fail.
 
+* Fix the fork's own behave suite, red since the ``-c``/``-f`` exit code
+  change: the two "invalid query" scenarios now expect the non-zero exit
+  (psql itself exits 1 on ``-c`` with a failing statement), and the ``-t``
+  special-command scenario passed ``\\dt`` with two backslashes, which pgcli
+  rejected; the error used to exit 0, so the scenario tested nothing.
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 

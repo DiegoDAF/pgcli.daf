@@ -29,6 +29,6 @@ Feature: run the cli with -t/--tuples-only option,
       and pgcli exits successfully
 
   Scenario: run pgcli with -t and special command
-     When we run pgcli with "-t -c '\\dt'"
+     When we run pgcli with "-t -c '\dt'"
       then we see the command output
       and pgcli exits successfully
