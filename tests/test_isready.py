@@ -2,6 +2,8 @@
 
 import subprocess
 from unittest.mock import patch, MagicMock
+
+import pytest
 from click.testing import CliRunner
 
 from pgcli.isready import (
@@ -11,6 +13,15 @@ from pgcli.isready import (
     build_tunneled_args,
     setup_logging,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_pg_env(monkeypatch):
+    """parse_connection_args() falls back to PGHOST/PGPORT, so a developer's
+    exported throwaway server (PGHOST=127.0.0.1 PGPORT=5439 for the dbtests)
+    used to break the default-value asserts below."""
+    for var in ("PGHOST", "PGPORT"):
+        monkeypatch.delenv(var, raising=False)
 
 
 class TestParseConnectionArgs:

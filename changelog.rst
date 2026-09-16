@@ -15,6 +15,13 @@ Bug fixes:
   or ProxyJump directive read wins when both apply. The DNS error now names
   the host and says whether a proxy applied, instead of a bare errno.
 
+Internal:
+---------
+
+* ``tests/test_isready.py`` no longer depends on the developer's ``PGHOST``
+  and ``PGPORT``: exporting a throwaway server for the dbtests (the documented
+  way to run the full suite) made two default-value asserts fail.
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 
