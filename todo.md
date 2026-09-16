@@ -1,6 +1,28 @@
 Upcoming
 ==============
 
+### PENDIENTE DE DIEGO (auditoria 2026-09-16): decisiones y pushes
+- [ ] PUSH: hay 14 commits locales en `main` (2db6770 -> HEAD) sin pushear a `fork/main`. Revisar
+      los mensajes con `git log --oneline 2db6770..` y decir "push". Ninguno bumpea `__version__`
+- [ ] Cuando se publique una version con el fix de ProxyJump: reinstalar en `t` y volver el
+      `~/.ssh/config` a `ProxyJump` (backup `~/.ssh/config.bak-20260916-1139`)
+- [ ] `d` no respondia por tailscale el 2026-09-16 (`ssh d` timeout): sigue en 4.5.8, instalarle 4.6.2+
+- [ ] HISTORIAL PUBLICO: `todo.md` nombro la cuenta de trabajo en los commits c229a45 (2026-09-03) y
+      9e02396 (2026-09-10), ya pusheados a `fork/main` (repo publico). El archivo actual ya esta
+      limpio (9a709eb); reescribir el historial es decision de Diego (implica force-push del fork)
+- [ ] `/home/daf/scripts/CLAUDE.md` y `~/.claude/CLAUDE.md` siguen hablando de `pgcli.dev/` como
+      "la version mas avanzada": el directorio de trabajo es `pgcli.daf/` desde hace meses
+- [ ] Candidatos a PR upstream chicos y sin dependencias nuestras, para cuando baje la cola:
+      (a) codeql.yml: `codeql-action@v2` y `checkout@v3` deprecados (GitHub lo marca como failure
+      en las annotations), (b) piso `sqlparse >= 0.6.0` (upstream permite >=0.3.0 con 11 avisos
+      OSV), (c) history/log/config con 0600 como `.psql_history`/`.pgpass`, (d) `ci.yml` con
+      `permissions: contents: read`, (e) `itertools.product` en parametrize y `click.get_text_stream`
+      en tests (pytest 9 / Click 9 los rompen). El de ProxyJump NO va a pgcli: upstream usa la
+      libreria `sshtunnel` (0.4.0, `_read_ssh_config` solo lee proxycommand), iria a pahaz/sshtunnel
+- [ ] Upstream mergeo #1542/#1543/#1544 con `-c`/`-f` saliendo con exit 0 aunque falle un statement;
+      el fork sale con 1 (psql -c tambien sale 1; -f sale 3 con ON_ERROR_STOP). Evaluar PR
+      "exit non-zero on error like psql" cuando haya lugar en la cola
+
 ### 2026-08-31: fix \watch en -f/-c (bug encontrado por j-bennet en #1543)
 - [x] j-bennet volvio (mergeo #1619, #1620 y #1622; dbaty revisa, ella mergea) y probando #1543
       encontro que `pgcli -f archivo` con `\watch` al final repetia el ARCHIVO ENTERO
@@ -418,6 +440,45 @@ Upcoming
 
 2026-09-16
 ===================
+
+### AUDITORIA 2026-09-16: seguridad, obsoletos y updates pendientes (pedido "quemate los tokens")
+- [x] METODO: el workflow de 8 finders en paralelo murio entero por limite de sesion (reset 13:00);
+      se rehizo solo y secuencial ("de a uno", pedido de Diego). Un unico agente revisor adversarial
+      al final sobre los commits del dia
+- [x] CI DEL FORK ROJA en cada push desde el 09-10 (tres escenarios behave): los de "query invalida"
+      esperaban exit 0 pero el fork sale con 1 desde cede0f6 (medido: psql -c sale 1; -f sale 0 sin
+      ON_ERROR_STOP y 3 con), y `-t -c '\\dt'` pasaba DOS backslashes (antes el error salia 0 y el
+      escenario no probaba nada). Arreglado en da977fa + rename `test_diego_column` -> `test_column`
+- [x] FUGA DE IDENTIDAD en el repo publico: `todo.md` (trackeado) nombraba la cuenta de trabajo y
+      paths `/home/daf`; limpiado en 9a709eb. Los tests con `@gmail.com`/`amazonaws` son data de upstream
+- [x] PERMISOS: `~/.local/state/pgcli/history`, `log` y los `pgcli-*.log` rotados estaban 0664 (umask)
+      mientras `.psql_history` y `.pgpass` son 0600; el history guarda cada statement (passwords de
+      `alter role` incluidas). `ensure_private_file()` en config.py: crea 0600 y ajusta existentes.
+      Aplicado a config por defecto, history y cada log al abrirlo (c0fe4e4, 4 tests)
+- [x] DEPS: OSV sobre los 68 paquetes del .venv: solo `cryptography 48.0.0` (7 avisos, 3 HIGH) en el
+      venv de DESARROLLO; el tool instalado ya tenia 50.0.1. Actualizado el venv. `sqlparse >=0.5.0`
+      permitia 0.5.x con 11 avisos (asi `d` quedo en 0.5.3): piso subido a 0.6.0 y `click < 9` como
+      upstream (49aa999). Sin DeprecationWarnings al importar ni en los tests unitarios
+- [x] CI CONFIG: `codeql-action@v2` + `checkout@v3` deprecados (annotation "failure" de GitHub):
+      v4/v5 (0ad4f8e); `permissions: contents: read` en ci.yml (no usa secrets). Python 3.14 sumado a
+      la matriz tras correr la suite completa con 3.14.0: 3222 passed (0c850e4). Sin dependabot (ni
+      upstream): se decidio no agregarlo, las deps se refrescan a mano por release
+- [x] SYNC UPSTREAM: solo faltaba 2de6387 (merge de #1614); `parseutils` del fork era identico,
+      merge -> 16e6e7c (solo AUTHORS y la linea de test). Cuidado: mi assert `"=======" not in s`
+      matcheaba subrayados RST y commiteo marcadores de conflicto; corregido con amend
+- [x] TESTS DE ENTORNO: `test_isready.py` leia PGHOST/PGPORT del entorno (fixture autouse, fa839d3);
+      los steps de `pgcli_dump` capturaban con text=True y `pg_dump -F c` es binario (f45abb8);
+      `@dbtest` faltante + `itertools.product` en parametrize + `click.get_text_stream` (ff5c696, y sig.)
+- [x] DOCS: README regenerado desde `--help` (faltaban --on-error y --timeout, 5227c9d); CLAUDE.md
+      del proyecto: version 4.6.2, bloque DSSKey marcado OBSOLETO, tabla de releases completa,
+      proxima revision 2026-10-17. pgclirc vs codigo: sin drift (casing_file/destructive_warning/
+      use_local_timezone se leen por otras vias). Keyring: la clave ya incluye el puerto (#1536 cubierto)
+- [x] LIMPIO (revisado, sin hallazgo): subprocess solo con listas (sin shell=True) en dump/dumpall/
+      isready; ProxyCommand via shlex.join; logs no vuelcan kwargs/DSN con password; ~/.ssh/config
+      no se lee salvo el host del tunel; bind del forwarder en 127.0.0.1; ruff extendido: solo
+      B904/ARG (callbacks de prompt_toolkit y params de API, no bugs)
+- [x] CORREO/UPSTREAM: nada nuevo salvo #1614 mergeado y Vincent explicando el rebase; PRs abiertos
+      sin cambios respecto al barrido anterior
 
 ### FIX: el tunel SSH ignoraba ProxyJump del ~/.ssh/config (encontrado 2026-09-16 en el proyecto vps, arreglado el mismo dia)
 - [x] HECHO: `_proxy_command_from_proxyjump()` + `_proxy_command_from_host_config()` en `pgcli/ssh_tunnel.py`
