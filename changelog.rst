@@ -53,6 +53,9 @@ Internal:
   a ``parametrize`` fed an ``itertools.product`` iterator, which pytest 9 will
   reject (``PytestRemovedIn9Warning``).
 
+* CI: test on Python 3.14 as well (the full suite passes on 3.14.0 locally;
+  upstream's matrix already includes it).
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 
