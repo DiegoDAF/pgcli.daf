@@ -89,7 +89,7 @@ Upcoming
       pg_service.conf NO soporta comentarios inline (a diferencia de postgresql.conf, ver
       guc-file.l:95) y el error de libpq ('invalid integer value "5432 # prod"') no los
       menciona. 14 tests, 7 fallan sin el fix. Idea de parche a PG anotada en
-      /home/daf/scripts/postgres/todo.md
+      ~/scripts/postgres/todo.md
 - [ ] PR ENCOLADO (no mandar todavia): el WARNING de comentarios inline en service files.
       Es lo unico nuestro que el #1631 no cubre, y es el workaround real de la limitacion de
       libpq. DEPENDE del #1631: sin parseo literal el valor ya viene mutilado y el warning
@@ -126,11 +126,11 @@ Upcoming
 
 ### CHEQUEO OBLIGATORIO ANTES DE QUE MERGEE UN PR (anotado 2026-09-10)
 # QUE PASO: en el grafico de contribuidores de dbcli/pgcli del ultimo mes aparecen
-# `diego-feito-stori` (2 commits) y `claude` (3 commits). NO son commits sueltos:
+# la cuenta de TRABAJO (2 commits) y `claude` (3 commits). NO son commits sueltos:
 # GitHub, al hacer SQUASH MERGE, agrega como Co-authored-by a TODOS los autores
 # distintos de la rama. Yo mire solo el campo author y dije que upstream estaba
 # limpio; estaba equivocado, hay que mirar la rama ENTERA y los trailers.
-#   - diego-feito-stori salio de 3 merges hechos con el boton "Update branch" de la
+#   - la cuenta de trabajo salio de 3 merges hechos con el boton "Update branch" de la
 #     web estando logueado con la cuenta de trabajo: 19c9730 (2026-03-27) y c8f1b0d
 #     (2026-08-24) en feature/command-option, a665991 (2026-08-24) en feature/yes-option.
 #     Terminaron como co-autores de 924e7d4 (#1542) y 8e4aef4 (#1544).
@@ -138,19 +138,19 @@ Upcoming
 #     (12 en command-option, 9 en yes-option).
 # NO SE PUEDE DESHACER: ya esta en main de dbcli.
 - [ ] SIEMPRE antes de mandar un PR y ANTES de que lo mergeen:
-      bash /home/daf/scripts/pgcli/check_pr_authors.sh <rama> original/main
+      bash ../check_pr_authors.sh <rama> original/main   (vive fuera del repo, en ~/scripts/pgcli/)
       (mira autores de toda la rama + trailers; probado: detecta el caso del #1542)
 - [ ] NUNCA apretar "Update branch" en la web sin mirar con que cuenta estas logueado.
       Mejor hacer el merge local y pushear, que ahi manda la identidad del repo
 - [x] Arreglado el user.name local de pgcli.daf: decia "DiegoDAF", ahora "Diego"
       (tu CLAUDE.md pide "Diego"; habia 61 commits con el nombre equivocado)
-# PENDIENTE DE DECISION: el user.email GLOBAL es diegodaf@gmail.com, o sea cualquier
+# PENDIENTE DE DECISION: el user.email GLOBAL es el gmail personal, o sea cualquier
 # repo sin override commitea con el gmail personal. Asi se filtraron 11 commits con
 # ese mail al fork publico. Conviene invertirlo: poner el noreply como default global
-# y dejar que el includeIf de storicard ponga el mail de trabajo donde corresponde.
+# y dejar que el includeIf de la carpeta de trabajo ponga el mail de trabajo donde corresponde.
 #   git config --global user.email "DiegoDAF@users.noreply.github.com"
-# (el includeIf de storicard ya existe y esta bien escrito, hoy no dispara porque
-#  storicard no es repo git ni tiene repos adentro)
+# (ese includeIf ya existe y esta bien escrito, hoy no dispara porque la carpeta
+#  de trabajo no es repo git ni tiene repos adentro)
 
 ### PLAN DE PRs A UPSTREAM (revisado 2026-09-03: el item 5 BAJA de prioridad)
 # Estado: 4 abiertos (#1542 -c, #1544 -y, #1545 -t, #1628 SQL_ASCII), todos CLEAN.
@@ -188,7 +188,7 @@ Upcoming
 # NO mandar por ahora: item 21 (log_truncate_on_rotation) depende de la rotacion de
 # logs del item 12, que upstream ya pospuso una vez ("revisit" en los #1541/#1547).
 # PENDIENTE APARTE: en el issue #1489 hay un comentario del 2026-06-25 firmado con la
-# cuenta de TRABAJO (diego-feito-stori) apuntando al fork personal y al #1603. Es publico
+# cuenta de TRABAJO apuntando al fork personal y al #1603. Es publico
 # y cruza identidades. Decidir si se borra y se repone desde DiegoDAF.
 
 ### BUG anotado 2026-08-10: `--` en named queries de una linea comenta el RESTO de la query
