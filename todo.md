@@ -416,6 +416,61 @@ Upcoming
 - [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
 
 
+2026-09-16
+===================
+
+### FIX: el tunel SSH ignoraba ProxyJump del ~/.ssh/config (encontrado 2026-09-16 en el proyecto vps, arreglado el mismo dia)
+- [x] HECHO: `_proxy_command_from_proxyjump()` + `_proxy_command_from_host_config()` en `pgcli/ssh_tunnel.py`
+      replican `ssh.c` ("Setting implicit ProxyCommand from ProxyJump"): el ULTIMO salto se marca con
+      `-W '[host]:port'` y los anteriores van en `-J a,b`; `user@host:port`, IPv6 `[v6]:port`, URI `ssh://`
+      y `none` contemplados. Precedencia igual a OpenSSH, medida con `ssh -v`: gana la PRIMERA directiva
+      leida (ProxyCommand o ProxyJump), y `ProxyJump none` NO bloquea un ProxyCommand posterior. El dict
+      de `SSHConfig.lookup()` conserva ese orden, asi que se itera por orden de aparicion
+- [x] PARIDAD MEDIDA: 8/8 configs de prueba dan el mismo comando que imprime `ssh -v` (OpenSSH 9.6)
+- [x] ERROR MEJORADO: `socket.gaierror` ahora dice `could not resolve SSH host 'X' from this machine` y,
+      si no habia proxy, `(no ProxyJump/ProxyCommand applies to it in ~/.ssh/config, so it was dialed directly)`
+- [x] TESTS: `TestProxyJump` en `tests/test_ssh_tunnel.py` (12 tests: helpers, precedencia, regresion del
+      tunel construyendo `paramiko.ProxyCommand` desde ProxyJump, y los dos mensajes de error)
+- [x] CHANGELOG: entrada en Upcoming (sale en la proxima release, la 4.6.2 ya estaba publicada)
+- [ ] PENDIENTE: cuando se instale una version con el fix, volver el `~/.ssh/config` de `t` a `ProxyJump`
+      (backup `~/.ssh/config.bak-20260916-1139`). Hasta entonces el workaround con ProxyCommand sigue andando
+- [ ] UPSTREAM: dbcli/pgcli usa la libreria `sshtunnel` (no nuestro modulo), que tiene el MISMO defecto
+      (`_read_ssh_config` solo mira `proxycommand`). El fix alla seria un PR a pahaz/sshtunnel, no a pgcli
+- [x] DIAGNOSTICO ORIGINAL (sesion vps):
+- [x] SINTOMA: `pgcli --dsn <alias>` contra un host que en `~/.ssh/config` se alcanza por `ProxyJump`
+      falla con `SSH tunnel failed: [Errno -2] Name or service not known`, mientras que `ssh <host>`
+      con el MISMO config conecta sin problema. O sea que el config esta bien y el que no lo honra
+      somos nosotros
+- [x] CAUSA RAIZ, verificada con paramiko 5.0.0: `pgcli/ssh_tunnel.py` linea ~389 hace
+      `proxycommand = host_config.get("proxycommand")`, pero `paramiko.SSHConfig.lookup()` devuelve
+      la clave **`proxyjump` cruda y NO la traduce** a `proxycommand`. Comprobado imprimiendo las
+      claves del lookup: aparece `proxyjump`, no aparece `proxycommand`. Con lo cual `proxycommand`
+      queda en None, no se pasa `sock` y paramiko intenta resolver el hostname final LOCALMENTE.
+      Si ese nombre solo existe en el DNS del otro lado del jump, no resuelve y muere ahi
+- [x] POR QUE NO SE VEIA HASTA AHORA: el caso tapaba el bug. Mientras la maquina tenia una VPN
+      propia hacia esa red, resolvia el nombre interno y conectaba DIRECTO, sin usar el jump nunca.
+      El bug estuvo siempre, latente. Aparecio al mudar la VPN a otra maquina
+- [x] FIX PROPUESTO, chico y acotado a esa funcion: si `host_config` trae `proxyjump` y NO trae
+      `proxycommand`, sintetizar `ssh -W %h:%p <valor de proxyjump>`, que es exactamente lo que hace
+      OpenSSH por dentro. El resto de la cadena ya funciona: `_base_connect_kwargs()` construye
+      `paramiko.ProxyCommand(...)` y lo pasa como `sock`
+- [x] VALIDADO A MANO ANTES DE ESCRIBIR CODIGO: armando el `SSHClient` con ese ProxyCommand
+      sintetizado, el tunel establece y el canal `direct-tcpip` a `localhost:5432` abre, sin VPN
+      y sin resolver el nombre interno en la maquina local
+- [x] CONTEMPLAR que `ProxyJump` admite varios saltos separados por coma (`a,b,c`) y la forma
+      `user@host:port`. El caso de un salto es el comun; para la cadena, OpenSSH anida. Decidir si
+      se soporta solo el primer salto o la cadena entera, y si no se soporta, que avise claro
+      en vez de fallar con un error de DNS que no dice nada
+- [x] TEST: fixture de `~/.ssh/config` con `ProxyJump`, y assert de que el tunel recibe un
+      `ssh_proxy_command` no vacio. Hoy ese caso no esta cubierto, por eso paso
+- [x] OJO CON EL MENSAJE DE ERROR, que es la mitad del problema: `Name or service not known` mando
+      la investigacion a la red y al DNS cuando el defecto estaba en el parseo del config. Vale
+      agregar contexto al error diciendo QUE nombre no resolvio y si habia un proxy configurado
+- [x] PUEDE SER PR AL REPO OFICIAL: no depende de nada nuestro, el codigo de arriba es comun
+- [x] WORKAROUND YA APLICADO en `t` el 2026-09-16, y no es el fix: en `~/.ssh/config` se cambio
+      `ProxyJump X` por `ProxyCommand ssh -W %h:%p X` en los tres bloques de esa red. Backup en
+      `~/.ssh/config.bak-20260916-1139`. Cuando el fork tenga el fix, se puede volver atras
+
 2026-08-31
 ===================
 - [x] Triage upstream: REPRODUCCION e2e de #1518/#1484 (crash de bytes con SQL_ASCII). Resumen en la seccion de triage de Upcoming

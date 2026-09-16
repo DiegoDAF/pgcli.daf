@@ -1,5 +1,6 @@
 import logging
 import os
+import socket
 from unittest.mock import patch, MagicMock, mock_open
 
 import paramiko
@@ -14,6 +15,8 @@ from pgcli.ssh_tunnel import (
     SSHTunnelManager,
     get_tunnel_manager_from_config,
     _NativeSSHTunnel,
+    _proxy_command_from_host_config,
+    _proxy_command_from_proxyjump,
 )
 
 
@@ -726,6 +729,101 @@ class TestSSHTunnelIdentityFile:
             "/home/user/.ssh/id_ed25519_host",
             "/home/user/.ssh/id_ed25519_global",
         ]
+
+
+class TestProxyJump:
+    """ProxyJump in ~/.ssh/config must reach the tunnel as the very ProxyCommand
+    ssh derives from it. paramiko's SSHConfig.lookup() returns the directive
+    verbatim, so before this the tunnel dialed the final host directly and
+    failed with "Name or service not known" whenever that name only resolved
+    behind the jump host. Expected strings were taken from `ssh -v`
+    ("Setting implicit ProxyCommand from ProxyJump", OpenSSH 9.6)."""
+
+    def test_single_hop(self):
+        assert _proxy_command_from_proxyjump("bastion.example", "db.internal", 22) == "ssh -W '[db.internal]:22' bastion.example"
+
+    def test_user_and_port(self):
+        assert (
+            _proxy_command_from_proxyjump("jumpuser@bastion.example:2200", "db.internal", 2222)
+            == "ssh -l jumpuser -p 2200 -W '[db.internal]:2222' bastion.example"
+        )
+
+    def test_multi_hop_dials_last_hop_and_recurses_with_J(self):
+        assert (
+            _proxy_command_from_proxyjump("b1.example,jumpuser@b2.example:2201", "db2.internal", 22)
+            == "ssh -l jumpuser -p 2201 -J b1.example -W '[db2.internal]:22' b2.example"
+        )
+
+    def test_ipv6_literal_with_port(self):
+        assert _proxy_command_from_proxyjump("[2001:db8::1]:2202", "db3.internal", 22) == "ssh -p 2202 -W '[db3.internal]:22' 2001:db8::1"
+
+    def test_bare_ipv6_literal_has_no_port(self):
+        assert _proxy_command_from_proxyjump("2001:db8::1", "db3.internal", 22) == "ssh -W '[db3.internal]:22' 2001:db8::1"
+
+    def test_ssh_uri_form(self):
+        assert (
+            _proxy_command_from_proxyjump("ssh://jumpuser@bastion.example:2200", "db.internal", 22)
+            == "ssh -l jumpuser -p 2200 -W '[db.internal]:22' bastion.example"
+        )
+
+    def test_none_disables_the_jump(self):
+        assert _proxy_command_from_proxyjump("none", "db.internal", 22) is None
+        assert _proxy_command_from_proxyjump("", "db.internal", 22) is None
+
+    def test_first_directive_wins_like_openssh(self):
+        cmd = "ssh -W db.internal:22 viacmd.example"
+        jump = "ssh -W '[db.internal]:22' viajump.example"
+        # lookup() keeps directives in the order ssh read them: first one wins.
+        assert _proxy_command_from_host_config({"proxycommand": cmd, "proxyjump": "viajump.example"}, "db.internal", 22) == cmd
+        assert _proxy_command_from_host_config({"proxyjump": "viajump.example", "proxycommand": cmd}, "db.internal", 22) == jump
+        # "ProxyJump none" does not block a later ProxyCommand.
+        assert _proxy_command_from_host_config({"proxyjump": "none", "proxycommand": cmd}, "db.internal", 22) == cmd
+        assert _proxy_command_from_host_config({"hostname": "db.internal"}, "db.internal", 22) is None
+
+    def _start_tunnel(self, mock_native_tunnel, host_config, tunnel_url="ssh://dbalias"):
+        """Run start_tunnel() with a mocked ~/.ssh/config lookup returning host_config."""
+        mock_ssh_config = MagicMock()
+        mock_ssh_config.lookup.return_value = host_config
+        manager = SSHTunnelManager(ssh_tunnel_url=tunnel_url, logger=logging.getLogger("test"))
+        with (
+            patch("pgcli.ssh_tunnel.os.path.expanduser", side_effect=lambda p: p),
+            patch("pgcli.ssh_tunnel.os.path.isfile", side_effect=lambda p: p == "~/.ssh/config"),
+            patch("pgcli.ssh_tunnel.paramiko.SSHConfig") as mock_config_cls,
+            patch("builtins.open", mock_open(read_data="")),
+        ):
+            mock_config_cls.return_value = mock_ssh_config
+            return manager.start_tunnel(host="db.internal", port=5432)
+
+    def test_start_tunnel_builds_proxy_command_from_proxyjump(self, mock_native_tunnel):
+        """Regression: with only ProxyJump in the config no ProxyCommand was built."""
+        host_config = {"hostname": "db.internal.example", "port": "2222", "proxyjump": "jumpuser@bastion.example:2200"}
+        with patch("pgcli.ssh_tunnel.paramiko.ProxyCommand") as mock_proxy:
+            self._start_tunnel(mock_native_tunnel, host_config)
+        mock_proxy.assert_called_once_with("ssh -l jumpuser -p 2200 -W '[db.internal.example]:2222' bastion.example")
+        assert mock_native_tunnel["client"].connect.call_args[1]["sock"] is mock_proxy.return_value
+
+    def test_start_tunnel_without_proxy_dials_directly(self, mock_native_tunnel):
+        with patch("pgcli.ssh_tunnel.paramiko.ProxyCommand") as mock_proxy:
+            self._start_tunnel(mock_native_tunnel, {"hostname": "db.internal.example"})
+        mock_proxy.assert_not_called()
+        assert "sock" not in mock_native_tunnel["client"].connect.call_args[1]
+
+    def test_unresolvable_host_error_names_host_and_missing_proxy(self, mock_native_tunnel, capsys):
+        mock_native_tunnel["client"].connect.side_effect = socket.gaierror(-2, "Name or service not known")
+        with pytest.raises(SystemExit):
+            self._start_tunnel(mock_native_tunnel, {"hostname": "db.internal.example"})
+        err = capsys.readouterr().err
+        assert "could not resolve SSH host 'db.internal.example'" in err
+        assert "no ProxyJump/ProxyCommand applies" in err
+        assert "Name or service not known" in err
+
+    def test_unresolvable_host_error_with_proxy_has_no_hint(self, mock_native_tunnel, capsys):
+        mock_native_tunnel["client"].connect.side_effect = socket.gaierror(-2, "Name or service not known")
+        with patch("pgcli.ssh_tunnel.paramiko.ProxyCommand"), pytest.raises(SystemExit):
+            self._start_tunnel(mock_native_tunnel, {"hostname": "db.internal.example", "proxyjump": "bastion.example"})
+        err = capsys.readouterr().err
+        assert "could not resolve SSH host 'db.internal.example'" in err
+        assert "no ProxyJump/ProxyCommand applies" not in err
 
 
 class TestGetTunnelManagerFromConfig:

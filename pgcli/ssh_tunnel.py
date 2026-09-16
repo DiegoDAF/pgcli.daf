@@ -13,6 +13,8 @@ import logging
 import os
 import re
 import select
+import shlex
+import socket
 import socketserver
 import sys
 import threading
@@ -23,6 +25,76 @@ import click
 import paramiko
 
 SSH_TUNNEL_SUPPORT = True
+
+
+def _parse_jump_hop(hop: str) -> Tuple[Optional[str], str, Optional[int]]:
+    """Split one ProxyJump hop into (user, host, port).
+
+    Accepts what ssh accepts: ``[user@]host[:port]``, ``[user@][v6addr]:port``
+    and the ``ssh://user@host:port`` URI form.
+    """
+    hop = hop.strip()
+    if hop.startswith("ssh://"):
+        parsed = urlparse(hop)
+        return parsed.username, parsed.hostname or "", parsed.port
+    user: Optional[str] = None
+    if "@" in hop:
+        user, hop = hop.rsplit("@", 1)
+    port: Optional[int] = None
+    host = hop
+    if hop.startswith("["):
+        host, _, rest = hop[1:].partition("]")
+        if rest.startswith(":") and rest[1:].isdigit():
+            port = int(rest[1:])
+    elif hop.count(":") == 1:
+        # A single colon is host:port; more than one is a bare IPv6 literal.
+        name, _, port_str = hop.partition(":")
+        if port_str.isdigit():
+            host, port = name, int(port_str)
+    return user, host, port
+
+
+def _proxy_command_from_proxyjump(proxyjump: str, target_host: str, target_port: int) -> Optional[str]:
+    """Build the ProxyCommand that ssh itself derives from a ProxyJump directive.
+
+    ssh dials the LAST hop with ``-W [target]:port`` and hands the earlier hops
+    back to itself as ``-J`` so it recurses through them (ssh.c, "Setting
+    implicit ProxyCommand from ProxyJump"). ``none`` yields None.
+    """
+    hops = [h.strip() for h in proxyjump.split(",") if h.strip()]
+    if not hops or proxyjump.strip().lower() == "none":
+        return None
+    user, host, port = _parse_jump_hop(hops[-1])
+    if not host:
+        return None
+    argv = ["ssh"]
+    if user:
+        argv += ["-l", user]
+    if port:
+        argv += ["-p", str(port)]
+    if len(hops) > 1:
+        argv += ["-J", ",".join(hops[:-1])]
+    argv += ["-W", f"[{target_host}]:{target_port}", host]
+    return shlex.join(argv)
+
+
+def _proxy_command_from_host_config(host_config: "dict[str, Any]", target_host: str, target_port: int) -> Optional[str]:
+    """Pick the proxy for a host the way ssh does.
+
+    The first ProxyCommand or ProxyJump directive read wins (SSHConfig.lookup()
+    keeps that order; ``ProxyJump none`` is skipped). A ProxyJump has to be
+    translated here because paramiko returns it verbatim instead of turning it
+    into a ProxyCommand, so without this the tunnel would dial the final host
+    directly and die on DNS.
+    """
+    for key, value in host_config.items():
+        if key == "proxycommand" and value:
+            return str(value)
+        if key == "proxyjump" and value:
+            command = _proxy_command_from_proxyjump(value, target_host, target_port)
+            if command:
+                return command
+    return None
 
 
 class _ForwardHandler(socketserver.StreamRequestHandler):
@@ -386,7 +458,9 @@ class SSHTunnelManager:
                     ssh_username = host_config.get("user")
                 if not tunnel_info.port and "port" in host_config:
                     ssh_port = int(host_config["port"])
-                proxycommand = host_config.get("proxycommand")
+                proxycommand = _proxy_command_from_host_config(host_config, ssh_hostname, ssh_port)
+                if proxycommand:
+                    self.logger.debug("SSH proxy command from config: %s", proxycommand)
                 identity_files = host_config.get("identityfile", [])
                 key_filenames = [os.path.expanduser(f) for f in identity_files if os.path.isfile(os.path.expanduser(f))]
                 if key_filenames:
@@ -436,6 +510,14 @@ class SSHTunnelManager:
                 raise Exception(f"SSH tunnel failed to start (is_active={tunnel.is_active})")
 
             self.logger.debug("SSH tunnel verified active")
+        except socket.gaierror as e:
+            # Name the host: a bare "Name or service not known" sent the last
+            # investigation to DNS when the real defect was an unread ProxyJump.
+            hint = "" if proxycommand else " (no ProxyJump/ProxyCommand applies to it in ~/.ssh/config, so it was dialed directly)"
+            msg = f"could not resolve SSH host '{ssh_hostname}' from this machine{hint}: {e}"
+            self.logger.error("SSH tunnel failed: %s", msg)
+            click.secho(f"SSH tunnel error: {msg}", err=True, fg="red")
+            sys.exit(1)
         except Exception as e:
             self.logger.error("SSH tunnel failed: %s", str(e))
             click.secho(f"SSH tunnel error: {e}", err=True, fg="red")

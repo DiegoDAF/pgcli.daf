@@ -1,3 +1,20 @@
+Upcoming
+========
+
+Bug fixes:
+----------
+
+* SSH tunnel: honor ``ProxyJump`` from ``~/.ssh/config``. paramiko returns that
+  directive verbatim instead of turning it into a ProxyCommand the way ssh
+  does, so a database host reachable only through a jump host was dialed
+  directly and failed with ``Name or service not known`` (the same config
+  worked fine with plain ``ssh``). The tunnel now builds the exact
+  ``ssh -W`` ProxyCommand OpenSSH derives, including ``user@host:port``,
+  multi-hop chains (last hop dialed, earlier hops passed as ``-J``), IPv6
+  literals and ``none``, and follows ssh's rule that the first ProxyCommand
+  or ProxyJump directive read wins when both apply. The DNS error now names
+  the host and says whether a proxy applied, instead of a bare errno.
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 
