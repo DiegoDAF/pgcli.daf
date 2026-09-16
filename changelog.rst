@@ -36,6 +36,11 @@ Internal:
   ``actions/checkout@v3`` are deprecated; moved to v4 and v5. The test
   workflow also runs with a read-only token (``permissions: contents: read``).
 
+* Require ``sqlparse >= 0.6.0``: every 0.5.x release carries the
+  denial-of-service and escaping advisories fixed in 0.6.0, and a machine that
+  already had 0.5.3 kept it because the old floor allowed it. ``click`` is
+  capped below 9, as upstream does.
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 

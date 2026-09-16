@@ -23,14 +23,14 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
     "pgspecial>=2.0.0",
-    "click >= 8.3.1",
+    "click >= 8.3.1, < 9",
     "Pygments>=2.0",       # Pygments has to be Capitalcased.
     # We still need to use pt-2 unless pt-3 released on Fedora32
     # see: https://github.com/dbcli/pgcli/pull/1197
     "prompt_toolkit>=2.0.6,<4.0.0",
     "psycopg >= 3.0.14; sys_platform != 'win32'",
     "psycopg-binary >= 3.0.14; sys_platform == 'win32'",
-    "sqlparse >=0.5.0,<0.7",
+    "sqlparse >=0.6.0,<0.7",
     "configobj >= 5.0.6",
     "cli_helpers[styles] >= 2.4.0",
     # setproctitle is used to mask the password when running `ps` in command line.
