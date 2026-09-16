@@ -995,7 +995,6 @@ def test_execute_statements_on_error_resume_continues(executor):
 
 
 @dbtest
-@dbtest
 def test_execute_statements_metacommand_spans_only_its_line(executor):
     """psql cuts a backslash command at its newline: a metacommand followed
     by SQL must not swallow the SQL (sqlparse only cuts at semicolons)."""
@@ -1038,6 +1037,7 @@ def test_execute_statements_sql_then_metacommand(executor):
     assert "medio" in outputs[1]
 
 
+@dbtest
 def test_execute_statements_does_not_split_inside_literals(executor):
     """Semicolons inside string literals are not statement boundaries."""
     cli = PGCli(pgexecute=executor)

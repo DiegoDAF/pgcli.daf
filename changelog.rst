@@ -48,6 +48,11 @@ Internal:
   already had 0.5.3 kept it because the old floor allowed it. ``click`` is
   capped below 9, as upstream does.
 
+* Test hygiene: ``test_execute_statements_does_not_split_inside_literals`` was
+  missing ``@dbtest`` (it errored instead of skipping without a server), and
+  a ``parametrize`` fed an ``itertools.product`` iterator, which pytest 9 will
+  reject (``PytestRemovedIn9Warning``).
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 
