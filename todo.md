@@ -190,44 +190,96 @@ Upcoming
 # (ese includeIf ya existe y esta bien escrito, hoy no dispara porque la carpeta
 #  de trabajo no es repo git ni tiene repos adentro)
 
-### PLAN DE PRs A UPSTREAM (revisado 2026-09-03: el item 5 BAJA de prioridad)
-# Estado: 4 abiertos (#1542 -c, #1544 -y, #1545 -t, #1628 SQL_ASCII), todos CLEAN.
-# Ya van 9 mergeados. j-bennet volvio y mergea a buen ritmo; igual no saturarla.
-# Orden acordado para los proximos, uno por vez:
-- [ ] 1) Item 11 del #1603: `--no-timings` / `--no-status`
-      # Va PRIMERO porque es el primitivo que le da coherencia al -t del #1545 (en vuelo)
-      # y porque ESQUIVA la objecion original de j-bennet (2025-12-25: "estas agregando
-      # una opcion para un knob que ya existe"): estos NO duplican nada, exponen dos
-      # knobs que hoy no se pueden apagar. Estimado: ~70-80 lineas con tests, media sesion.
-      # Adaptacion a upstream: OutputSettings alla es namedtuple (agregar campo), el
-      # timing sale de pgspecial.timing_enabled, el status de un `if status:` en format_output.
-      # OJO: nuestro -t esta atado a --no-timings/--no-status; hay que desacoplarlo.
-- [ ] 2) Item 8 del #1603: `-o/--output`
-      # Misma familia de scripting que los que estan en vuelo. Chico y autocontenido,
-      # y no pisa codigo que upstream acabe de tocar.
-- [ ] 3) Item 6 del #1603: namedqueries.d + sufijo de version (estilo psqlrc-NN)
-      # La version del server sale del startup packet (conn.info.server_version),
-      # sin round-trip extra.
-- [ ] 4) Item 5 del #1603: `dsn.d/`  <-- BAJADO de la posicion 3 a la 4 (2026-09-03)
-      # POR QUE BAJO: perdio su mejor argumento. El issue #1489 ("alias dsn is not
-      # detected"), que era el respaldo del pitch, lo CERRO j-bennet el 2026-09-03 al
-      # mergear el #1617 de ChrisJr404 (72c5f91). Ese fix es mas chico y por otra via:
-      # no reescribe el config default en un comando de solo lectura y resuelve -D
-      # desde el config ya cargado. NO agrega archivos drop-in.
-      # Consecuencias para cuando lo mandemos:
-      #   a) Hay que REBASAR sobre la forma nueva: el #1617 reescribio exactamente las
-      #      dos lineas de main.py donde engancha nuestro DsnAliases (--list-dsn y -D).
-      #   b) El pitch tiene que pararse solo en el valor de la feature (aliases como
-      #      archivos sueltos; Diego tiene 104), sin issue que cerrar.
-      #   c) j-bennet ya mostro opinion fuerte contra opciones que "duplican un knob
-      #      que ya existe" -> conviene PREGUNTAR en el #1603 si les interesa el formato
-      #      drop-in ANTES de invertir en el PR, para no repetir el rediseño del -t.
-      # Tamaño: pgcli/dsnaliases.py son 243 lineas + 22 tests en tests/test_dsnaliases.py.
-# NO mandar por ahora: item 21 (log_truncate_on_rotation) depende de la rotacion de
-# logs del item 12, que upstream ya pospuso una vez ("revisit" en los #1541/#1547).
-# PENDIENTE APARTE: en el issue #1489 hay un comentario del 2026-06-25 firmado con la
-# cuenta de TRABAJO apuntando al fork personal y al #1603. Es publico
-# y cruza identidades. Decidir si se borra y se repone desde DiegoDAF.
+### PLAN DE PRs A UPSTREAM (mapa completo, revisado 2026-09-16 con datos frescos de la API)
+
+# --- MARCADOR ---------------------------------------------------------------
+# 11 PRs nuestros MERGEADOS: #1542 -c, #1543 -f, #1544 -y, #1545 -t, #1546 .pgpass+tunel,
+#   #1559 comentarios finales, #1609 \ne, #1619 timeouts behave, #1620 explain mode,
+#   #1621 -l/--ping, #1622 --timeout
+# 6 cerrados sin mergear (viejos, reemplazados): #1530, #1538, #1539, #1540, #1541, #1547
+# 2 ABIERTOS hoy: #1637 y #1628
+# La cola de upstream tiene 15 PRs abiertos en total, o sea que 2 nuestros es razonable.
+
+### NUESTROS 2 PRs ABIERTOS (estado 2026-09-16)
+- [ ] #1637 "Add --no-timings and --no-status" = item 11 del #1603. Abierto 2026-09-15.
+      Rama `upstream/no-timings-no-status`, +103-3 en 3 archivos. MERGEABLE.
+      CI: los 5 builds (3.10 a 3.14) PASAN, CodeQL pasa, Analyze pasa. El unico rojo es
+      `codex-review`, que falla en TODOS los PRs del repo incluidos los ya mergeados: por eso
+      el estado sale UNSTABLE y no CLEAN. No hay que hacer nada con eso.
+      Sin review ni comentarios todavia. SOLO ESPERAR.
+- [ ] #1628 "Decode text results defensively (SQL_ASCII)". CLEAN, 7 comentarios.
+      BLOQUEADO POR ACUERDO: j-bennet pidio meter primero el #1629 de dbaty (arregla el caso
+      comun, ASCII puro) y despues nuestro fallback byte a byte, que es el caso raro. Diego
+      acepto ese orden el 2026-09-10.
+      OJO: el #1629 NO SE MOVIO desde el 2026-09-04, no tiene ni un comentario ni un review.
+      Si sigue frenado un par de semanas, vale preguntar amablemente en el #1629.
+      Cuando entre: rehacer el nuestro como follow-up (fallback en CharacterNotInRepertoire).
+
+### PROXIMOS A MANDAR, uno por vez y solo cuando baje la cola
+- [ ] 1) Item 8 del #1603: `-o/--output`   <-- EL SIGUIENTE
+      # Misma familia de scripting que los 4 que ya entraron (-c, -f, -y, -t). Chico y
+      # autocontenido. Ahora tiene mejor pie que nunca: los 4 hermanos estan mergeados.
+- [ ] 2) Item 6 del #1603: namedqueries.d + sufijo de version (estilo psqlrc-NN)
+      # La version del server sale del startup packet (conn.info.server_version), sin
+      # round-trip extra.
+- [ ] 3) Item 5 del #1603: `dsn.d/`  (BAJADO el 2026-09-03, sigue ultimo)
+      # Perdio su respaldo: el issue #1489 lo cerro j-bennet al mergear el #1617 de
+      # ChrisJr404 (72c5f91), que resuelve -D y --list-dsn por otra via, sin drop-in.
+      # a) hay que REBASAR sobre esa forma nueva (toca las mismas 2 lineas de main.py)
+      # b) el pitch se para solo en el valor de la feature (Diego tiene 105 alias)
+      # c) PREGUNTAR en el #1603 si les interesa el formato drop-in ANTES de escribir el PR
+- [ ] NO MANDAR: item 21 (log_truncate_on_rotation) depende del item 12 (rotacion de logs),
+      que upstream ya pospuso una vez ("revisit" en los #1541/#1547).
+
+### CANDIDATOS NUEVOS salidos de la auditoria 2026-09-16 (NO son items del #1603:
+### son defectos de upstream, chicos, sin dependencias nuestras, faciles de aceptar)
+- [ ] CI: `codeql-action@v2` y `actions/checkout@v3` estan deprecados y GitHub ya marca la
+      corrida con una annotation de tipo failure. Upstream tiene el mismo codeql.yml que
+      teniamos nosotros. Fix de 4 lineas
+- [ ] Deps: upstream permite `sqlparse >=0.3.0`, y todo 0.5.x arrastra 11 avisos de OSV que
+      0.6.0 corrige (DoS + escaping). Subir el piso a 0.6.0. Es el mismo argumento que ya
+      usamos en el fork, medido
+- [ ] Seguridad: history, log y config se crean con el umask (0664 en un desktop tipico)
+      y guardan cada statement tipeado, `alter role ... password` incluido. psql usa 0600
+      para su history y libpq 0600 para .pgpass. Nuestro `ensure_private_file()` ya esta
+      probado (fstat+fchmod, solo archivos regulares propios, no toca /dev/null ni FIFOs)
+- [ ] CI: `permissions: contents: read` en ci.yml (el job no usa secrets)
+- [ ] Tests: `itertools.product` pasado a `parametrize` (pytest 9 lo convierte en error) y
+      `click.get_text_stream` en test_prompt_utils (Click 9 lo elimina). Los dos son de
+      upstream tal cual
+- [ ] ProxyJump NO va a pgcli: upstream usa la libreria `sshtunnel` 0.4.0, cuyo
+      `_read_ssh_config` tambien lee solo proxycommand. El PR iria a pahaz/sshtunnel
+
+### PRs DE TERCEROS que nos tocan (estado 2026-09-16)
+- [ ] #1629 dbaty (SQL_ASCII): BLOQUEA nuestro #1628 por acuerdo. Sin movimiento desde el 04/09
+- [ ] #1631 jackwalkerlabs (passwords literales en service files): CONFLICTING, 4 reviews.
+      Detras de el tenemos ENCOLADO nuestro PR del warning por comentarios inline (a617ff2)
+- [ ] #1635 jackwalkerlabs (ConfigObj -> configparser en pgclirc): va a CHOCAR con nuestro
+      config.py. Ya lo probamos contra el pgclirc real de Diego: 85 claves, 84 identicas, y
+      arregla un crash que hoy existe con una coma en `prompt`. Cuando entre, rebasar
+- [ ] #1636 anandghegde (COPY stdin/stdout): 3 reviews. Nosotros YA lo tenemos aplicado
+- [ ] #1633 MelvinCERBA (Keychain macOS): cherry-pick cuando entre
+- [ ] #1632 jackwalkerlabs (service names en el prompt): 0 comentarios, nadie lo mira
+- [ ] #1613 dcavalcante (meta-comandos de filesystem): 0 comentarios desde el 12/08
+- [ ] #1605 youdie006: j-bennet le pidio resolver conflictos el 04/09, sigue sin moverse
+- [ ] #1625 pacocartones (xfail): discutido, sin cerrar
+- [ ] #1571 jrraymond ($XDG_STATE_HOME para log e history): TRABADO desde MAYO por conflictos.
+      NOSOTROS YA LO TENEMOS implementado y funcionando desde la v4.5.7. Oportunidad: ofrecer
+      nuestra version o ayudarlo a destrabarlo, es un feature que ya usamos todos los dias
+
+### DISCUSSION #1603 "Features I maintain on top of upstream"
+# https://github.com/dbcli/pgcli/discussions/1603 - creada 2026-06-03 por DiegoDAF
+# 23 items numerados, categoria General, 1 upvote, CERO comentarios de terceros en 3 meses.
+# Lectura honesta: como vidriera no funciono (nadie pidio un numero), pero SI funciona como
+# indice propio y como carta de presentacion cuando se manda cada PR. Los merges vinieron
+# por mandar PRs chicos, no por la discussion.
+- [ ] EL CUERPO ESTA DESACTUALIZADO (dice "updated 2026-08-27"). Miente en:
+      a) "Currently open from this list: item 7 as #1542 y #1543, item 9 as #1544,
+         item 10 as #1545" -> LOS CUATRO YA ESTAN MERGEADOS (entre el 03 y el 09/09)
+      b) no menciona el #1637 (item 11), que se mando el 15/09
+      c) dice que el #1620 esta abierto y ya se mergeo el 30/08
+      d) "All five open PRs were rebased on 2026-08-27" -> quedan dos abiertos
+- [ ] Al actualizarlo, marcar tambien que el item 3 (paramiko nativo) incluye ahora ProxyJump
 
 ### BUG anotado 2026-08-10: `--` en named queries de una linea comenta el RESTO de la query
 # Sintoma: al aplanar una query multilinea a `name = "sql"` (formato namedqueries.d),
