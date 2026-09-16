@@ -10,9 +10,19 @@ Upcoming
       bumpea `__version__` (sigue 4.6.2, sin release nueva). CI del fork VERDE por primera vez
       desde antes del 09-10: los 5 jobs de la matriz (3.10 a 3.14) con unit + integration (behave)
       + ReST + ruff + mypy, y CodeQL en verde con las actions v4/v5 pinneadas por SHA
-- [ ] Cuando se publique una version con el fix de ProxyJump: reinstalar en `t` y volver el
-      `~/.ssh/config` a `ProxyJump` (backup `~/.ssh/config.bak-20260916-1139`)
-- [ ] `d` no respondia por tailscale el 2026-09-16 (`ssh d` timeout): sigue en 4.5.8, instalarle 4.6.2+
+- [x] HECHO 2026-09-16 14:50: build local 4.6.2 (con los 21 commits) instalada en `t` y en `d`
+      (`--force --reinstall --python 3.12`, extras `[sshtunnel,keyring]`). OJO: el numero de version
+      es 4.6.2 igual que el release publicado, pero el codigo tiene los commits de la auditoria
+- [x] WORKAROUND REVERTIDO en `t`: los 3 bloques volvieron a `ProxyJump` (backup del workaround en
+      `~/.ssh/config.bak-workaround-20260916-1448`). VALIDADO contra los 3 hosts reales: el tunel SSH
+      levanta por el jump y el canal direct-tcpip llega a 5432 y 6432 del otro lado. Sin tocar
+      ninguna base: solo se abrio y cerro el canal TCP, sin handshake de PG ni queries
+- [x] `d` estaba prendida y tenia 4.6.1 (no 4.5.8 como decia la nota): actualizada a la build nueva.
+      Su `~/.ssh/config` no tiene ni ProxyJump ni ProxyCommand, no alcanza esos hosts por jump
+- [x] PERMISOS: el fix solo ajusta el archivo que abre, asi que los logs rotados de otros dias y el
+      `history` seguian 664. Pasados a 600 a mano en `t` y `d` (one-shot; de aca en mas los crea
+      pgcli con 600). El history solo se ajusta solo en modo interactivo: el bloque `-c`/`-f` sale
+      antes de llegar a esa linea, por diseno
 - [ ] HISTORIAL PUBLICO: `todo.md` nombro la cuenta de trabajo en los commits c229a45 (2026-09-03) y
       9e02396 (2026-09-10), ya pusheados a `fork/main` (repo publico). El archivo actual ya esta
       limpio (9a709eb); reescribir el historial es decision de Diego (implica force-push del fork)
