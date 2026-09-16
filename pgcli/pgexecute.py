@@ -588,7 +588,7 @@ class PGExecute:
             # the connection busy: every later statement then fails with
             # "another command is already in progress" and pgcli believes a
             # transaction is open. Close the COPY before reporting the error.
-            if self.conn.info.transaction_status != psycopg.pq.TransactionStatus.ACTIVE:
+            if self.conn.info.transaction_status != psycopg.pq.TransactionStatus.ACTIVE:  # type: ignore[union-attr]
                 raise
             self._end_stray_copy()
             raise psycopg.ProgrammingError("COPY to STDOUT or from STDIN is not supported, use \\copy instead") from e
