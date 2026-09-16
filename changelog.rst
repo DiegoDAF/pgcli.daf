@@ -1,5 +1,5 @@
-Upcoming
-========
+4.6.2 (2026-09-16) - upstream: 4.6.0
+====================================
 
 Bug fixes:
 ----------
@@ -10,19 +10,6 @@ Bug fixes:
   later statement failed with "another command is already in progress" until
   the user reconnected. The COPY is now closed before the error is reported,
   and the message points at ``\copy``. Follows upstream #1636.
-
-Internal:
----------
-
-* Drop the stale ``xfail`` on ``test_simple_insert_single_table_schema_qualified``.
-  It was marked for an old ``sqlparse`` that mislabelled schema-qualified
-  ``INSERT``; the test passes on the supported range, so with ``xfail_strict``
-  off the marker only hid a passing test as an unreported XPASS. The remaining
-  ``xfail`` on ``test_sub_select_multiple_col_name_completion`` now carries the
-  reason it is still needed. Follows upstream #1625.
-
-Bug fixes:
-----------
 
 * Read ``.pg_service.conf`` values literally, the way libpq does. They were
   parsed with ConfigObj, which strips an inline ``# ...`` as a comment, removes
@@ -49,6 +36,7 @@ Bug fixes:
   ``ON_ERROR_STOP``. A backslash command in a file also spans only its
   own line, like in psql, so a metacommand followed by SQL on the next line no
   longer swallows the SQL.
+
 * Fix a prompt crash, garbled timezone output and a completion-refresh crash
   when the client encoding cannot decode text (e.g. SQL_ASCII), where psycopg
   returns text columns as raw bytes: the socket directory and timezone query
@@ -59,6 +47,19 @@ Bug fixes:
   refresh no longer dies in ``parse_defaults`` with a ``TypeError``). Same
   guard as the completion metadata fix for issue #1405; see upstream issues
   #1484 and #1518.
+
+Internal:
+---------
+
+* Drop the stale ``xfail`` on ``test_simple_insert_single_table_schema_qualified``.
+  It was marked for an old ``sqlparse`` that mislabelled schema-qualified
+  ``INSERT``; the test passes on the supported range, so with ``xfail_strict``
+  off the marker only hid a passing test as an unreported XPASS. The remaining
+  ``xfail`` on ``test_sub_select_multiple_col_name_completion`` now carries the
+  reason it is still needed. Follows upstream #1625.
+
+* Expose ``Changelog``, ``Repository`` and ``Issues`` project URLs in the
+  package metadata, pointed at this fork. Follows upstream #1630.
 
 4.6.1 (2026-08-27) - upstream: 4.6.0
 ====================================
