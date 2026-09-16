@@ -34,6 +34,7 @@ def _parse_jump_hop(hop: str) -> Tuple[Optional[str], str, Optional[int]]:
     and the ``ssh://user@host:port`` URI form.
     """
     hop = hop.strip()
+    port: Optional[int] = None
     if hop.startswith("ssh://"):
         parsed = urlparse(hop)
         try:
@@ -44,7 +45,6 @@ def _parse_jump_hop(hop: str) -> Tuple[Optional[str], str, Optional[int]]:
     user: Optional[str] = None
     if "@" in hop:
         user, hop = hop.rsplit("@", 1)
-    port: Optional[int] = None
     host = hop
     if hop.startswith("["):
         host, _, rest = hop[1:].partition("]")
