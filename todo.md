@@ -202,6 +202,9 @@ Upcoming
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
 
+2026-09-17
+===================
+
 ### LIMPIEZA DEL todo.md (autorizada por Diego)
 - [x] Bajadas a su fecha las 6 secciones de trabajo ya cerrado de agosto y septiembre, que
       seguian ocupando Upcoming. Su contenido esta mas abajo, tal cual estaba
