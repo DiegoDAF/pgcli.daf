@@ -96,6 +96,14 @@ Features:
   costs or no timings.
 
 
+* The EXPLAIN summary now reports the query statistics that
+  explain.depesz.com shows under its Stats tab: total I/O (blocks read and
+  written, with the temporary traffic called out separately), time grouped by
+  node type with a count of each, and time by table broken down by the scan
+  that read it. ``Time by relation`` became ``By table`` and gained the scan
+  counts.
+
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 

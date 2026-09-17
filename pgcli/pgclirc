@@ -67,8 +67,9 @@ stream_results = False
 paste_mode = False
 
 # When explain mode is on (F5), append an analysis summary after the plan tree:
-# the slowest nodes (by exclusive time), time grouped by relation, and the worst
-# planner row-estimate misses. It also turns on the plan diagnostics: nodes that
+# the slowest nodes (by exclusive time), total I/O, time grouped by node type and
+# by table (broken down by scan), and the worst planner row-estimate misses. The
+# grouped statistics mirror the Stats tab of explain.depesz.com. It also turns on the plan diagnostics: nodes that
 # spilled to disk, filters doing an index's job, index-only scans hitting the
 # heap, re-executed inner sides and parallel workers that were not granted are
 # tagged in the tree and explained underneath, grouped by what you would change

@@ -40,12 +40,14 @@ class Visualizer:
         self.summary = summary
         self.node_stats = []
         self.diagnostics = []
+        self.io_totals = {}
 
     def load(self, explain_dict):
         self.plan = explain_dict.pop("Plan")
         self.explain = explain_dict
         self.node_stats = []
         self.diagnostics = []
+        self.io_totals = {}
         self.process_all()
         self.generate_lines()
 
@@ -53,6 +55,25 @@ class Visualizer:
         self.plan = self.process_plan(self.plan)
         self.plan = self.calculate_outlier_nodes(self.plan)
         self.collect_node_stats(self.plan)
+        self.collect_io_totals(self.plan)
+
+    def collect_io_totals(self, plan):
+        """Total blocks read and written, in the style of explain.depesz.com.
+
+        Buffer counters accumulate up the tree, so the root node already holds
+        the totals for the whole query and there is nothing to add up.
+        """
+
+        def blocks(*names):
+            return sum(plan.get(name, 0) or 0 for name in names)
+
+        self.io_totals = {
+            "read": blocks("Shared Read Blocks", "Local Read Blocks", "Temp Read Blocks"),
+            "written": blocks("Shared Written Blocks", "Local Written Blocks", "Temp Written Blocks"),
+            "temp_read": blocks("Temp Read Blocks"),
+            "temp_written": blocks("Temp Written Blocks"),
+            "hit": blocks("Shared Hit Blocks", "Local Hit Blocks"),
+        }
 
     def collect_node_stats(self, plan):
         """Flatten the plan tree into per-node stats for the summary section.
@@ -72,6 +93,7 @@ class Visualizer:
         self.diagnose_node(plan, label)
         self.node_stats.append({
             "label": label,
+            "node_type": plan.get("Node Type", "?"),
             "relation": ((("%s.%s" % (plan["Schema"], relation)) if plan.get("Schema") else relation) if relation else None),
             "duration": plan.get("Actual Duration", 0) or 0,
             "rows": plan.get("Actual Rows", 0),
@@ -157,6 +179,10 @@ class Visualizer:
 
         if found:
             plan["Diagnostics"] = found
+
+    def blocks_to_string(self, blocks):
+        """Render a buffer count as a size. PostgreSQL pages are 8 kB."""
+        return self.kb_to_string((blocks or 0) * 8)
 
     def kb_to_string(self, value):
         """Render a size that PostgreSQL reports in kilobytes."""
@@ -593,26 +619,67 @@ class Visualizer:
                 )
             )
 
-        # Time grouped by relation.
+        # What the query moved to and from disk, for the whole plan.
+        io = self.io_totals or {}
+        if io.get("read") or io.get("written"):
+            parts = []
+            if io.get("read"):
+                parts.append("read %s" % self.blocks_to_string(io["read"]))
+            if io.get("written"):
+                parts.append("wrote %s" % self.blocks_to_string(io["written"]))
+            if io.get("temp_read") or io.get("temp_written"):
+                parts.append(
+                    "temp %s read / %s written"
+                    % (self.blocks_to_string(io.get("temp_read")), self.blocks_to_string(io.get("temp_written")))
+                )
+            lines.append(self.muted_format("  I/O:"))
+            lines.append("    %s" % ", ".join(parts))
+
+        # Time grouped by node type.
+        by_type: dict = {}
+        for n in self.node_stats:
+            agg = by_type.setdefault(n["node_type"], {"duration": 0.0, "count": 0})
+            agg["duration"] += n["duration"]
+            agg["count"] += 1
+        if len(by_type) > 1:
+            lines.append(self.muted_format("  By node type:"))
+            for node_type, agg in sorted(by_type.items(), key=lambda kv: kv[1]["duration"], reverse=True):
+                p = pct(agg["duration"])
+                lines.append(
+                    "    %-28s %4d %10s %s"
+                    % (
+                        node_type[:28],
+                        agg["count"],
+                        self.duration_to_string(agg["duration"]),
+                        self.severity_format(p, "(%.0f%%)" % p),
+                    )
+                )
+
+        # Time grouped by table, broken down by the scan that read it.
         by_rel: dict = {}
         for n in self.node_stats:
             if n["relation"]:
-                agg = by_rel.setdefault(n["relation"], {"duration": 0.0, "nodes": 0})
+                agg = by_rel.setdefault(n["relation"], {"duration": 0.0, "nodes": 0, "scans": {}})
                 agg["duration"] += n["duration"]
                 agg["nodes"] += 1
+                scan = agg["scans"].setdefault(n["node_type"], {"duration": 0.0, "count": 0})
+                scan["duration"] += n["duration"]
+                scan["count"] += 1
         if by_rel:
-            lines.append(self.muted_format("  Time by relation:"))
+            lines.append(self.muted_format("  By table:"))
             for rel, agg in sorted(by_rel.items(), key=lambda kv: kv[1]["duration"], reverse=True):
                 p = pct(agg["duration"])
                 lines.append(
-                    "    %-35s %s %s  %d node(s)"
-                    % (
-                        rel[:35],
-                        self.duration_to_string(agg["duration"]),
-                        self.severity_format(p, "(%.0f%%)" % p),
-                        agg["nodes"],
-                    )
+                    "    %-28s %4d %10s %s"
+                    % (rel[:28], agg["nodes"], self.duration_to_string(agg["duration"]), self.severity_format(p, "(%.0f%%)" % p))
                 )
+                if len(agg["scans"]) > 1 or agg["nodes"] > 1:
+                    for scan_type, scan in sorted(agg["scans"].items(), key=lambda kv: kv[1]["duration"], reverse=True):
+                        lines.append(
+                            self.muted_format(
+                                "      %-26s %4d %10s" % (scan_type[:26], scan["count"], self.duration_to_string(scan["duration"]))
+                            )
+                        )
 
         # Worst planner row-estimate misses (factor >= 10).
         misses = sorted(

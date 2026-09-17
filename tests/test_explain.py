@@ -60,7 +60,8 @@ def test_explain_summary_sections():
     out = v.get_list()
     assert "Summary" in out
     assert "Slowest nodes" in out
-    assert "Time by relation" in out
+    assert "By table" in out
+    assert "By node type" in out
     assert "Planner estimate misses" in out
 
 
@@ -94,7 +95,7 @@ def test_explain_formatter_passes_summary_flag():
     data = json.dumps([_plan()])
     cur = [(data,)]
     out = "\n".join(ExplainOutputFormatter(100, summary=True).format_output(iter(cur), None))
-    assert "Time by relation" in out
+    assert "By table" in out
     cur2 = [(data,)]
     out2 = "\n".join(ExplainOutputFormatter(100, summary=False).format_output(iter(cur2), None))
     assert "Summary" not in out2
@@ -293,3 +294,109 @@ def test_visualizer_survives_a_plan_without_costs_or_timings():
     v = Visualizer(100, color=False, summary=True)
     v.load({"Plan": {"Node Type": "Seq Scan", "Plans": []}, "Execution Time": 1.0})
     assert "Seq Scan" in v.get_list()
+
+
+# ---------------------------------------------------------------------------
+# Query statistics, in the style of explain.depesz.com
+# ---------------------------------------------------------------------------
+
+
+def _summary_of(visualizer):
+    """Just the summary block: the tree above it also mentions node types."""
+    lines = visualizer.get_list().splitlines()
+    return lines[lines.index("Summary") :]
+
+
+def _io_plan(**buffers):
+    node = {
+        "Node Type": "Seq Scan",
+        "Relation Name": "t",
+        "Schema": "public",
+        "Actual Total Time": 5.0,
+        "Actual Loops": 1,
+        "Total Cost": 10,
+        "Plan Rows": 1,
+        "Actual Rows": 1,
+        "Plans": [],
+    }
+    node.update(buffers)
+    return {"Plan": node, "Planning Time": 0.1, "Execution Time": 10.0}
+
+
+def test_io_totals_use_eight_kilobyte_pages():
+    v = Visualizer(100, color=False, summary=True)
+    # 1280 blocks * 8 kB = 10 MB
+    v.load(_io_plan(**{"Shared Read Blocks": 1280, "Temp Written Blocks": 128}))
+    assert v.io_totals["read"] == 1280 and v.io_totals["written"] == 128
+    out = v.get_list()
+    assert "I/O:" in out and "read 10.0 MB" in out and "wrote 1.0 MB" in out
+
+
+def test_temp_io_is_called_out_separately():
+    v = Visualizer(100, color=False, summary=True)
+    v.load(_io_plan(**{"Temp Read Blocks": 256, "Temp Written Blocks": 256}))
+    assert "temp 2.0 MB read / 2.0 MB written" in v.get_list()
+
+
+def test_cache_hits_alone_do_not_print_an_io_line():
+    # Reading everything from shared buffers is not disk traffic.
+    v = Visualizer(100, color=False, summary=True)
+    v.load(_io_plan(**{"Shared Hit Blocks": 5000}))
+    assert "I/O:" not in v.get_list()
+
+
+def test_node_types_are_counted_and_totalled():
+    v = Visualizer(100, color=False, summary=True)
+    v.load(_plan())
+    summary = _summary_of(v)
+    assert any("By node type" in line for line in summary)
+    # two Seq Scans in the fixture plan, totalling 120 + 18 ms
+    row = next(line for line in summary[summary.index("  By node type:") :] if "Seq Scan" in line)
+    assert row.split() == ["Seq", "Scan", "2", "138.00", "ms", "(86%)"]
+
+
+def test_table_rows_break_down_by_scan_type():
+    """A table read twice by different scans shows each one underneath."""
+    plan = {
+        "Plan": {
+            "Node Type": "Append",
+            "Actual Total Time": 30.0,
+            "Actual Loops": 1,
+            "Total Cost": 300,
+            "Plan Rows": 1,
+            "Actual Rows": 1,
+            "Plans": [
+                {
+                    "Node Type": "Seq Scan",
+                    "Relation Name": "t",
+                    "Schema": "public",
+                    "Actual Total Time": 20.0,
+                    "Actual Loops": 1,
+                    "Total Cost": 200,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Plans": [],
+                },
+                {
+                    "Node Type": "Index Scan",
+                    "Relation Name": "t",
+                    "Schema": "public",
+                    "Actual Total Time": 5.0,
+                    "Actual Loops": 1,
+                    "Total Cost": 50,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Plans": [],
+                },
+            ],
+        },
+        "Planning Time": 0.1,
+        "Execution Time": 30.0,
+    }
+    v = Visualizer(100, color=False, summary=True)
+    v.load(plan)
+    summary = _summary_of(v)
+    rows = summary[summary.index("  By table:") :]
+    assert rows[1].split() == ["public.t", "2", "25.00", "ms", "(83%)"]  # both scans, added up
+    assert rows[2].split() == ["Seq", "Scan", "1", "20.00", "ms"]
+    assert rows[3].split() == ["Index", "Scan", "1", "5.00", "ms"]
