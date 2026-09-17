@@ -39,6 +39,172 @@ Upcoming
       el fork sale con 1 (psql -c tambien sale 1; -f sale 3 con ON_ERROR_STOP). Evaluar PR
       "exit non-zero on error like psql" cuando haya lugar en la cola
 
+### CHEQUEO OBLIGATORIO ANTES DE QUE MERGEE UN PR (anotado 2026-09-10)
+# QUE PASO: en el grafico de contribuidores de dbcli/pgcli del ultimo mes aparecen
+# la cuenta de TRABAJO (2 commits) y `claude` (3 commits). NO son commits sueltos:
+# GitHub, al hacer SQUASH MERGE, agrega como Co-authored-by a TODOS los autores
+# distintos de la rama. Yo mire solo el campo author y dije que upstream estaba
+# limpio; estaba equivocado, hay que mirar la rama ENTERA y los trailers.
+#   - la cuenta de trabajo salio de 3 merges hechos con el boton "Update branch" de la
+#     web estando logueado con la cuenta de trabajo: 19c9730 (2026-03-27) y c8f1b0d
+#     (2026-08-24) en feature/command-option, a665991 (2026-08-24) en feature/yes-option.
+#     Terminaron como co-autores de 924e7d4 (#1542) y 8e4aef4 (#1544).
+#   - claude salio de los trailers Co-Authored-By que arrastraban esas ramas
+#     (12 en command-option, 9 en yes-option).
+# NO SE PUEDE DESHACER: ya esta en main de dbcli.
+- [ ] SIEMPRE antes de mandar un PR y ANTES de que lo mergeen:
+      bash ../check_pr_authors.sh <rama> original/main   (vive fuera del repo, en ~/scripts/pgcli/)
+      (mira autores de toda la rama + trailers; probado: detecta el caso del #1542)
+- [ ] NUNCA apretar "Update branch" en la web sin mirar con que cuenta estas logueado.
+      Mejor hacer el merge local y pushear, que ahi manda la identidad del repo
+- [x] Arreglado el user.name local de pgcli.daf: decia "DiegoDAF", ahora "Diego"
+      (tu CLAUDE.md pide "Diego"; habia 61 commits con el nombre equivocado)
+# PENDIENTE DE DECISION: el user.email GLOBAL es el gmail personal, o sea cualquier
+# repo sin override commitea con el gmail personal. Asi se filtraron 11 commits con
+# ese mail al fork publico. Conviene invertirlo: poner el noreply como default global
+# y dejar que el includeIf de la carpeta de trabajo ponga el mail de trabajo donde corresponde.
+#   git config --global user.email "DiegoDAF@users.noreply.github.com"
+# (ese includeIf ya existe y esta bien escrito, hoy no dispara porque la carpeta
+#  de trabajo no es repo git ni tiene repos adentro)
+
+### PLAN DE PRs A UPSTREAM (mapa completo, revisado 2026-09-16 con datos frescos de la API)
+
+# --- MARCADOR ---------------------------------------------------------------
+# 11 PRs nuestros MERGEADOS: #1542 -c, #1543 -f, #1544 -y, #1545 -t, #1546 .pgpass+tunel,
+#   #1559 comentarios finales, #1609 \ne, #1619 timeouts behave, #1620 explain mode,
+#   #1621 -l/--ping, #1622 --timeout
+# 6 cerrados sin mergear (viejos, reemplazados): #1530, #1538, #1539, #1540, #1541, #1547
+# 2 ABIERTOS hoy: #1637 y #1628
+# La cola de upstream tiene 15 PRs abiertos en total, o sea que 2 nuestros es razonable.
+
+### NUESTROS 4 PRs ABIERTOS (estado 2026-09-17)
+- [ ] #1637 "Add --no-timings and --no-status" = item 11 del #1603. Abierto 2026-09-15.
+      Rama `upstream/no-timings-no-status`, +103-3 en 3 archivos. MERGEABLE.
+      CI: los 5 builds (3.10 a 3.14) PASAN, CodeQL pasa, Analyze pasa. El unico rojo es
+      `codex-review`, que falla en TODOS los PRs del repo incluidos los ya mergeados: por eso
+      el estado sale UNSTABLE y no CLEAN. No hay que hacer nada con eso.
+      Sin review ni comentarios todavia. SOLO ESPERAR.
+- [ ] #1628 "Decode text results defensively (SQL_ASCII)". CLEAN, 7 comentarios.
+      BLOQUEADO POR ACUERDO: j-bennet pidio meter primero el #1629 de dbaty (arregla el caso
+      comun, ASCII puro) y despues nuestro fallback byte a byte, que es el caso raro. Diego
+      acepto ese orden el 2026-09-10.
+      OJO: el #1629 NO SE MOVIO desde el 2026-09-04, no tiene ni un comentario ni un review.
+      Si sigue frenado un par de semanas, vale preguntar amablemente en el #1629.
+      Cuando entre: rehacer el nuestro como follow-up (fallback en CharacterNotInRepertoire).
+- [ ] #1639 "ci: update the deprecated CodeQL action and checkout". Mandado 2026-09-17.
+      Rama `upstream/codeql-v4`, 1 archivo, 4 lineas. Fix de deprecacion: GitHub ya marca cada
+      corrida de CodeQL con una annotation de nivel failure. Solo esperar
+- [ ] #1640 "Require sqlparse 0.6.0 or newer". Mandado 2026-09-17.
+      Rama `upstream/sqlparse-floor`, 2 archivos, 6 lineas. Sube el piso (el tope ya permitia 0.6).
+      El argumento es el camino de UPGRADE: hoy `pip install -U pgcli` sobre una maquina con 0.5.3
+      la deja ahi. Solo esperar
+
+### PROXIMOS A MANDAR, uno por vez y solo cuando baje la cola
+- [ ] 1) Item 8 del #1603: `-o/--output`   <-- EL SIGUIENTE
+      # Misma familia de scripting que los 4 que ya entraron (-c, -f, -y, -t). Chico y
+      # autocontenido. Ahora tiene mejor pie que nunca: los 4 hermanos estan mergeados.
+- [ ] 2) Item 6 del #1603: namedqueries.d + sufijo de version (estilo psqlrc-NN)
+      # La version del server sale del startup packet (conn.info.server_version), sin
+      # round-trip extra.
+- [ ] 3) Item 5 del #1603: `dsn.d/`  (BAJADO el 2026-09-03, sigue ultimo)
+      # Perdio su respaldo: el issue #1489 lo cerro j-bennet al mergear el #1617 de
+      # ChrisJr404 (72c5f91), que resuelve -D y --list-dsn por otra via, sin drop-in.
+      # a) hay que REBASAR sobre esa forma nueva (toca las mismas 2 lineas de main.py)
+      # b) el pitch se para solo en el valor de la feature (Diego tiene 105 alias)
+      # c) PREGUNTAR en el #1603 si les interesa el formato drop-in ANTES de escribir el PR
+- [ ] NO MANDAR: item 21 (log_truncate_on_rotation) depende del item 12 (rotacion de logs),
+      que upstream ya pospuso una vez ("revisit" en los #1541/#1547).
+
+### LISTOS PARA MANDAR: 2 ramas ya escritas, probadas y esperando lugar en la cola
+# Las cuatro salieron de la auditoria del 2026-09-16. Dos se mandaron el 17 (#1639 y #1640).
+# Estas dos estan COMPLETAS: nacen de original/main, suite completa verde contra PG real,
+# ruff y format limpios, y check_pr_authors.sh dice Limpio. Solo falta apretar el boton.
+- [ ] RAMA `upstream/test-future-proofing` (2 archivos, 13 lineas, SIN changelog: upstream no
+      registra cambios de test) -> "tests: stop using two APIs that the next major bump removes"
+      # (a) `itertools.product` pasado a `parametrize` en test_smart_completion_multiple_schemata:
+      #     pytest ya avisa (PytestRemovedIn10Warning) y pytest 10 lo convierte en error
+      # (b) `click.get_text_stream("stdin")` en test_prompt_utils: Click 9 lo elimina y ya avisa.
+      #     Es literalmente `sys.stdin`, y el test solo usa `.isatty()`
+      # NO esta pusheada al fork todavia
+- [ ] RAMA `upstream/private-state-files` (4 archivos, 117 lineas, 6 tests + changelog)
+      -> "Create the history, log and config files readable by their owner only"
+      # El mas grande de los cuatro y el unico que puede generar discusion, por eso va ultimo.
+      # Adaptado al codigo de UPSTREAM (no tiene rotacion de logs ni $XDG_STATE_HOME, los puntos
+      # de enganche son otros: main.py:663 el handler y main.py:1113 el FileHistory).
+      # Incluye los dos casos que marco la revision adversarial: `/dev/null` (history_file
+      # apuntando ahi es el modo "no grabar nada"; como root un chmod lo romperia para todo el
+      # sistema) y FIFO (colgaba el arranque en open()). fstat+fchmod, sin ventana TOCTOU.
+      # MANDAR CUANDO entre alguno de los que estan en vuelo. NO esta pusheada al fork todavia
+
+### PRs DE TERCEROS que nos tocan (estado 2026-09-16)
+- [ ] #1629 dbaty (SQL_ASCII): BLOQUEA nuestro #1628 por acuerdo. Sin movimiento desde el 04/09
+- [ ] #1631 jackwalkerlabs (passwords literales en service files): CONFLICTING, 4 reviews.
+      Detras de el tenemos ENCOLADO nuestro PR del warning por comentarios inline (a617ff2)
+- [ ] #1635 jackwalkerlabs (ConfigObj -> configparser en pgclirc): va a CHOCAR con nuestro
+      config.py. Ya lo probamos contra el pgclirc real de Diego: 85 claves, 84 identicas, y
+      arregla un crash que hoy existe con una coma en `prompt`. Cuando entre, rebasar
+- [ ] #1636 anandghegde (COPY stdin/stdout): 3 reviews. Nosotros YA lo tenemos aplicado
+- [ ] #1633 MelvinCERBA (Keychain macOS): cherry-pick cuando entre
+- [ ] #1632 jackwalkerlabs (service names en el prompt): 0 comentarios, nadie lo mira
+- [ ] #1613 dcavalcante (meta-comandos de filesystem): 0 comentarios desde el 12/08
+- [ ] #1605 youdie006: j-bennet le pidio resolver conflictos el 04/09, sigue sin moverse
+- [ ] #1625 pacocartones (xfail): discutido, sin cerrar
+- [ ] #1571 jrraymond ($XDG_STATE_HOME para log e history): TRABADO desde MAYO por conflictos.
+      NOSOTROS YA LO TENEMOS implementado y funcionando desde la v4.5.7. Oportunidad: ofrecer
+      nuestra version o ayudarlo a destrabarlo, es un feature que ya usamos todos los dias
+
+### DISCUSSION #1603 "Features I maintain on top of upstream"
+# https://github.com/dbcli/pgcli/discussions/1603 - creada 2026-06-03 por DiegoDAF
+# Lectura honesta: como vidriera NO funciono. 1 upvote y cero comentarios de terceros en
+# 3 meses, nadie pidio nunca un numero. Los 11 merges vinieron de mandar PRs chicos, no de
+# la lista. Igual sirve como indice propio y como carta de presentacion al mandar cada PR.
+# REESCRITA el 2026-09-16: ahora es SOLO una lista de PENDIENTES (decision de Diego).
+# Quedaron 18 items; salieron los mergeados (4, 7, 9, 10 y 23) y todo el historial de merges.
+# La numeracion NO se toca nunca: los numeros son con lo que la gente elige un item, y hay
+# comentarios viejos que los citan. Por eso hay huecos, con una linea arriba que lo explica.
+# El 2026-09-16, a pedido de Diego, se saco tambien la seccion final de bugs de upstream y
+# los 4 candidatos de la auditoria: el post termina en el bloque Status.
+- [ ] MANTENIMIENTO: cada vez que mergeen algo nuestro, SACAR ese item del post (no marcarlo
+      como merged). Hoy quedan por sacar, cuando entren: item 11 (#1637) y los que sigan
+- [ ] Eventual: sumar ssh_tunnel_save_password como feature a ofrecer en la lista
+
+### FORK: features inspiradas en pgadmin4 (analisis 2026-07-15)
+# Lista completa (47) + detalle en notas LOCALES (no en este repo publico):
+#   ../pgadmin-feature-ideas.md  (los 47, con valor/portabilidad/esfuerzo)
+#   ../pgadmin-feature-plans.md  (planes detallados de EXPLAIN / Query-tool / Conexiones)
+- [x] #1 psql-style paste (paste_mode + F6 toggle) -> v4.5.4, PUSHEADO
+- [x] #2 EXPLAIN summary (slowest nodes / time by relation / estimate misses; explain_summary default False) -> v4.5.5, LOCAL listo para push
+- [x] #3 Query-tool bundle -> v4.5.6, LOCAL (commit sin push; falta test de Diego en nb). Ver seccion 2026-07-15
+- [~] #4 Conexiones -> CERRADO 2026-07-17 (redundante, verificado en codigo). post-connect SQL: YA ESTA (init-commands global/DSN/--init-command). .pg_service.conf: YA ESTA (parse_service_info lee ~/.pg_service.conf/PGSERVICEFILE/PGSYSCONFDIR + service=/PGSERVICE). keepalives + connect_timeout: ya usables por passthrough de libpq en el connstring (?connect_timeout=10&keepalives=1...), feature dedicada = YAGNI. SSL ~ expansion: unico gap real (no se expande ~ en sslrootcert/sslcert/sslkey) pero usamos rutas absolutas -> sin necesidad practica. Reabrir solo si aparece un caso concreto
+- [ ] Backlog (~40 restantes en ideas.md): sub-warnings de EXPLAIN (nested-loop/hash-spill/bitmap-recheck), tweaks de autocomplete, params chicos de conexion, y varios de bajo valor. Ir picando por valor
+
+### Bookkeeping / nice-to-have
+- [ ] Evaluar cherry-pick upstream #1601 (licencia SPDX BSD-3-Clause + saca dynamic version, migran a setuptools_scm) - toca como versionamos, revisar con calma
+- [ ] Branches feature/stream-results y feature/ssh-tunnel-keyring: ya estan en main; se pueden borrar o conservar si los queremos para PRs upstream separados
+- [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
+
+
+
+2026-09-17
+===================
+
+### LIMPIEZA DEL todo.md (autorizada por Diego)
+- [x] Bajadas a su fecha las 6 secciones de trabajo ya cerrado de agosto y septiembre, que
+      seguian ocupando Upcoming. Su contenido esta mas abajo, tal cual estaba
+- [x] ARCHIVADAS 5 secciones cuyo contenido ya era FALSO o estaba duplicado:
+      - "UPSTREAM - estado real AUDITADO 2026-07-14": listaba #1542/#1543/#1544/#1545 como OPEN.
+        Los cuatro se mergearon entre el 3 y el 9 de septiembre
+      - "TIMEOUTS de conexion": el trabajo esta HECHO (--timeout salio en 4.5.8 y upstream lo
+        mergeo como #1622). Los 28 "pendientes" eran el ranking de candidatos a PR de agosto,
+        que hoy duplica y contradice al PLAN DE PRs A UPSTREAM
+      - "Issues upstream - triage": decia que #1518/#1484 estaba "PENDIENTE (decision Diego)"
+        cuando es el PR #1628, abierto desde el 1 de septiembre; y que $XDG_STATE_HOME era
+        "NO AHORA" cuando esta en el fork desde la v4.5.7
+      - "Discussion #1603 (features sobre upstream)": duplicaba la seccion nueva, y describia
+        un cross-link que se reemplazo al reescribir el post el 2026-09-16
+      - "BUG 2026-08-10 (`--` en named queries)": estaba entero en [x], sin pendientes
+- [x] Upcoming queda solo con lo vivo. Nada se borro: todo el texto esta mas abajo
+
 ### 2026-08-31: fix \watch en -f/-c (bug encontrado por j-bennet en #1543)
 - [x] j-bennet volvio (mergeo #1619, #1620 y #1622; dbaty revisa, ella mergea) y probando #1543
       encontro que `pgcli -f archivo` con `\watch` al final repetia el ARCHIVO ENTERO
@@ -161,150 +327,6 @@ Upcoming
 - [ ] #1632 (jackwalkerlabs) "Show PostgreSQL service names in the prompt": feature nueva
       (token `\service` en el prompt). No la tenemos. Solo util si usamos service files
 - [~] #1630 (Add Changelog project URL) y #1625 (remove stale xfail): irrelevantes para nosotros
-
-### CHEQUEO OBLIGATORIO ANTES DE QUE MERGEE UN PR (anotado 2026-09-10)
-# QUE PASO: en el grafico de contribuidores de dbcli/pgcli del ultimo mes aparecen
-# la cuenta de TRABAJO (2 commits) y `claude` (3 commits). NO son commits sueltos:
-# GitHub, al hacer SQUASH MERGE, agrega como Co-authored-by a TODOS los autores
-# distintos de la rama. Yo mire solo el campo author y dije que upstream estaba
-# limpio; estaba equivocado, hay que mirar la rama ENTERA y los trailers.
-#   - la cuenta de trabajo salio de 3 merges hechos con el boton "Update branch" de la
-#     web estando logueado con la cuenta de trabajo: 19c9730 (2026-03-27) y c8f1b0d
-#     (2026-08-24) en feature/command-option, a665991 (2026-08-24) en feature/yes-option.
-#     Terminaron como co-autores de 924e7d4 (#1542) y 8e4aef4 (#1544).
-#   - claude salio de los trailers Co-Authored-By que arrastraban esas ramas
-#     (12 en command-option, 9 en yes-option).
-# NO SE PUEDE DESHACER: ya esta en main de dbcli.
-- [ ] SIEMPRE antes de mandar un PR y ANTES de que lo mergeen:
-      bash ../check_pr_authors.sh <rama> original/main   (vive fuera del repo, en ~/scripts/pgcli/)
-      (mira autores de toda la rama + trailers; probado: detecta el caso del #1542)
-- [ ] NUNCA apretar "Update branch" en la web sin mirar con que cuenta estas logueado.
-      Mejor hacer el merge local y pushear, que ahi manda la identidad del repo
-- [x] Arreglado el user.name local de pgcli.daf: decia "DiegoDAF", ahora "Diego"
-      (tu CLAUDE.md pide "Diego"; habia 61 commits con el nombre equivocado)
-# PENDIENTE DE DECISION: el user.email GLOBAL es el gmail personal, o sea cualquier
-# repo sin override commitea con el gmail personal. Asi se filtraron 11 commits con
-# ese mail al fork publico. Conviene invertirlo: poner el noreply como default global
-# y dejar que el includeIf de la carpeta de trabajo ponga el mail de trabajo donde corresponde.
-#   git config --global user.email "DiegoDAF@users.noreply.github.com"
-# (ese includeIf ya existe y esta bien escrito, hoy no dispara porque la carpeta
-#  de trabajo no es repo git ni tiene repos adentro)
-
-### PLAN DE PRs A UPSTREAM (mapa completo, revisado 2026-09-16 con datos frescos de la API)
-
-# --- MARCADOR ---------------------------------------------------------------
-# 11 PRs nuestros MERGEADOS: #1542 -c, #1543 -f, #1544 -y, #1545 -t, #1546 .pgpass+tunel,
-#   #1559 comentarios finales, #1609 \ne, #1619 timeouts behave, #1620 explain mode,
-#   #1621 -l/--ping, #1622 --timeout
-# 6 cerrados sin mergear (viejos, reemplazados): #1530, #1538, #1539, #1540, #1541, #1547
-# 2 ABIERTOS hoy: #1637 y #1628
-# La cola de upstream tiene 15 PRs abiertos en total, o sea que 2 nuestros es razonable.
-
-### NUESTROS 2 PRs ABIERTOS (estado 2026-09-16)
-- [ ] #1637 "Add --no-timings and --no-status" = item 11 del #1603. Abierto 2026-09-15.
-      Rama `upstream/no-timings-no-status`, +103-3 en 3 archivos. MERGEABLE.
-      CI: los 5 builds (3.10 a 3.14) PASAN, CodeQL pasa, Analyze pasa. El unico rojo es
-      `codex-review`, que falla en TODOS los PRs del repo incluidos los ya mergeados: por eso
-      el estado sale UNSTABLE y no CLEAN. No hay que hacer nada con eso.
-      Sin review ni comentarios todavia. SOLO ESPERAR.
-- [ ] #1628 "Decode text results defensively (SQL_ASCII)". CLEAN, 7 comentarios.
-      BLOQUEADO POR ACUERDO: j-bennet pidio meter primero el #1629 de dbaty (arregla el caso
-      comun, ASCII puro) y despues nuestro fallback byte a byte, que es el caso raro. Diego
-      acepto ese orden el 2026-09-10.
-      OJO: el #1629 NO SE MOVIO desde el 2026-09-04, no tiene ni un comentario ni un review.
-      Si sigue frenado un par de semanas, vale preguntar amablemente en el #1629.
-      Cuando entre: rehacer el nuestro como follow-up (fallback en CharacterNotInRepertoire).
-
-### PROXIMOS A MANDAR, uno por vez y solo cuando baje la cola
-- [ ] 1) Item 8 del #1603: `-o/--output`   <-- EL SIGUIENTE
-      # Misma familia de scripting que los 4 que ya entraron (-c, -f, -y, -t). Chico y
-      # autocontenido. Ahora tiene mejor pie que nunca: los 4 hermanos estan mergeados.
-- [ ] 2) Item 6 del #1603: namedqueries.d + sufijo de version (estilo psqlrc-NN)
-      # La version del server sale del startup packet (conn.info.server_version), sin
-      # round-trip extra.
-- [ ] 3) Item 5 del #1603: `dsn.d/`  (BAJADO el 2026-09-03, sigue ultimo)
-      # Perdio su respaldo: el issue #1489 lo cerro j-bennet al mergear el #1617 de
-      # ChrisJr404 (72c5f91), que resuelve -D y --list-dsn por otra via, sin drop-in.
-      # a) hay que REBASAR sobre esa forma nueva (toca las mismas 2 lineas de main.py)
-      # b) el pitch se para solo en el valor de la feature (Diego tiene 105 alias)
-      # c) PREGUNTAR en el #1603 si les interesa el formato drop-in ANTES de escribir el PR
-- [ ] NO MANDAR: item 21 (log_truncate_on_rotation) depende del item 12 (rotacion de logs),
-      que upstream ya pospuso una vez ("revisit" en los #1541/#1547).
-
-### CANDIDATOS NUEVOS salidos de la auditoria 2026-09-16 (NO son items del #1603:
-### son defectos de upstream, chicos, sin dependencias nuestras, faciles de aceptar)
-- [ ] CI: `codeql-action@v2` y `actions/checkout@v3` estan deprecados y GitHub ya marca la
-      corrida con una annotation de tipo failure. Upstream tiene el mismo codeql.yml que
-      teniamos nosotros. Fix de 4 lineas
-- [ ] Deps: upstream permite `sqlparse >=0.3.0`, y todo 0.5.x arrastra 11 avisos de OSV que
-      0.6.0 corrige (DoS + escaping). Subir el piso a 0.6.0. Es el mismo argumento que ya
-      usamos en el fork, medido
-- [ ] Seguridad: history, log y config se crean con el umask (0664 en un desktop tipico)
-      y guardan cada statement tipeado, `alter role ... password` incluido. psql usa 0600
-      para su history y libpq 0600 para .pgpass. Nuestro `ensure_private_file()` ya esta
-      probado (fstat+fchmod, solo archivos regulares propios, no toca /dev/null ni FIFOs)
-- [ ] CI: `permissions: contents: read` en ci.yml (el job no usa secrets)
-- [ ] Tests: `itertools.product` pasado a `parametrize` (pytest 9 lo convierte en error) y
-      `click.get_text_stream` en test_prompt_utils (Click 9 lo elimina). Los dos son de
-      upstream tal cual
-- [ ] ProxyJump NO va a pgcli: upstream usa la libreria `sshtunnel` 0.4.0, cuyo
-      `_read_ssh_config` tambien lee solo proxycommand. El PR iria a pahaz/sshtunnel
-
-### PRs DE TERCEROS que nos tocan (estado 2026-09-16)
-- [ ] #1629 dbaty (SQL_ASCII): BLOQUEA nuestro #1628 por acuerdo. Sin movimiento desde el 04/09
-- [ ] #1631 jackwalkerlabs (passwords literales en service files): CONFLICTING, 4 reviews.
-      Detras de el tenemos ENCOLADO nuestro PR del warning por comentarios inline (a617ff2)
-- [ ] #1635 jackwalkerlabs (ConfigObj -> configparser en pgclirc): va a CHOCAR con nuestro
-      config.py. Ya lo probamos contra el pgclirc real de Diego: 85 claves, 84 identicas, y
-      arregla un crash que hoy existe con una coma en `prompt`. Cuando entre, rebasar
-- [ ] #1636 anandghegde (COPY stdin/stdout): 3 reviews. Nosotros YA lo tenemos aplicado
-- [ ] #1633 MelvinCERBA (Keychain macOS): cherry-pick cuando entre
-- [ ] #1632 jackwalkerlabs (service names en el prompt): 0 comentarios, nadie lo mira
-- [ ] #1613 dcavalcante (meta-comandos de filesystem): 0 comentarios desde el 12/08
-- [ ] #1605 youdie006: j-bennet le pidio resolver conflictos el 04/09, sigue sin moverse
-- [ ] #1625 pacocartones (xfail): discutido, sin cerrar
-- [ ] #1571 jrraymond ($XDG_STATE_HOME para log e history): TRABADO desde MAYO por conflictos.
-      NOSOTROS YA LO TENEMOS implementado y funcionando desde la v4.5.7. Oportunidad: ofrecer
-      nuestra version o ayudarlo a destrabarlo, es un feature que ya usamos todos los dias
-
-### DISCUSSION #1603 "Features I maintain on top of upstream"
-# https://github.com/dbcli/pgcli/discussions/1603 - creada 2026-06-03 por DiegoDAF
-# 23 items numerados, categoria General, 1 upvote, CERO comentarios de terceros en 3 meses.
-# Lectura honesta: como vidriera no funciono (nadie pidio un numero), pero SI funciona como
-# indice propio y como carta de presentacion cuando se manda cada PR. Los merges vinieron
-# por mandar PRs chicos, no por la discussion.
-- [ ] EL CUERPO ESTA DESACTUALIZADO (dice "updated 2026-08-27"). Miente en:
-      a) "Currently open from this list: item 7 as #1542 y #1543, item 9 as #1544,
-         item 10 as #1545" -> LOS CUATRO YA ESTAN MERGEADOS (entre el 03 y el 09/09)
-      b) no menciona el #1637 (item 11), que se mando el 15/09
-      c) dice que el #1620 esta abierto y ya se mergeo el 30/08
-      d) "All five open PRs were rebased on 2026-08-27" -> quedan dos abiertos
-- [ ] Al actualizarlo, marcar tambien que el item 3 (paramiko nativo) incluye ahora ProxyJump
-
-### BUG anotado 2026-08-10: `--` en named queries de una linea comenta el RESTO de la query
-# Sintoma: al aplanar una query multilinea a `name = "sql"` (formato namedqueries.d),
-# un comentario `-- ...` embebido deja de comentar "su linea" y comenta todo lo que
-# sigue. Y no es solo al convertir: pgexecute.run() hace sqlparse.format(strip_comments)
-# sobre el statement ya aplanado, asi que cualquier named query de una linea con `--`
-# adentro pierde el resto al EJECUTARSE.
-# Opciones de fix (evaluar al implementar):
-#   a) al aplanar/guardar: convertir `-- x` a `/* x */` (seguro, preserva el comentario)
-#   b) soportar valores MULTILINEA en namedqueries.d (ConfigObj banca triple-quote):
-#      la query conserva sus saltos de linea y el `--` vuelve a comentar solo su linea.
-#      Bonus: adios al infierno de una-linea para queries largas
-#   c) strip de comentarios en el momento de la conversion (lo que hice a mano hoy)
-# PROPUESTA: (b) como fix de fondo + (a) como salvaguarda en \ns/\ne al guardar
-- [x] HECHO 2026-08-10: multilinea soportado punta a punta (ConfigObj triple-quote, doc en pgclirc) + save() de \ns/\ne convierte `-- x` a `/* x */` token-aware (sqlparse; literales intactos). 5 tests
-
-### FORK: features inspiradas en pgadmin4 (analisis 2026-07-15)
-# Lista completa (47) + detalle en notas LOCALES (no en este repo publico):
-#   ../pgadmin-feature-ideas.md  (los 47, con valor/portabilidad/esfuerzo)
-#   ../pgadmin-feature-plans.md  (planes detallados de EXPLAIN / Query-tool / Conexiones)
-- [x] #1 psql-style paste (paste_mode + F6 toggle) -> v4.5.4, PUSHEADO
-- [x] #2 EXPLAIN summary (slowest nodes / time by relation / estimate misses; explain_summary default False) -> v4.5.5, LOCAL listo para push
-- [x] #3 Query-tool bundle -> v4.5.6, LOCAL (commit sin push; falta test de Diego en nb). Ver seccion 2026-07-15
-- [~] #4 Conexiones -> CERRADO 2026-07-17 (redundante, verificado en codigo). post-connect SQL: YA ESTA (init-commands global/DSN/--init-command). .pg_service.conf: YA ESTA (parse_service_info lee ~/.pg_service.conf/PGSERVICEFILE/PGSYSCONFDIR + service=/PGSERVICE). keepalives + connect_timeout: ya usables por passthrough de libpq en el connstring (?connect_timeout=10&keepalives=1...), feature dedicada = YAGNI. SSL ~ expansion: unico gap real (no se expande ~ en sslrootcert/sslcert/sslkey) pero usamos rutas absolutas -> sin necesidad practica. Reabrir solo si aparece un caso concreto
-- [ ] Backlog (~40 restantes en ideas.md): sub-warnings de EXPLAIN (nested-loop/hash-spill/bitmap-recheck), tweaks de autocomplete, params chicos de conexion, y varios de bajo valor. Ir picando por valor
 
 ### UPSTREAM (dbcli/pgcli) - estado real AUDITADO 2026-07-14
 # Auditado con workflow (19 features): TODOS estan en nuestra fork; 18/19 NO
@@ -500,11 +522,20 @@ Upcoming
       paso a ser el 22 para que los numeros sean unicos (la discussion dice "pick a number")
 - [ ] Eventual: sumar ssh_tunnel_save_password como feature a ofrecer en la lista
 
-### Bookkeeping / nice-to-have
-- [ ] Evaluar cherry-pick upstream #1601 (licencia SPDX BSD-3-Clause + saca dynamic version, migran a setuptools_scm) - toca como versionamos, revisar con calma
-- [ ] Branches feature/stream-results y feature/ssh-tunnel-keyring: ya estan en main; se pueden borrar o conservar si los queremos para PRs upstream separados
-- [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
-
+### BUG anotado 2026-08-10: `--` en named queries de una linea comenta el RESTO de la query
+# Sintoma: al aplanar una query multilinea a `name = "sql"` (formato namedqueries.d),
+# un comentario `-- ...` embebido deja de comentar "su linea" y comenta todo lo que
+# sigue. Y no es solo al convertir: pgexecute.run() hace sqlparse.format(strip_comments)
+# sobre el statement ya aplanado, asi que cualquier named query de una linea con `--`
+# adentro pierde el resto al EJECUTARSE.
+# Opciones de fix (evaluar al implementar):
+#   a) al aplanar/guardar: convertir `-- x` a `/* x */` (seguro, preserva el comentario)
+#   b) soportar valores MULTILINEA en namedqueries.d (ConfigObj banca triple-quote):
+#      la query conserva sus saltos de linea y el `--` vuelve a comentar solo su linea.
+#      Bonus: adios al infierno de una-linea para queries largas
+#   c) strip de comentarios en el momento de la conversion (lo que hice a mano hoy)
+# PROPUESTA: (b) como fix de fondo + (a) como salvaguarda en \ns/\ne al guardar
+- [x] HECHO 2026-08-10: multilinea soportado punta a punta (ConfigObj triple-quote, doc en pgclirc) + save() de \ns/\ne convierte `-- x` a `/* x */` token-aware (sqlparse; literales intactos). 5 tests
 
 2026-09-16
 ===================
