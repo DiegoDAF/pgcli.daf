@@ -63,13 +63,16 @@ class Visualizer:
         label = plan.get("Node Type", "?")
         relation = plan.get("Relation Name")
         if relation:
-            label = "%s on %s.%s" % (label, plan.get("Schema", "?"), relation)
+            # Schema is only present with EXPLAIN VERBOSE; without it, naming
+            # the table alone beats printing "?.orders".
+            schema = plan.get("Schema")
+            label = "%s on %s" % (label, ("%s.%s" % (schema, relation)) if schema else relation)
         elif plan.get("CTE Name"):
             label = "%s %s" % (label, plan.get("CTE Name"))
         self.diagnose_node(plan, label)
         self.node_stats.append({
             "label": label,
-            "relation": (("%s.%s" % (plan.get("Schema", "?"), relation)) if relation else None),
+            "relation": ((("%s.%s" % (plan["Schema"], relation)) if plan.get("Schema") else relation) if relation else None),
             "duration": plan.get("Actual Duration", 0) or 0,
             "rows": plan.get("Actual Rows", 0),
             "est_factor": plan.get("Planner Row Estimate Factor", 0) or 0,
@@ -618,8 +621,9 @@ class Visualizer:
             lines.append(self.muted_format("  Diagnostics:"))
             for topic in ("work_mem", "index", "vacuum", "parallel", "plan"):
                 for d in (x for x in self.diagnostics if x["topic"] == topic):
-                    lines.append("    %-10s %s" % (self.critical_format(topic), d["detail"]))
-                    lines.append("    %-10s %s" % ("", self.muted_format("node: %s" % d["label"][:60])))
+                    # Pad before coloring: the escape codes count as characters.
+                    lines.append("    %s %s" % (self.critical_format("%-9s" % topic), d["detail"]))
+                    lines.append("    %-9s %s" % ("", self.muted_format("node: %s" % d["label"][:60])))
 
         self.string_lines.extend(lines)
 
