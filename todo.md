@@ -2,10 +2,17 @@ Upcoming
 ==============
 
 ### PENDIENTE DE DIEGO (auditoria 2026-09-16): decisiones y pushes
-- [ ] LIMITACION paramiko (follow-up posible): `SSHConfig` NO procesa `Include` (ni /etc/ssh/ssh_config),
-      asi que un ProxyJump que viva en `~/.ssh/config.d/*` es invisible para el tunel; y `%r`/`%p`
-      dentro de un ProxyJump se expanden con el User/Port del bloque o el usuario LOCAL, nunca con
-      los de la URL del tunel. Si molesta: resolver Include a mano antes del lookup
+- [x] RESUELTO 2026-09-17 (11f60e0): `Include` de `~/.ssh/config` ahora se expande antes de que
+      paramiko parsee. Medido 17/17 contra `ssh -G`. Lo no obvio, que hubo que MEDIR: ssh
+      RESTAURA el contexto Host/Match despues del include, y ademas solo procesa el include si
+      ese bloque matchea; un archivo plano no puede expresar esa condicion para los bloques que
+      el incluido abre, asi que en ese caso se conservan las directivas sueltas que si aplican
+      al padre y se descarta el resto con un debug. El config real de Diego (39 hosts, sin
+      Include) resuelve identico que antes
+- [ ] QUEDA de la misma familia: `/etc/ssh/ssh_config` y `/etc/ssh/ssh_config.d/` siguen sin
+      leerse (ssh los lee DESPUES del config del usuario). Y `%r`/`%p` dentro de un ProxyJump se
+      expanden con el User/Port del bloque o el usuario LOCAL, nunca con los de la URL del tunel:
+      eso es de paramiko y no se arregla por la API publica
 - [x] PUSH HECHO 2026-09-16: `fork/main` = `1cbc87f`, 20 commits despues del tag v4.6.2. Ninguno
       bumpea `__version__` (sigue 4.6.2, sin release nueva). CI del fork VERDE por primera vez
       desde antes del 09-10: los 5 jobs de la matriz (3.10 a 3.14) con unit + integration (behave)
