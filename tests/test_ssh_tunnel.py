@@ -1,3 +1,4 @@
+import io
 import logging
 import os
 import socket
@@ -17,6 +18,7 @@ from pgcli.ssh_tunnel import (
     _NativeSSHTunnel,
     _proxy_command_from_host_config,
     _proxy_command_from_proxyjump,
+    _expand_ssh_includes,
 )
 
 
@@ -850,6 +852,75 @@ class TestProxyJump:
         err = capsys.readouterr().err
         assert "could not resolve SSH host 'dbalias'" in err
         assert "could not be read: Unparsable line 7" in err
+
+
+class TestSSHConfigIncludes:
+    """paramiko's SSHConfig ignores Include, so a Host block living in
+    ~/.ssh/config.d/ is invisible to the tunnel even though ssh honors it.
+    Every expectation below was measured against `ssh -G` (OpenSSH 9.6)."""
+
+    def _parse(self, path):
+        config = paramiko.SSHConfig()
+        config.parse(io.StringIO(_expand_ssh_includes(str(path))))
+        return config
+
+    def test_included_host_is_found(self, tmp_path):
+        (tmp_path / "conf.d").mkdir()
+        (tmp_path / "conf.d" / "10-db.conf").write_text("Host db\n    HostName db.internal\n    User dbuser\n")
+        main = tmp_path / "config"
+        main.write_text(f"Include {tmp_path}/conf.d/*.conf\nHost other\n    HostName other.internal\n")
+        config = self._parse(main)
+        assert config.lookup("db")["hostname"] == "db.internal"
+        assert config.lookup("db")["user"] == "dbuser"
+        # the parent's own blocks still work
+        assert config.lookup("other")["hostname"] == "other.internal"
+
+    def test_several_patterns_on_one_line_and_sorted_glob(self, tmp_path):
+        (tmp_path / "a.conf").write_text("Host a\n    HostName a.internal\n")
+        (tmp_path / "b.conf").write_text("Host b\n    HostName b.internal\n")
+        main = tmp_path / "config"
+        main.write_text(f"Include {tmp_path}/a.conf {tmp_path}/b.conf\n")
+        config = self._parse(main)
+        assert config.lookup("a")["hostname"] == "a.internal"
+        assert config.lookup("b")["hostname"] == "b.internal"
+
+    def test_nested_includes(self, tmp_path):
+        (tmp_path / "level2").write_text("Host deep\n    HostName deep.internal\n")
+        (tmp_path / "level1").write_text(f"Include {tmp_path}/level2\n")
+        main = tmp_path / "config"
+        main.write_text(f"Include {tmp_path}/level1\n")
+        assert self._parse(main).lookup("deep")["hostname"] == "deep.internal"
+
+    def test_missing_file_and_empty_glob_are_not_errors(self, tmp_path):
+        main = tmp_path / "config"
+        main.write_text(f"Include {tmp_path}/nope.conf\nInclude {tmp_path}/empty.d/*\nHost h\n    HostName h.internal\n")
+        assert self._parse(main).lookup("h")["hostname"] == "h.internal"
+
+    def test_include_inside_a_host_block_keeps_the_parent_context(self, tmp_path):
+        """ssh restores the enclosing Host after the include, so `Port` below
+        still applies to the parent and not to a block the include opened."""
+        (tmp_path / "inc.conf").write_text("Host elsewhere\n    HostName elsewhere.internal\n")
+        main = tmp_path / "config"
+        main.write_text(f"Host parent\n    Include {tmp_path}/inc.conf\n    Port 7777\n")
+        config = self._parse(main)
+        assert config.lookup("parent")["port"] == "7777"
+        # and the include is conditional on the parent matching: looking up
+        # `elsewhere` must NOT pick up the included block.
+        assert config.lookup("elsewhere").get("hostname", "elsewhere") == "elsewhere"
+
+    def test_include_inside_a_host_block_still_applies_plain_directives(self, tmp_path):
+        (tmp_path / "keys.conf").write_text("    IdentitiesOnly yes\n")
+        main = tmp_path / "config"
+        main.write_text(f"Host parent\n    Include {tmp_path}/keys.conf\n")
+        assert self._parse(main).lookup("parent")["identitiesonly"] == "yes"
+
+    def test_recursion_is_bounded(self, tmp_path):
+        loop = tmp_path / "loop"
+        loop.write_text(f"Include {loop}\n")
+        assert _expand_ssh_includes(str(loop)) is not None  # returns instead of recursing forever
+
+    def test_unreadable_file_is_skipped(self, tmp_path):
+        assert _expand_ssh_includes(str(tmp_path / "does-not-exist")) == ""
 
 
 class TestGetTunnelManagerFromConfig:

@@ -9,6 +9,8 @@ Uses native Paramiko for SSH tunneling (no sshtunnel dependency).
 
 import atexit
 import getpass
+import glob
+import io
 import logging
 import os
 import re
@@ -25,6 +27,83 @@ import click
 import paramiko
 
 SSH_TUNNEL_SUPPORT = True
+
+
+# ssh gives up at this nesting depth with "Too many recursive configuration
+# includes" (readconf.c). Keeping the same number also bounds an include loop.
+_SSH_INCLUDE_MAX_DEPTH = 16
+
+
+def _expand_ssh_includes(path: str, depth: int = 0, logger: Optional[logging.Logger] = None) -> str:
+    """Return the text of an ssh_config with its ``Include`` directives expanded.
+
+    paramiko's ``SSHConfig`` ignores ``Include`` entirely, so a Host block that
+    lives in ``~/.ssh/config.d/`` is invisible to it even though ssh honors it.
+    This inlines the included files, following what ssh does (ssh_config(5)):
+
+    * a directive may list several patterns, and each is globbed and sorted;
+    * a relative path is taken from ``~/.ssh``;
+    * a pattern matching nothing, or a file that cannot be read, is not an
+      error and is skipped;
+    * the enclosing ``Host``/``Match`` context is restored afterwards, so an
+      included file that opens its own blocks does not capture the directives
+      that follow the ``Include`` in the parent.
+    """
+    logger = logger or logging.getLogger(__name__)
+    if depth > _SSH_INCLUDE_MAX_DEPTH:
+        logger.warning("Too many recursive SSH config includes at %s", path)
+        return ""
+    try:
+        with open(path) as handle:
+            lines = handle.read().splitlines()
+    except OSError as e:
+        logger.debug("Could not read SSH config include %s: %s", path, e)
+        return ""
+
+    out: "list[str]" = []
+    context: Optional[str] = None  # last Host/Match line seen in THIS file
+    for line in lines:
+        stripped = line.strip()
+        lowered = stripped.lower()
+        if lowered.startswith(("host ", "match ")) or lowered in ("host", "match"):
+            context = line
+            out.append(line)
+            continue
+        if not lowered.startswith("include ") and lowered != "include":
+            out.append(line)
+            continue
+
+        included: "list[str]" = []
+        for pattern in shlex.split(stripped[len("include") :].strip()):
+            pattern = os.path.expanduser(pattern)
+            if not os.path.isabs(pattern):
+                pattern = os.path.join(os.path.expanduser("~/.ssh"), pattern)
+            for name in sorted(glob.glob(pattern)):
+                if os.path.isfile(name):
+                    included.append(_expand_ssh_includes(name, depth + 1, logger))
+        text = "\n".join(part for part in included if part)
+        if context is not None and text:
+            # Inside a Host/Match block ssh processes the include only when that
+            # block matches, and it restores the context afterwards. A flat
+            # config cannot express that condition for blocks the included file
+            # opens, so keep only the part that does apply to the parent (the
+            # directives before its first block) and drop the rest.
+            kept = []
+            for included_line in text.splitlines():
+                if included_line.strip().lower().startswith(("host ", "match ")):
+                    logger.debug(
+                        "Ignoring Host/Match blocks from %s: the include sits inside %r",
+                        stripped,
+                        context.strip(),
+                    )
+                    break
+                kept.append(included_line)
+            text = "\n".join(kept)
+        if not text.strip():
+            continue
+        out.append(f"# Include: {stripped}")
+        out.append(text)
+    return "\n".join(out)
 
 
 def _parse_jump_hop(hop: str) -> Tuple[Optional[str], str, Optional[int]]:
@@ -460,8 +539,8 @@ class SSHTunnelManager:
         if ssh_hostname and os.path.isfile(ssh_config_path):
             try:
                 ssh_config = paramiko.SSHConfig()
-                with open(ssh_config_path) as f:
-                    ssh_config.parse(f)
+                # Include directives are inlined first: paramiko ignores them.
+                ssh_config.parse(io.StringIO(_expand_ssh_includes(ssh_config_path, logger=self.logger)))
                 host_config = ssh_config.lookup(ssh_hostname)
                 ssh_hostname = host_config.get("hostname", ssh_hostname)
                 if not ssh_username:

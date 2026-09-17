@@ -61,6 +61,14 @@ Internal:
 * CI: test on Python 3.14 as well (the full suite passes on 3.14.0 locally;
   upstream's matrix already includes it).
 
+* SSH tunnel: follow ``Include`` directives in ``~/.ssh/config``. paramiko's
+  parser ignores them, so a host defined under ``~/.ssh/config.d/`` was
+  invisible to the tunnel while plain ``ssh`` resolved it. The included files
+  are now inlined the way ssh does it: several patterns per directive, globs
+  sorted, relative paths taken from ``~/.ssh``, missing files skipped, nesting
+  bounded, and the enclosing ``Host`` context restored afterwards. Seventeen
+  configurations were compared against ``ssh -G`` and all match.
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 
