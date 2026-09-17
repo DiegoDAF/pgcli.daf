@@ -33,15 +33,13 @@ Upcoming
 - [ ] HISTORIAL PUBLICO: `todo.md` nombro la cuenta de trabajo en los commits c229a45 (2026-09-03) y
       9e02396 (2026-09-10), ya pusheados a `fork/main` (repo publico). El archivo actual ya esta
       limpio (9a709eb); reescribir el historial es decision de Diego (implica force-push del fork)
-- [ ] `/home/daf/scripts/CLAUDE.md` y `~/.claude/CLAUDE.md` siguen hablando de `pgcli.dev/` como
-      "la version mas avanzada": el directorio de trabajo es `pgcli.daf/` desde hace meses
-- [ ] Candidatos a PR upstream chicos y sin dependencias nuestras, para cuando baje la cola:
-      (a) codeql.yml: `codeql-action@v2` y `checkout@v3` deprecados (GitHub lo marca como failure
-      en las annotations), (b) piso `sqlparse >= 0.6.0` (upstream permite >=0.3.0 con 11 avisos
-      OSV), (c) history/log/config con 0600 como `.psql_history`/`.pgpass`, (d) `ci.yml` con
-      `permissions: contents: read`, (e) `itertools.product` en parametrize y `click.get_text_stream`
-      en tests (pytest 9 / Click 9 los rompen). El de ProxyJump NO va a pgcli: upstream usa la
-      libreria `sshtunnel` (0.4.0, `_read_ssh_config` solo lee proxycommand), iria a pahaz/sshtunnel
+- [x] HECHO 2026-09-17: los dos CLAUDE.md (`~/scripts/` y `~/.claude/`) decian `pgcli.dev/`, un
+      directorio que NO existe. Ahora dicen `pgcli.daf/`, con una linea aclarando el nombre viejo
+      y otra diciendo que `pgcli/pgcli/` es el clon de solo lectura de referencia. Backups al lado
+- [x] HECHO 2026-09-17: de los 4 candidatos chicos salidos de la auditoria, DOS se mandaron
+      (#1639 CodeQL y #1640 sqlparse) y los otros dos quedaron en rama, listos (ver la seccion
+      "LISTOS PARA MANDAR"). El de ProxyJump no va a pgcli: upstream usa la libreria `sshtunnel`,
+      cuyo `_read_ssh_config` tambien lee solo proxycommand; ese PR iria a pahaz/sshtunnel
 - [ ] Upstream mergeo #1542/#1543/#1544 con `-c`/`-f` saliendo con exit 0 aunque falle un statement;
       el fork sale con 1 (psql -c tambien sale 1; -f sale 3 con ON_ERROR_STOP). Evaluar PR
       "exit non-zero on error like psql" cuando haya lugar en la cola
@@ -195,14 +193,14 @@ Upcoming
 - [ ] Backlog (~40 restantes en ideas.md): sub-warnings de EXPLAIN (nested-loop/hash-spill/bitmap-recheck), tweaks de autocomplete, params chicos de conexion, y varios de bajo valor. Ir picando por valor
 
 ### Bookkeeping / nice-to-have
-- [ ] Evaluar cherry-pick upstream #1601 (licencia SPDX BSD-3-Clause + saca dynamic version, migran a setuptools_scm) - toca como versionamos, revisar con calma
-- [ ] Branches feature/stream-results y feature/ssh-tunnel-keyring: ya estan en main; se pueden borrar o conservar si los queremos para PRs upstream separados
-- [ ] integration/nb-install: branch throwaway, ya no hace falta (main == su contenido). Se puede borrar
-
-
-
-2026-09-17
-===================
+- [x] CERRADO 2026-09-17: el #1601 esta mergeado upstream desde el 2026-06-03 y nosotros YA
+      tenemos lo que importa (`license = "BSD-3-Clause"`). Lo de `setuptools_scm` NO se adopta a
+      proposito: tomaria la version de los tags de git y pelearia con nuestro bump manual de
+      `pgcli/__init__.py`. Esa decision ya esta escrita como comentario en el pyproject
+# (nota vieja) - toca como versionamos, revisar con calma
+- [x] CERRADO 2026-09-17: las tres ramas que figuraban como borrables (feature/stream-results,
+      feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
+      Verificado con `git rev-parse` y `git ls-remote`
 
 ### LIMPIEZA DEL todo.md (autorizada por Diego)
 - [x] Bajadas a su fecha las 6 secciones de trabajo ya cerrado de agosto y septiembre, que
