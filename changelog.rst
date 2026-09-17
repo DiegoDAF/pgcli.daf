@@ -83,6 +83,19 @@ Features:
   a warning that fires on a healthy plan teaches you to ignore all of them.
   Every rule was checked against a live server rather than read off the docs.
 
+* Fix explain mode (F5) rejecting a statement that already is an ``EXPLAIN``.
+  pgcli prepended its own ``EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT
+  JSON)`` unconditionally, so typing a full ``explain (analyze, buffers, wal,
+  memory, serialize) select ...`` produced ``EXPLAIN (...) explain (...)`` and
+  the server answered with a syntax error, while the same statement worked in
+  psql. The options written by the user are now kept, since they are usually
+  richer than the fixed prefix, and only what the visualizer needs is added:
+  ``ANALYZE``, ``COSTS`` and ``FORMAT JSON``. A plan requested as ``text``,
+  ``yaml`` or ``xml`` is shown verbatim instead of failing, and the visualizer
+  no longer raises ``KeyError`` or divides by zero on a plan that carries no
+  costs or no timings.
+
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 

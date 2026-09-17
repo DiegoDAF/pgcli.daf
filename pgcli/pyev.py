@@ -225,6 +225,10 @@ class Visualizer:
         plan["Planner Row Estimate Factor"] = 0
         plan["Planner Row Estimate Direction"] = "Under"
 
+        # A plan can arrive without these (EXPLAIN without COSTS or without
+        # ANALYZE); treat them as zero instead of raising KeyError.
+        plan.setdefault("Plan Rows", 0)
+        plan.setdefault("Actual Rows", 0)
         if plan["Plan Rows"] == plan["Actual Rows"]:
             return plan
 
@@ -240,13 +244,16 @@ class Visualizer:
 
     #
     def calculate_actuals(self, plan):
+        plan.setdefault("Actual Total Time", 0)
+        plan.setdefault("Total Cost", 0)
+        plan.setdefault("Actual Loops", 1)
         plan["Actual Duration"] = plan["Actual Total Time"]
         plan["Actual Cost"] = plan["Total Cost"]
 
         for child in plan.get("Plans", []):
             if child["Node Type"] != "CTEScan":
-                plan["Actual Duration"] = plan["Actual Duration"] - child["Actual Total Time"]
-                plan["Actual Cost"] = plan["Actual Cost"] - child["Total Cost"]
+                plan["Actual Duration"] = plan["Actual Duration"] - child.get("Actual Total Time", 0)
+                plan["Actual Cost"] = plan["Actual Cost"] - child.get("Total Cost", 0)
 
         if plan["Actual Cost"] < 0:
             plan["Actual Cost"] = 0
@@ -414,7 +421,7 @@ class Visualizer:
                     % (
                         "Duration:",
                         self.duration_to_string(plan["Actual Duration"]),
-                        (plan["Actual Duration"] / self.explain["Execution Time"]) * 100,
+                        (plan["Actual Duration"] / self.explain["Execution Time"] * 100) if self.explain.get("Execution Time") else 0,
                     ),
                 )
             )
@@ -426,7 +433,7 @@ class Visualizer:
                 % (
                     "Cost:",
                     self.intcomma(plan["Actual Cost"]),
-                    (plan["Actual Cost"] / self.explain["Total Cost"]) * 100,
+                    (plan["Actual Cost"] / self.explain["Total Cost"] * 100) if self.explain.get("Total Cost") else 0,
                 ),
             )
         )
@@ -530,10 +537,12 @@ class Visualizer:
             self.create_lines(nested_plan, prefix, depth + 1, width, index == len(plan["Plans"]) - 1)
 
     def generate_lines(self):
+        # EXPLAIN without ANALYZE has no timings, and without COSTS no cost:
+        # report what is there instead of raising KeyError.
         self.string_lines = [
-            "○ Total Cost: %s" % self.intcomma(self.explain["Total Cost"]),
-            "○ Planning Time: %s" % self.duration_to_string(self.explain["Planning Time"]),
-            "○ Execution Time: %s" % self.duration_to_string(self.explain["Execution Time"]),
+            "○ Total Cost: %s" % self.intcomma(self.explain.get("Total Cost", 0)),
+            "○ Planning Time: %s" % self.duration_to_string(self.explain.get("Planning Time", 0)),
+            "○ Execution Time: %s" % self.duration_to_string(self.explain.get("Execution Time", 0)),
             self.prefix_format("┬"),
         ]
         self.create_lines(

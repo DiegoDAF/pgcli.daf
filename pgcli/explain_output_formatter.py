@@ -11,9 +11,17 @@ class ExplainOutputFormatter:
         self.summary = summary
 
     def format_output(self, cur, headers, **output_kwargs):
-        # explain query results should always contain 1 row each
-        [(data,)] = list(cur)
-        explain_list = json.loads(data)
+        rows = list(cur)
+        try:
+            # An explain result is a single row holding the whole plan.
+            [(data,)] = rows
+            explain_list = json.loads(data)
+        except (ValueError, TypeError):
+            # Not JSON: the user ran their own EXPLAIN asking for text, yaml or
+            # xml. Show exactly what the server sent instead of failing.
+            for row in rows:
+                yield "\n".join("" if value is None else str(value) for value in row)
+            return
         visualizer = Visualizer(self.max_width, summary=self.summary)
         for explain in explain_list:
             visualizer.load(explain)

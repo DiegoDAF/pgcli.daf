@@ -2,6 +2,7 @@ import json
 
 from pgcli.pyev import Visualizer
 from pgcli.explain_output_formatter import ExplainOutputFormatter
+from pgcli.pgexecute import PGExecute
 
 
 def _plan():
@@ -228,3 +229,67 @@ def test_the_node_is_named_in_the_summary_block():
     })
     assert v.diagnostics[0]["label"] == "Seq Scan on public.orders"
     assert "node: Seq Scan on public.orders" in v.get_list()
+
+
+# ---------------------------------------------------------------------------
+# Explain mode and a user-written EXPLAIN
+# ---------------------------------------------------------------------------
+
+
+def test_own_explain_is_not_prefixed_again():
+    """With F5 on, prepending to a statement that already is an EXPLAIN
+    produced "EXPLAIN (...) explain (...)", which the server rejects."""
+    sql = PGExecute.explain_mode_sql("explain (analyze, verbose, wal) select 1")
+    assert sql.lower().count("explain") == 1
+    assert "verbose" in sql and "wal" in sql
+
+
+def test_own_explain_keeps_its_options_and_gains_what_is_needed():
+    sql = PGExecute.explain_mode_sql(
+        "explain (analyze, verbose, costs, buffers, timing, summary, settings, wal, memory, serialize ) select 1"
+    )
+    for kept in ("verbose", "buffers", "timing", "summary", "settings", "wal", "memory", "serialize"):
+        assert kept in sql, kept
+    assert "FORMAT JSON" in sql
+
+
+def test_plain_statement_still_gets_the_prefix():
+    assert PGExecute.explain_mode_sql("select 1") == PGExecute.explain_prefix() + "select 1"
+
+
+def test_analyze_and_costs_are_added_when_missing():
+    sql = PGExecute.explain_mode_sql("explain (verbose) select 1")
+    assert "ANALYZE" in sql and "COSTS" in sql
+
+
+def test_costs_off_is_overridden_because_the_visualizer_needs_them():
+    sql = PGExecute.explain_mode_sql("explain (costs off) select 1")
+    assert "COSTS ON" in sql and "costs off" not in sql.lower()
+
+
+def test_a_format_the_visualizer_cannot_read_is_left_alone():
+    for fmt in ("text", "yaml", "xml"):
+        original = "explain (format %s, analyze) select 1" % fmt
+        assert PGExecute.explain_mode_sql(original) == original
+
+
+def test_legacy_explain_without_parentheses_is_left_alone():
+    for original in ("explain analyze select 1", "explain select 1"):
+        assert PGExecute.explain_mode_sql(original) == original
+
+
+def test_unbalanced_parentheses_are_left_for_the_server_to_reject():
+    original = "explain (analyze select 1"
+    assert PGExecute.explain_mode_sql(original) == original
+
+
+def test_formatter_falls_back_to_the_raw_plan_when_it_is_not_json():
+    rows = [("Seq Scan on t  (cost=0.00..1.00 rows=1 width=4)",), ("Planning Time: 0.1 ms",)]
+    out = list(ExplainOutputFormatter(100, summary=True).format_output(iter(rows), None))
+    assert "Seq Scan on t" in "\n".join(out)
+
+
+def test_visualizer_survives_a_plan_without_costs_or_timings():
+    v = Visualizer(100, color=False, summary=True)
+    v.load({"Plan": {"Node Type": "Seq Scan", "Plans": []}, "Execution Time": 1.0})
+    assert "Seq Scan" in v.get_list()

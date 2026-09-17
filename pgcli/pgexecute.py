@@ -484,7 +484,7 @@ class PGExecute:
                 # prefix is applied ONLY here, to real SQL, so special commands
                 # keep working while explain mode is on (see comment above).
                 if explain_mode:
-                    sql = self.explain_prefix() + sql
+                    sql = self.explain_mode_sql(sql)
 
                 yield self.execute_normal_sql(sql, notice_callback=notice_callback) + (sql, True, False)
             except psycopg.DatabaseError as e:
@@ -1037,8 +1037,62 @@ class PGExecute:
             for row in cur:
                 yield row[0]
 
-    def explain_prefix(self):
+    @staticmethod
+    def explain_prefix():
         return "EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) "
+
+    @staticmethod
+    def explain_mode_sql(sql):
+        """Return the SQL to run for ``sql`` while explain mode is on.
+
+        Normally the prefix above is prepended. When the statement already is
+        an EXPLAIN, prepending would produce ``EXPLAIN (...) explain (...)``
+        and the server rejects it, which is what happens to anyone who types
+        their own EXPLAIN with F5 on. Their options are kept instead, since
+        they are usually richer than the fixed prefix (``wal``, ``memory``,
+        ``serialize``, ``settings``), and only what the visualizer needs is
+        added: ANALYZE for the timings and FORMAT JSON for the parser.
+
+        A statement the visualizer cannot read (the user asked for text, yaml
+        or xml) is returned untouched, and the formatter falls back to showing
+        the plan verbatim.
+        """
+        stripped = sql.lstrip()
+        if not re.match(r"explain\b", stripped, re.IGNORECASE):
+            return PGExecute.explain_prefix() + sql
+
+        rest = stripped[len("explain") :].lstrip()
+        if not rest.startswith("("):
+            # "EXPLAIN ANALYZE select ..." or a bare "EXPLAIN select ...": the
+            # legacy syntax takes no parenthesised options, so leave it alone.
+            return sql
+
+        depth, end = 0, None
+        for i, ch in enumerate(rest):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        if end is None:
+            return sql  # unbalanced; let the server complain about it
+
+        options = rest[1:end]
+        fmt = re.search(r"\bformat\s+(\w+)", options, re.IGNORECASE)
+        if fmt and fmt.group(1).lower() != "json":
+            return sql  # text, yaml or xml: show it as the user asked
+        if not fmt:
+            options += ", FORMAT JSON"
+        # The visualizer needs the timings and the costs to draw anything.
+        if not re.search(r"\banalyze\b", options, re.IGNORECASE):
+            options = "ANALYZE, " + options
+        if re.search(r"\bcosts\s+off\b", options, re.IGNORECASE):
+            options = re.sub(r"\bcosts\s+off\b", "COSTS ON", options, flags=re.IGNORECASE)
+        elif not re.search(r"\bcosts\b", options, re.IGNORECASE):
+            options = "COSTS, " + options
+        return "EXPLAIN (%s) %s" % (options.strip().strip(","), rest[end + 1 :])
 
     def get_timezone(self) -> str:
         query = psycopg.sql.SQL("show time zone")
