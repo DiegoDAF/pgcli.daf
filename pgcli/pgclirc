@@ -68,7 +68,12 @@ paste_mode = False
 
 # When explain mode is on (F5), append an analysis summary after the plan tree:
 # the slowest nodes (by exclusive time), time grouped by relation, and the worst
-# planner row-estimate misses. Set to True to enable (default only shows tree).
+# planner row-estimate misses. It also turns on the plan diagnostics: nodes that
+# spilled to disk, filters doing an index's job, index-only scans hitting the
+# heap, re-executed inner sides and parallel workers that were not granted are
+# tagged in the tree and explained underneath, grouped by what you would change
+# (work_mem, index, vacuum, parallel, plan).
+# Set to True to enable (default only shows tree).
 explain_summary = False
 
 # Connection autocommit. When True (default), each statement commits on its own.

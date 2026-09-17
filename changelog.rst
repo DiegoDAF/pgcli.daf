@@ -69,6 +69,20 @@ Internal:
   bounded, and the enclosing ``Host`` context restored afterwards. Seventeen
   configurations were compared against ``ssh -G`` and all match.
 
+Features:
+---------
+
+* EXPLAIN diagnostics. With ``explain_summary`` on, the plan is now read for
+  the problems its own numbers state outright: a hash or sort that spilled to
+  disk, a bitmap that went lossy, a filter discarding far more rows than it
+  keeps, an index-only scan still fetching from the heap, an inner side
+  re-executed thousands of times, and parallel workers the planner asked for
+  but did not get. Each one tags its node in the tree and is explained below
+  it, grouped by what you would change: ``work_mem``, ``index``, ``vacuum``,
+  ``parallel`` or ``plan``. The thresholds are deliberately conservative, since
+  a warning that fires on a healthy plan teaches you to ignore all of them.
+  Every rule was checked against a live server rather than read off the docs.
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 

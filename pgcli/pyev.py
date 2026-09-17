@@ -24,6 +24,14 @@ DESCRIPTIONS = {
 }
 
 
+# Thresholds for the plan diagnostics. They are deliberately conservative: a
+# warning that fires on a healthy plan trains you to ignore all of them.
+DIAG_MIN_DISCARDED_ROWS = 1000  # rows a filter must throw away before it is worth mentioning
+DIAG_DISCARD_RATIO = 10  # ...and how many times more than it keeps
+DIAG_MIN_LOOPS = 1000  # loops on the inner side of a join before it reads as a risk
+DIAG_MIN_HEAP_FETCHES = 1000  # heap fetches in an index-only scan before blaming the visibility map
+
+
 class Visualizer:
     def __init__(self, terminal_width=100, color=True, summary=False):
         self.color = color
@@ -31,11 +39,13 @@ class Visualizer:
         self.string_lines = []
         self.summary = summary
         self.node_stats = []
+        self.diagnostics = []
 
     def load(self, explain_dict):
         self.plan = explain_dict.pop("Plan")
         self.explain = explain_dict
         self.node_stats = []
+        self.diagnostics = []
         self.process_all()
         self.generate_lines()
 
@@ -56,6 +66,7 @@ class Visualizer:
             label = "%s on %s.%s" % (label, plan.get("Schema", "?"), relation)
         elif plan.get("CTE Name"):
             label = "%s %s" % (label, plan.get("CTE Name"))
+        self.diagnose_node(plan, label)
         self.node_stats.append({
             "label": label,
             "relation": (("%s.%s" % (plan.get("Schema", "?"), relation)) if relation else None),
@@ -66,6 +77,95 @@ class Visualizer:
         })
         for child in plan.get("Plans", []):
             self.collect_node_stats(child)
+
+    def diagnose_node(self, plan, label):
+        """Flag the plan problems that the numbers state outright.
+
+        Each finding is attached to its own node (``Diagnostics`` holds the
+        short inline tags) and collected for the summary block. Counters that
+        accumulate up the tree, such as the temp blocks, are read on the node
+        that causes the spill rather than on its parents, so a single problem
+        is reported once.
+        """
+        found = []
+
+        def add(tag, topic, detail):
+            found.append(tag)
+            self.diagnostics.append({"tag": tag, "topic": topic, "label": label, "detail": detail})
+
+        node_type = plan.get("Node Type", "")
+        rows = plan.get("Actual Rows", 0) or 0
+        loops = plan.get("Actual Loops", 1) or 1
+
+        # Hash join that did not fit in work_mem: the build side was split into
+        # batches and written out to temporary files.
+        batches = plan.get("Hash Batches", 1) or 1
+        if node_type == "Hash" and batches > 1:
+            peak = plan.get("Peak Memory Usage")
+            detail = "spilled to %s batches" % self.intcomma(batches)
+            if plan.get("Original Hash Batches", batches) != batches:
+                detail += " (planned %s)" % self.intcomma(plan["Original Hash Batches"])
+            if peak:
+                detail += ", peak memory %s" % self.kb_to_string(peak)
+            add("spill disk", "work_mem", detail)
+
+        # Sort that exceeded work_mem and fell back to an on-disk merge.
+        if plan.get("Sort Space Type") == "Disk":
+            add(
+                "sort disk",
+                "work_mem",
+                "%s used %s of disk" % (plan.get("Sort Method", "sort"), self.kb_to_string(plan.get("Sort Space Used", 0))),
+            )
+
+        # Bitmap that ran out of memory and degraded to page granularity, which
+        # forces a recheck of every row on those pages.
+        lossy = plan.get("Lossy Heap Blocks", 0) or 0
+        if lossy > 0:
+            detail = "%s lossy heap blocks" % self.intcomma(lossy)
+            recheck = plan.get("Rows Removed by Index Recheck", 0) or 0
+            if recheck:
+                detail += ", %s rows rechecked and dropped" % self.intcomma(recheck)
+            add("lossy bitmap", "work_mem", detail)
+
+        # A filter doing the work an index should be doing.
+        removed = plan.get("Rows Removed by Filter", 0) or 0
+        if removed >= DIAG_MIN_DISCARDED_ROWS and removed >= DIAG_DISCARD_RATIO * max(rows, 1):
+            add(
+                "bad filter",
+                "index",
+                "read and discarded %s rows to keep %s" % (self.intcomma(removed * loops), self.intcomma(rows * loops)),
+            )
+
+        # Index-only scan that still had to visit the heap: the visibility map
+        # is behind, which is what VACUUM maintains.
+        fetches = plan.get("Heap Fetches", 0) or 0
+        if fetches >= DIAG_MIN_HEAP_FETCHES:
+            add("heap fetches", "vacuum", "%s heap fetches in an index-only scan" % self.intcomma(fetches))
+
+        # Inner side of a join re-executed many times.
+        if loops >= DIAG_MIN_LOOPS and node_type not in ("Hash", "Sort", "Materialize"):
+            add("high loops", "plan", "executed %s times" % self.intcomma(loops))
+
+        # The planner asked for parallel workers and did not get them all.
+        planned = plan.get("Workers Planned", 0) or 0
+        launched = plan.get("Workers Launched", 0) or 0
+        if planned and launched < planned:
+            add("few workers", "parallel", "got %d of %d requested workers" % (launched, planned))
+
+        if found:
+            plan["Diagnostics"] = found
+
+    def kb_to_string(self, value):
+        """Render a size that PostgreSQL reports in kilobytes."""
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return "?"
+        if value >= 1024 * 1024:
+            return "%.1f GB" % (value / 1024 / 1024)
+        if value >= 1024:
+            return "%.1f MB" % (value / 1024)
+        return "%d kB" % value
 
     #
     def process_plan(self, plan):
@@ -226,6 +326,11 @@ class Visualizer:
             tags.append(self.tag_format("largest"))
         if plan.get("Planner Row Estimate Factor", 0) >= 100:
             tags.append(self.tag_format("bad estimate"))
+        if self.summary:
+            # Diagnostics ride with the summary: no new knob, and a user who
+            # turned the summary off keeps the plain tree.
+            for tag in plan.get("Diagnostics", []):
+                tags.append(self.critical_format(tag))
 
         return " ".join(tags)
 
@@ -507,6 +612,14 @@ class Visualizer:
             lines.append(self.muted_format("  Planner estimate misses:"))
             for n in misses:
                 lines.append("    %-45s %s-estimated %.0fx" % (n["label"][:45], (n["est_dir"] or "mis").lower(), n["est_factor"]))
+
+        # What the numbers say outright, grouped by what you would change.
+        if self.diagnostics:
+            lines.append(self.muted_format("  Diagnostics:"))
+            for topic in ("work_mem", "index", "vacuum", "parallel", "plan"):
+                for d in (x for x in self.diagnostics if x["topic"] == topic):
+                    lines.append("    %-10s %s" % (self.critical_format(topic), d["detail"]))
+                    lines.append("    %-10s %s" % ("", self.muted_format("node: %s" % d["label"][:60])))
 
         self.string_lines.extend(lines)
 
