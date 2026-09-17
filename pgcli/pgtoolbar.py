@@ -44,7 +44,9 @@ def create_toolbar_tokens_func(pgcli):
         else:
             result.append(("class:bottom-toolbar", "[F4] Emacs-mode  "))
 
-        if pgcli.explain_mode:
+        if pgcli.explain_mode and pgcli.explain_summary:
+            result.append(("class:bottom-toolbar", "[F5] Explain: ON+SUMMARY "))
+        elif pgcli.explain_mode:
             result.append(("class:bottom-toolbar", "[F5] Explain: ON "))
         else:
             result.append(("class:bottom-toolbar", "[F5] Explain: OFF "))

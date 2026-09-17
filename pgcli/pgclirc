@@ -74,7 +74,8 @@ paste_mode = False
 # heap, re-executed inner sides and parallel workers that were not granted are
 # tagged in the tree and explained underneath, grouped by what you would change
 # (work_mem, index, vacuum, parallel, plan).
-# Set to True to enable (default only shows tree).
+# Set to True to enable (default only shows tree). F5 also cycles through
+# off, plan and plan with summary, so this can be turned on for one query.
 explain_summary = False
 
 # Connection autocommit. When True (default), each statement commits on its own.

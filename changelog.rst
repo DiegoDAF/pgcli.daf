@@ -104,6 +104,13 @@ Features:
   counts.
 
 
+* F5 now cycles through three states instead of toggling two: off, the plan,
+  and the plan with the analysis summary. The toolbar says which one is
+  active, so the summary can be turned on for one query without editing the
+  config. Turning explain mode off restores whatever ``explain_summary`` says,
+  so a user who enabled it in the config keeps it.
+
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 

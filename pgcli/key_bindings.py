@@ -42,9 +42,18 @@ def pgcli_bindings(pgcli):
 
     @kb.add("f5")
     def _(event):
-        """Toggle between Vi and Emacs mode."""
+        """Cycle explain mode: off, plan, plan with the analysis summary."""
         _logger.debug("Detected F5 key.")
-        pgcli.explain_mode = not pgcli.explain_mode
+        if not pgcli.explain_mode:
+            pgcli.explain_mode = True
+            pgcli.explain_summary = False
+        elif not pgcli.explain_summary:
+            pgcli.explain_summary = True
+        else:
+            pgcli.explain_mode = False
+            # Leave the summary as the config set it, so turning explain mode
+            # on again from the prompt starts where the config says.
+            pgcli.explain_summary = pgcli.config["main"].as_bool("explain_summary")
 
     @kb.add("f6")
     def _(event):
