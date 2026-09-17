@@ -174,6 +174,15 @@ Upcoming
 - [ ] MANTENIMIENTO: cada vez que mergeen algo nuestro, SACAR ese item del post (no marcarlo
       como merged). Hoy quedan por sacar, cuando entren: item 11 (#1637) y los que sigan
 - [ ] Eventual: sumar ssh_tunnel_save_password como feature a ofrecer en la lista
+- [x] CONSULTA de Diego 2026-09-17: contador de visitas estilo odometro en el post. EVALUADO,
+      NO se hace. Tres razones: (a) GitHub no sirve imagenes externas directo, las proxya por
+      Camo y las cachea, asi que el numero cuenta refrescos del proxy y no visitas; (b) seria un
+      beacon de un TERCERO dentro de un repo AJENO: cada persona que abra la discussion le pega
+      a ese servicio por una imagen que pusimos nosotros, y queda escrito en el markdown;
+      (c) la senal real ya la tenemos (1 upvote, 0 comentarios en 3 meses) y la metrica que
+      importa son los merges, que vienen de mandar PRs chicos.
+      SI Diego quiere el juguete, el lugar legitimo es el README de NUESTRO repo `pgcli.daf`,
+      donde ademas GitHub Insights ya da trafico y clones reales sin depender de terceros
 
 ### FORK: features inspiradas en pgadmin4 (analisis 2026-07-15)
 # Lista completa (47) + detalle en notas LOCALES (no en este repo publico):
