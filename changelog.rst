@@ -111,6 +111,15 @@ Features:
   so a user who enabled it in the config keeps it.
 
 
+* Restore the output column for functions whose arguments have no names.
+  ``fields()`` zipped ``arg_names`` with ``arg_modes`` and gave up when the
+  names were missing, so a function such as
+  ``labels(variadic text[]) returns hstore`` offered no column at all and
+  ``select labels from labels(...)`` had nothing to complete. When no argument
+  carries an output mode, the function name is used as the column name, which
+  is what pgcli already does for functions without output parameters.
+
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 

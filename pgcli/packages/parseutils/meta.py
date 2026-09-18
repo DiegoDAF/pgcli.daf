@@ -161,10 +161,14 @@ class FunctionMetadata:
             # E.g. 'SELECT unnest FROM unnest(...);'
             return [ColumnMetadata(self.func_name, self.return_type, [])]
 
-        if not self.arg_names or not self.arg_types:
-            return []
-        return [
+        fields = [
             ColumnMetadata(name, typ, [])
-            for name, typ, mode in zip(self.arg_names, self.arg_types, self.arg_modes)
-            if mode in ("o", "b", "t")
-        ]  # OUT, INOUT, TABLE
+            for name, typ, mode in zip(self.arg_names or [], self.arg_types or [], self.arg_modes)
+            if mode in ("o", "b", "t")  # OUT, INOUT, TABLE
+        ]
+        # No output parameters (e.g. variadic/unnamed args such as
+        # 'labels(variadic text[]) RETURNS hstore', or named input-only args):
+        # the function name is used as the name of the output column, same as
+        # the no-arg_modes case above. Guarding the zip with ``or []`` also
+        # avoids a 'NoneType' is not iterable crash when arg_names is None.
+        return fields or [ColumnMetadata(self.func_name, self.return_type, [])]
