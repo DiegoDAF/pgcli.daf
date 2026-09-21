@@ -120,6 +120,17 @@ Features:
   is what pgcli already does for functions without output parameters.
 
 
+Internal:
+---------
+
+* Merged upstream 4.7.1. That release line is where our ``-c``/``--command``,
+  ``-f``/``--file``, ``-y``/``--yes`` and ``-t``/``--tuples-only`` reached
+  released pgcli: 4.7.0 shipped them and 4.7.1 fixed the version string it
+  reported. The only code upstream added that we did not already have is the
+  ``@dbtest`` marker on
+  ``test_execute_statements_does_not_split_inside_literals``, which we had
+  applied here on 2026-09-16.
+
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
 
