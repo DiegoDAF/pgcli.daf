@@ -78,6 +78,7 @@ from .key_bindings import pgcli_bindings
 from .packages.formatter.sqlformatter import register_new_formatter
 from .packages.prompt_utils import confirm, confirm_destructive_query
 from .packages.parseutils import is_destructive
+from .packages.parseutils import strip_markdown
 from .packages.parseutils import parse_destructive_warning
 from .__init__ import __version__
 
@@ -1539,6 +1540,10 @@ class PGCli:
                     click.secho(str(e), err=True, fg="red")
                     continue
 
+                text = self._strip_markdown(text)
+                if not text.strip():
+                    continue
+
                 try:
                     self.handle_watch_command(text)
                 except PgCliQuitError:
@@ -1585,6 +1590,19 @@ class PGCli:
         self.query_history.append(query)
         return query
 
+    def _strip_markdown(self, text):
+        """Pull the SQL out of text pasted from a markdown document.
+
+        Pasting a chat or LLM answer brings the code fence along, and the
+        server's answer ("syntax error at or near \"```\"") points at the
+        fence rather than at anything useful. What was dropped is reported, so
+        that running something other than what was pasted is never silent.
+        """
+        sql, removed = strip_markdown(text)
+        if removed:
+            click.secho("(%s removed)" % removed, err=True, fg="cyan")
+        return sql
+
     def _execute_statements(self, text):
         r"""Run a block of SQL the way psql -c/-f does: one statement at a time.
 
@@ -1602,7 +1620,7 @@ class PGCli:
         stops the run. Returns True when every statement succeeded.
         """
         ok = True
-        statements = sqlparse.split(text)
+        statements = sqlparse.split(self._strip_markdown(text))
         while statements:
             statement = statements.pop(0)
             stripped = statement.strip()
