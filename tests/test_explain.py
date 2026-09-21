@@ -400,3 +400,25 @@ def test_table_rows_break_down_by_scan_type():
     assert rows[1].split() == ["public.t", "2", "25.00", "ms", "(83%)"]  # both scans, added up
     assert rows[2].split() == ["Seq", "Scan", "1", "20.00", "ms"]
     assert rows[3].split() == ["Index", "Scan", "1", "5.00", "ms"]
+
+
+# ---------------------------------------------------------------------------
+# The wiring: the config value has to reach the formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_output_passes_explain_summary_through():
+    """format_output() builds the ExplainOutputFormatter. Hard-coding summary
+    to False there would leave every unit test above green while the summary
+    silently disappeared from the session."""
+    from pgcli.main import format_output, OutputSettings
+
+    cur = iter([(json.dumps([_plan()]),)])
+    settings = OutputSettings(table_format="psql", explain_summary=True, max_width=100)
+    out = "\n".join(format_output("title", cur, ["QUERY PLAN"], "status", settings, explain_mode=True))
+    assert "Summary" in out and "By table" in out
+
+    cur = iter([(json.dumps([_plan()]),)])
+    settings = OutputSettings(table_format="psql", explain_summary=False, max_width=100)
+    out = "\n".join(format_output("title", cur, ["QUERY PLAN"], "status", settings, explain_mode=True))
+    assert "Summary" not in out

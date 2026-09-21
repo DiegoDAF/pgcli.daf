@@ -1081,6 +1081,32 @@ def test_execute_statements_does_not_split_inside_literals(executor):
     assert "a;b" in outputs[0]
 
 
+@dbtest
+def test_history_file_is_secured_before_it_is_created(executor, tmpdir):
+    """The history records every statement typed, so it is created 0600. The
+    unit tests cover ensure_private_file(); this covers the call site, and the
+    order: securing it after FileHistory opened it would leave a window where
+    the file exists with the umask mode.
+
+    FileHistory raises a sentinel to stop run_cli() right there, which is the
+    cheapest way to reach a line that otherwise sits inside the prompt loop.
+    """
+
+    class Reached(Exception):
+        pass
+
+    cli = PGCli(pgexecute=executor, pgclirc_file=str(tmpdir.join("rcfile")))
+    with (
+        mock.patch("pgcli.main.ensure_private_file") as mock_secure,
+        mock.patch("pgcli.main.FileHistory", side_effect=Reached),
+    ):
+        with pytest.raises(Reached):
+            cli.run_cli()
+
+    secured = [c[0][0] for c in mock_secure.call_args_list]
+    assert any(str(path).endswith("history") for path in secured), secured
+
+
 def test_file_mode_runs_statements_and_exits_zero(tmpdir):
     """-f wiring: the file content goes through _execute_statements, exit 0."""
     sql_file = tmpdir.join("script.sql")

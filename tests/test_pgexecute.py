@@ -776,6 +776,46 @@ def test_exit_without_active_connection(executor):
 
 
 @dbtest
+def test_hash_operator_survives_execution(executor):
+    """# is bitwise XOR in PostgreSQL (issue #1646). The unit tests cover
+    strip_trailing_comments(); this one covers the call site, so removing it
+    from run() cannot go unnoticed: the answer would silently become 17."""
+    result = list(executor.run("select 17 # 5 as answer"))
+    rows = list(result[0][1])
+    assert rows == [(20,)]
+
+
+@dbtest
+def test_trailing_comment_is_still_stripped_at_execution(executor, pgspecial):
+    """The other half: what #1559 fixed must keep working. The observable case
+    is \\G, which is only recognised at the end of the input, so the trailing
+    comment has to be gone by then. Without the strip the server gets
+    "select 1 \\G -- note" and answers: syntax error at or near "\\"."""
+    result = list(executor.run("select 1 \\G -- a trailing note", pgspecial=pgspecial))
+    # The row comes back at all: without the strip this is a syntax error.
+    assert list(result[0][1]) == [(1,)]
+
+
+@dbtest
+def test_explain_mode_keeps_a_hand_written_explain(executor):
+    """With F5 on, prepending the fixed prefix to a statement that already is
+    an EXPLAIN produced "EXPLAIN (...) explain (...)" and a syntax error. The
+    user's own options must reach the server instead."""
+    result = list(executor.run("explain (analyze, verbose, buffers) select 1", explain_mode=True))
+    rows = list(result[0][1])
+    plan = rows[0][0]
+    # FORMAT JSON is added for the visualizer, so the plan comes back as JSON
+    # carrying the timings ANALYZE asked for.
+    assert "Actual Total Time" in str(plan)
+
+
+@dbtest
+def test_explain_mode_still_wraps_plain_sql(executor):
+    result = list(executor.run("select 1", explain_mode=True))
+    assert "Actual Total Time" in str(list(result[0][1])[0][0])
+
+
+@dbtest
 def test_explain_mode_does_not_wrap_special_command(executor):
     """A special command (\\q) must still be dispatched as special -- NOT wrapped
     with the EXPLAIN prefix -- when explain mode (F5) is on.

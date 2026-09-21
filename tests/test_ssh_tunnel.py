@@ -914,6 +914,24 @@ class TestSSHConfigIncludes:
         main.write_text(f"Host parent\n    Include {tmp_path}/keys.conf\n")
         assert self._parse(main).lookup("parent")["identitiesonly"] == "yes"
 
+    def test_start_tunnel_resolves_a_host_defined_in_an_included_file(self, tmp_path, mock_native_tunnel):
+        """The wiring: start_tunnel() has to expand Include before paramiko
+        parses, or a host that only exists in ~/.ssh/config.d/ is invisible and
+        the tunnel dials the alias itself."""
+        (tmp_path / "conf.d").mkdir()
+        (tmp_path / "conf.d" / "db.conf").write_text("Host dbalias\n    HostName db.internal\n    User dbuser\n    Port 2022\n")
+        config = tmp_path / "config"
+        config.write_text(f"Include {tmp_path}/conf.d/*.conf\n")
+
+        manager = SSHTunnelManager(ssh_tunnel_url="ssh://dbalias", logger=logging.getLogger("test"))
+        with patch("pgcli.ssh_tunnel.os.path.expanduser", side_effect=lambda p: str(config) if p == "~/.ssh/config" else p):
+            manager.start_tunnel(host="db", port=5432)
+
+        kwargs = mock_native_tunnel["client"].connect.call_args[1]
+        assert kwargs["hostname"] == "db.internal"
+        assert kwargs["username"] == "dbuser"
+        assert kwargs["port"] == 2022
+
     def test_recursion_is_bounded(self, tmp_path):
         loop = tmp_path / "loop"
         loop.write_text(f"Include {loop}\n")
