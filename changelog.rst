@@ -1,6 +1,19 @@
 Upcoming
 ========
 
+Bug fixes:
+----------
+
+* Treat ``#`` as the bitwise XOR operator it is in PostgreSQL, not as a comment
+  marker. ``select 17 # 5`` returned 17 instead of 20, silently, because
+  ``sqlparse.format(strip_comments=True)`` follows MySQL and drops everything
+  after a ``#``. Trailing comments are now removed with PostgreSQL's own rules
+  (``--`` to end of line, nestable ``/* */``, and markers inside string
+  literals, quoted identifiers or dollar-quoted bodies left alone), so a
+  comment after the final semicolon still goes and the rest of the statement
+  reaches the server as written. Reported upstream as dbcli/pgcli#1646; the
+  underlying sqlparse limitation is andialbrecht/sqlparse#539.
+
 Features:
 ---------
 

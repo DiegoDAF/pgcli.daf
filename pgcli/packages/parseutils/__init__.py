@@ -138,3 +138,62 @@ def strip_markdown(text):
                 return text, ""  # already SQL: the common case, untouched
             return "\n".join(lines[index:]), "%d line(s) of text before the statement" % index
     return text, ""  # nothing that looks like SQL: let the server complain
+
+
+def strip_trailing_comments(sql):
+    """Return ``sql`` without the comments that trail its last statement.
+
+    ``sqlparse.format(strip_comments=True)`` cannot be used for this. sqlparse
+    follows MySQL and treats ``#`` as a comment marker, but in PostgreSQL it is
+    the bitwise XOR operator, so it eats the rest of the line: ``select 17 # 5``
+    becomes ``select 17`` and quietly returns 17 instead of 20 (dbcli/pgcli
+    issue #1646, andialbrecht/sqlparse issue #539).
+
+    This scans the text with PostgreSQL's own rules instead: ``--`` to end of
+    line and ``/* */`` (which nest) are comments, string literals, quoted
+    identifiers and dollar-quoted bodies are not, and ``#`` is an operator like
+    any other. Only trailing comments are dropped, so a comment in the middle
+    of a statement is kept as the server would see it.
+    """
+    last = 0  # one past the last character that is part of the statement
+    i, n = 0, len(sql)
+    while i < n:
+        ch = sql[i]
+        if ch in " \t\r\n":
+            i += 1
+        elif sql.startswith("--", i):
+            end = sql.find("\n", i)
+            i = n if end == -1 else end + 1
+        elif sql.startswith("/*", i):
+            depth, i = 1, i + 2
+            while i < n and depth:
+                if sql.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif sql.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+        elif ch in "'\"":
+            i += 1
+            while i < n:
+                if sql[i] == ch:
+                    if i + 1 < n and sql[i + 1] == ch:  # '' or "" escapes itself
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                i += 1
+            last = i
+        elif ch == "$":
+            match = re.match(r"\$[\w]*\$", sql[i:])
+            if match:
+                tag = match.group(0)
+                end = sql.find(tag, i + len(tag))
+                i = n if end == -1 else end + len(tag)
+            else:
+                i += 1
+            last = i
+        else:
+            i += 1
+            last = i
+    return sql[:last]
