@@ -929,6 +929,38 @@ def test_watch_works(executor):
 
 
 @dbtest
+def test_execute_statements_runs_a_pasted_markdown_block(executor):
+    """The unit tests cover strip_markdown() itself; this one covers the wiring,
+    so removing the call from _execute_statements cannot pass unnoticed."""
+    cli = PGCli(pgexecute=executor)
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo:
+        ok = cli._execute_statements("```sql\nselect 111;\n```")
+    assert ok is True
+    outputs = [c[0][0] for c in mock_echo.call_args_list]
+    assert len(outputs) == 1 and "111" in outputs[0]
+
+
+@dbtest
+def test_execute_statements_reports_what_it_removed(executor, capsys):
+    """Running something other than what was pasted must never be silent."""
+    cli = PGCli(pgexecute=executor)
+    with mock.patch.object(cli, "echo_via_pager"):
+        cli._execute_statements("Here you go:\n\n```sql\nselect 111;\n```")
+    assert "removed" in capsys.readouterr().err
+
+
+@dbtest
+def test_execute_statements_leaves_plain_sql_alone(executor, capsys):
+    """The common case: no fence, nothing removed, nothing said."""
+    cli = PGCli(pgexecute=executor)
+    with mock.patch.object(cli, "echo_via_pager") as mock_echo:
+        ok = cli._execute_statements("select 111;")
+    assert ok is True
+    assert "111" in [c[0][0] for c in mock_echo.call_args_list][0]
+    assert "removed" not in capsys.readouterr().err
+
+
+@dbtest
 def test_execute_statements_splits_a_block(executor):
     """A multi-statement block runs one statement at a time, like psql -f."""
     cli = PGCli(pgexecute=executor)
