@@ -105,6 +105,8 @@ def ensure_private_file(path):
             else:
                 os.chmod(path, 0o600)
     except OSError:
+        # Tightening the mode is best effort: a filesystem that does not
+        # support it must not keep pgcli from starting.
         pass
     finally:
         os.close(fd)
