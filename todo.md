@@ -1,6 +1,21 @@
 Upcoming
 ==============
 
+### LECCION 2026-09-21: ESPERAR A QUE BAJE LA COLA NOS COSTO DOS PRs
+# Los dos eran fixes triviales y objetivos, de los que entran en un minuto:
+#   - CodeQL deprecado: lo mandamos (#1639) y dbaty ya lo tenia hecho y con mas cosas (#1641)
+#   - el @dbtest faltante: lo teniamos ARREGLADO EN RAMA desde el 16/09 y no lo mandamos.
+#     Ben Beasley (musicinmybrain) lo mando como #1643 y se mergeo en un dia. Encima el test
+#     sin @dbtest lo habiamos introducido NOSOTROS en upstream con los PRs de -c/-f
+- [ ] REGLA NUEVA: la politica de "no saturar la cola" aplica a FEATURES, no a fixes chicos y
+      objetivos. Esos se mandan apenas estan listos
+- [ ] REGLA NUEVA (pedido de Diego el 21/09): al mandar un PR, revisar los LINTERS, no solo la
+      suite. El #1645 volvio con una alerta de CodeQL ("except clause does nothing but pass and
+      there is no explanatory comment") con ruff, mypy y 2794 tests en verde. CodeQL NO aparece
+      como check rojo: llega como comentario inline de github-advanced-security[bot], hay que
+      leerlo con `gh api repos/dbcli/pgcli/pulls/<n>/comments`.
+      Todo `except` que se trague un error lleva comentario adentro explicando por que
+
 ### PENDIENTE DE DIEGO (auditoria 2026-09-16): decisiones y pushes
 - [x] RESUELTO 2026-09-17 (11f60e0): `Include` de `~/.ssh/config` ahora se expande antes de que
       paramiko parsee. Medido 17/17 contra `ssh -G`. Lo no obvio, que hubo que MEDIR: ssh
@@ -82,27 +97,24 @@ Upcoming
 # 2 ABIERTOS hoy: #1637 y #1628
 # La cola de upstream tiene 15 PRs abiertos en total, o sea que 2 nuestros es razonable.
 
-### NUESTROS 4 PRs ABIERTOS (estado 2026-09-17)
-- [ ] #1637 "Add --no-timings and --no-status" = item 11 del #1603. Abierto 2026-09-15.
-      Rama `upstream/no-timings-no-status`, +103-3 en 3 archivos. MERGEABLE.
-      CI: los 5 builds (3.10 a 3.14) PASAN, CodeQL pasa, Analyze pasa. El unico rojo es
-      `codex-review`, que falla en TODOS los PRs del repo incluidos los ya mergeados: por eso
-      el estado sale UNSTABLE y no CLEAN. No hay que hacer nada con eso.
-      Sin review ni comentarios todavia. SOLO ESPERAR.
-- [ ] #1628 "Decode text results defensively (SQL_ASCII)". CLEAN, 7 comentarios.
-      BLOQUEADO POR ACUERDO: j-bennet pidio meter primero el #1629 de dbaty (arregla el caso
-      comun, ASCII puro) y despues nuestro fallback byte a byte, que es el caso raro. Diego
-      acepto ese orden el 2026-09-10.
-      OJO: el #1629 NO SE MOVIO desde el 2026-09-04, no tiene ni un comentario ni un review.
-      Si sigue frenado un par de semanas, vale preguntar amablemente en el #1629.
-      Cuando entre: rehacer el nuestro como follow-up (fallback en CharacterNotInRepertoire).
-- [ ] #1639 "ci: update the deprecated CodeQL action and checkout". Mandado 2026-09-17.
-      Rama `upstream/codeql-v4`, 1 archivo, 4 lineas. Fix de deprecacion: GitHub ya marca cada
-      corrida de CodeQL con una annotation de nivel failure. Solo esperar
-- [ ] #1640 "Require sqlparse 0.6.0 or newer". Mandado 2026-09-17.
-      Rama `upstream/sqlparse-floor`, 2 archivos, 6 lineas. Sube el piso (el tope ya permitia 0.6).
-      El argumento es el camino de UPGRADE: hoy `pip install -U pgcli` sobre una maquina con 0.5.3
-      la deja ahi. Solo esperar
+### NUESTROS PRs (estado 2026-09-21)
+# UPSTREAM PUBLICO 4.7.0 el 19/09 y 4.7.1 el 20/09. La 4.7.0 es LA RELEASE DONDE SALIERON
+# NUESTRAS FEATURES: -c/--command, -f/--file, -y/--yes y -t/--tuples-only. La 4.7.1 salio al
+# dia siguiente solo para arreglar el numero que reportaba `pgcli --version`.
+- [ ] #1637 "--no-timings / --no-status" (item 11 del #1603). Abierto 15/09, sin review. ESPERAR
+- [ ] #1628 "SQL_ASCII". BLOQUEADO por el #1629 de dbaty, que lleva 17 DIAS SIN UN SOLO
+      COMENTARIO (parado desde el 04/09). Ojo: la 4.7.0 trae un fix de encoding que SUENA igual
+      ("TypeError: cannot use a string pattern on a bytes-like object ... SQL_ASCII") pero es el
+      del escape_name (#1612), que ya estaba: NO cubre lo nuestro (crash del prompt por
+      get_socket_directory() ni el mensaje con b'...' del timezone).
+      DECIDIR: preguntar en el #1629 si piensan avanzarlo y ofrecer tomarlo nosotros
+- [ ] #1640 "sqlparse >= 0.6.0". SIGUE VIGENTE: upstream continua en >=0.3.0 con los 11 avisos
+- [ ] #1645 "history/log/config en 0600". MANDADO 2026-09-21. Rebasado sobre 4.7.1
+- [x] #1639 "CodeQL v4" CERRADO por dbaty el 21/09: "I did the same (and some more) in a
+      separate pull request: #1641". Su PR ademas pinnea todas las actions y suma Dependabot
+- [x] COMENTARIO en el #1638 (PR ajeno de Tatamis): le marcamos que su fix NO alcanzaba (el
+      crash se MOVIA de meta.py:162 a pgcompleter.py:77). Lo reprodujo, aplico nuestra
+      sugerencia y agrego tests. Ejemplo de que comentar PRs ajenos con evidencia medida sirve
 
 ### PROXIMOS A MANDAR, uno por vez y solo cuando baje la cola
 - [ ] 1) Item 8 del #1603: `-o/--output`   <-- EL SIGUIENTE
