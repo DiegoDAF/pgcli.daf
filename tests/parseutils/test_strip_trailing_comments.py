@@ -76,9 +76,56 @@ def test_empty_and_whitespace():
     assert strip_trailing_comments("   \n  ") == ""
 
 
-def test_unterminated_block_comment():
-    assert strip_trailing_comments("select 1; /* never closed") == "select 1;"
+def test_unterminated_block_comment_is_kept():
+    """PostgreSQL rejects it ("unterminated /* comment"). Dropping it would run
+    a different statement and return an answer where the server gave an error:
+    `select 4/*2` would quietly say 4."""
+    for sql in ("select 1; /* never closed", "select 4/*2"):
+        assert strip_trailing_comments(sql) == sql
 
 
 def test_unterminated_string_does_not_hang():
     assert strip_trailing_comments("select 'never closed") == "select 'never closed"
+
+
+# --- PostgreSQL operators that look like comment markers -------------------
+#
+# Every expectation below was run against PostgreSQL 17 first; the value in the
+# comment is what the server answers for that expression.
+
+
+def test_hash_operators_are_left_alone():
+    """# starts several operators, none of them a comment."""
+    for sql in (
+        "select 17 # 5",  # 20, bitwise XOR
+        """select '{"a":{"b":7}}'::jsonb #> '{a,b}'""",  # 7, path extract
+        """select '{"a":1}'::jsonb #>> '{a}'""",  # 1, path extract as text
+        """select '{"a":1,"b":2}'::jsonb #- '{a}'""",  # {"b": 2}, delete path
+        "select point '(0,0)' ## lseg '((1,1),(2,2))'",  # (1,1), closest point
+        "select box '((0,0),(2,2))' # box '((1,1),(3,3))'",  # intersection
+        "select # path '((1,1),(2,2),(3,3))'",  # 3, number of points
+    ):
+        assert strip_trailing_comments(sql) == sql, sql
+
+
+def test_operators_built_from_dashes_and_slashes():
+    for sql in (
+        "select 5 - -3",  # 8, unary minus after an operator
+        "select @ -5",  # 5, absolute value
+        """select '{"a":1}'::json ->> 'a'""",  # 1
+        "select 1 << 3",  # 8
+        "select 'abc' ~ 'b'",  # t, regex match
+        """select '{"a":1}'::jsonb @> '{"a":1}'""",  # t, contains
+        "select 'a' || 'b'",  # ab
+    ):
+        assert strip_trailing_comments(sql) == sql, sql
+
+
+def test_double_dash_without_spaces_is_a_comment_to_postgres_too():
+    """`select 5--3` answers 5, not 8: the server reads --3 as a comment, so
+    dropping it here matches what the server would have done."""
+    assert strip_trailing_comments("select 5--3") == "select 5"
+
+
+def test_hash_inside_a_trailing_comment_is_still_a_comment():
+    assert strip_trailing_comments("select 1; -- see issue #1646") == "select 1;"

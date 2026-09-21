@@ -165,14 +165,20 @@ def strip_trailing_comments(sql):
             end = sql.find("\n", i)
             i = n if end == -1 else end + 1
         elif sql.startswith("/*", i):
-            depth, i = 1, i + 2
-            while i < n and depth:
-                if sql.startswith("/*", i):
-                    depth, i = depth + 1, i + 2
-                elif sql.startswith("*/", i):
-                    depth, i = depth - 1, i + 2
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if sql.startswith("/*", j):
+                    depth, j = depth + 1, j + 2
+                elif sql.startswith("*/", j):
+                    depth, j = depth - 1, j + 2
                 else:
-                    i += 1
+                    j += 1
+            if depth:
+                # Never closed. PostgreSQL rejects that ("unterminated /*
+                # comment"), so keep the text and let it say so, rather than
+                # dropping it and running a different statement.
+                last = n
+            i = j
         elif ch in "'\"":
             i += 1
             while i < n:
