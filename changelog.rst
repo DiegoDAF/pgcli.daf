@@ -21,7 +21,7 @@ Features:
 
 * Accept SQL pasted out of a markdown document. A block copied from a chat or
   an LLM answer carries its code fence, and sometimes the prose above it, so
-  the server replies with ``syntax error at or near "```"``, which says
+  the server replies with a syntax error at or near "\`\`\`", which says
   nothing about the real problem. The fence is now removed and the statement
   runs. Text inside a fence wins, because a fence states exactly where the
   code is; without a fence, leading lines are dropped up to the first one that
