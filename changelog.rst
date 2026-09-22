@@ -86,6 +86,15 @@ Bug fixes:
 Internal:
 ---------
 
+* Cover the prompt-side modules that had almost no tests: ``pgbuffer`` (which
+  decides whether Enter runs the query), ``pgtoolbar``, ``key_bindings`` and
+  ``prompt_utils``, all four from 48-66% to 100%. Among the branches that had
+  never been exercised: every function key except F5 and F9, the two ``enter``
+  bindings that share a key and differ only by filter, the F5 explain cycle as
+  the toolbar reports it, and ``-y``/``--yes`` skipping the destructive-query
+  confirmation in a script, which works because ``force`` is checked before the
+  tty test.
+
 * The pg_dump and pg_dumpall wrappers no longer carry a byte-identical copy of
   ``parse_connection_args`` and ``build_tunneled_args``. The 167 duplicated lines
   moved to ``pgcli/dump_args.py``, and only the ``pgcli.dump`` copy had ever been
