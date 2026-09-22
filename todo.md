@@ -2,22 +2,21 @@ Upcoming
 ==============
 
 ### EN ESPERA, DECISION DE DIEGO (aplazado el 2026-09-22: "lo vemos mas tarde")
-- [ ] 1) PERMISOS DEL .pgpass: `get_password_from_pgpass` (pgcli/dump.py) lee el archivo sin
-      mirarle los permisos. libpq lo IGNORA si tiene acceso de grupo u otros (0640 o mas
-      abierto). O sea que hoy `pgcli_dump`/`pgcli_dumpall` pueden usar una password que `psql`
-      rechazaria, sin avisar nada.
-      # VERIFICADO 2026-09-22: no es una pregunta de diseno abierta, es una INCONSISTENCIA
-      # nuestra. `pgcli/pgpass.py` YA hace lo correcto: `_has_safe_permissions()` rechaza
-      # cualquier bit de grupo/otros (0o077) y `lookup_password()` no lee el archivo si falla.
-      # O sea que `pgcli` respeta la regla de libpq y `pgcli_dump`/`pgcli_dumpall` no, con dos
-      # lectores de .pgpass distintos conviviendo en el mismo repo.
-      # Arreglo natural: que los wrappers usen `pgcli.pgpass.lookup_password()` en vez de su
-      # propio `get_password_from_pgpass`, que ademas borraria otra copia duplicada (misma
-      # familia que las 167 lineas que ya sacamos a dump_args.py).
-      # A MIRAR antes: los dos no son identicos. El de los wrappers hace fnmatch sobre host,
-      # database y user (soporta globs tipo `*.example.com`); el de pgpass.py compara por
-      # igualdad o `*`. Cambiar de uno al otro puede dejar de matchear lineas que hoy matchean.
-      # Por eso no se hizo de una: hay que medir contra el .pgpass real antes de tocar.
+- [x] 1) PERMISOS DEL .pgpass: RESUELTO 2026-09-22 (a2b603ab), con el alcance acotado que
+      pidio Diego ("tirale el control de 0600"): se agrego SOLO el chequeo de permisos, no la
+      unificacion de los dos lectores.
+      # El chequeo ahora vive en un solo lugar, `pgpass.has_safe_permissions()` (era privado,
+      # pasa a publico), y lo usan tanto pgcli como los wrappers. Los wrappers ademas IMPRIMEN
+      # el mismo warning que libpq ("has group or world access; permissions should be u=rw
+      # (0600) or less") en vez de devolver None calladitos: si no, el dia que alguien apreta
+      # los permisos el backup falla sin explicacion.
+      # MEDIDO contra el .pgpass real antes de tocar: 544 lineas, 541 con comodin, 3 concretas,
+      # y las 3 siguen resolviendo. 4 tests, verificados con mutacion (fallan sin el chequeo).
+- [ ] QUEDA ABIERTO de esa familia: unificar el MATCHEO de los dos lectores. Siguen siendo dos
+      implementaciones: la de los wrappers hace fnmatch sobre host/database/user (soporta globs
+      tipo `*.example.com`) y la de pgpass.py compara por igualdad o `*`. Cambiar de una a otra
+      puede dejar de matchear lineas que hoy matchean, y en el .pgpass real 541 de 544 lineas
+      usan comodines, asi que el riesgo es concreto. Medir entrada por entrada antes de tocar
 - [ ] 2) INSTALAR LA BUILD CON EL FIX DE URI en las dos maquinas de trabajo: corren la build del
       2026-09-22 de la manana, que NO tiene el fix de `-d postgresql://...` ni los 139 tests.
       # 2026-09-22: los 4 servidores SI quedaron con la build nueva (sha256 d3c989914a46...).
