@@ -95,6 +95,16 @@ Internal:
   confirmation in a script, which works because ``force`` is checked before the
   tty test.
 
+* Cover ``completion_refresher`` and ``pgstyle``, 64% and 48% to 100%. The nine
+  refreshers had never been called in a test, only checked for being registered
+  under the right name, and ``pgstyle`` had no test file at all. Now pinned: the
+  restart handshake that makes a second refresh reuse the running thread instead
+  of racing a new one against the same completer, the copied connection being
+  closed again unless ``single_connection``, only the last 100 history entries
+  being learned, and both directions of the token-to-class-name translation that
+  ``[colors]`` depends on, including the AttributeError that makes a value
+  literal for output styles but inheritable for prompt styles.
+
 * The pg_dump and pg_dumpall wrappers no longer carry a byte-identical copy of
   ``parse_connection_args`` and ``build_tunneled_args``. The 167 duplicated lines
   moved to ``pgcli/dump_args.py``, and only the ``pgcli.dump`` copy had ever been
