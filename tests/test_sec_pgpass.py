@@ -20,7 +20,7 @@ import stat
 import pytest
 
 from pgcli.pgpass import (
-    _has_safe_permissions,
+    has_safe_permissions,
     _pgpass_path,
     _split_pgpass_line,
     lookup_password,
@@ -74,8 +74,8 @@ def test_tightening_permissions_re_enables_read(tmp_path):
 def test_has_safe_permissions_predicate(tmp_path):
     safe = _write_pgpass(tmp_path, "x\n", mode=0o600, name="safe")
     unsafe = _write_pgpass(tmp_path, "x\n", mode=0o640, name="unsafe")
-    assert _has_safe_permissions(safe) is True
-    assert _has_safe_permissions(unsafe) is False
+    assert has_safe_permissions(safe) is True
+    assert has_safe_permissions(unsafe) is False
 
 
 # --------------------------------------------------------------------------- #
@@ -92,7 +92,7 @@ def test_directory_is_not_a_regular_file(tmp_path):
     d = tmp_path / "adir"
     d.mkdir()
     os.chmod(d, 0o700)
-    assert _has_safe_permissions(str(d)) is False
+    assert has_safe_permissions(str(d)) is False
     assert lookup_password("h", 5432, "db", "u", path=str(d)) is None
 
 
@@ -101,7 +101,7 @@ def test_fifo_is_not_a_regular_file(tmp_path):
     fifo = tmp_path / "afifo"
     os.mkfifo(fifo, 0o600)
     assert stat.S_ISFIFO(os.stat(fifo).st_mode)
-    assert _has_safe_permissions(str(fifo)) is False
+    assert has_safe_permissions(str(fifo)) is False
     assert lookup_password("h", 5432, "db", "u", path=str(fifo)) is None
 
 

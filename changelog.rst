@@ -4,6 +4,19 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``pgcli_dump`` and ``pgcli_dumpall`` now apply libpq's rule to ``.pgpass``:
+  a file that is readable by group or others is refused, with the same warning
+  libpq prints. They read it regardless of its mode, so a backup could
+  authenticate with a password ``psql`` would have ignored, and the difference
+  only showed up the day somebody tightened the file. ``pgcli`` itself already
+  did this; the wrappers carried a second reader that had drifted. The
+  permission check now lives in one place (``pgpass.has_safe_permissions``)
+  and both use it. The matching logic is untouched, so which line wins does
+  not change.
+
+Bug fixes:
+----------
+
 * ``pgcli_dump`` and ``pgcli_dumpall`` now route a URI connection string through
   the SSH tunnel. Given ``-d postgresql://user@db.internal:5432/mydb`` they read
   neither the host nor the port, so the tunnel was opened to ``localhost`` and

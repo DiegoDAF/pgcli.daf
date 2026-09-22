@@ -50,8 +50,12 @@ def _pgpass_path():
     return os.path.expanduser("~/.pgpass")
 
 
-def _has_safe_permissions(path):
-    """libpq ignores .pgpass if it is group/world accessible (must be <= 0600)."""
+def has_safe_permissions(path):
+    """libpq ignores .pgpass if it is group/world accessible (must be <= 0600).
+
+    Public because pgcli_dump and pgcli_dumpall apply the same rule; keeping a
+    second copy is what let the wrappers drift from libpq in the first place.
+    """
     try:
         mode = os.stat(path).st_mode
     except OSError:
@@ -74,7 +78,7 @@ def lookup_password(host, port, database, user, path=None):
     permissions.
     """
     path = path or _pgpass_path()
-    if not _has_safe_permissions(path):
+    if not has_safe_permissions(path):
         return None
     host = host or "localhost"
     port = str(port or "5432")

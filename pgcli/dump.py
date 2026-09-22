@@ -16,6 +16,7 @@ from typing import List, Optional
 import click
 
 from .config import get_config
+from .pgpass import has_safe_permissions
 from .ssh_tunnel import get_tunnel_manager_from_config
 from .dump_args import (  # re-exported: both wrappers and their tests import these
     build_tunneled_args,
@@ -36,6 +37,18 @@ def get_password_from_pgpass(host: str, port: int, database: str, user: str) -> 
     """
     pgpass_path = Path.home() / ".pgpass"
     if not pgpass_path.exists():
+        return None
+
+    # libpq refuses a password file that others can read, and says so. Without
+    # this the wrappers would authenticate with a password psql itself would
+    # have ignored, which is the kind of difference that only shows up when
+    # somebody tightens the file and the backup stops working.
+    if not has_safe_permissions(pgpass_path):
+        click.secho(
+            f'WARNING: password file "{pgpass_path}" has group or world access; permissions should be u=rw (0600) or less',
+            err=True,
+            fg="yellow",
+        )
         return None
 
     try:

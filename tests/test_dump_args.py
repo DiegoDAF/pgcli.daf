@@ -377,6 +377,30 @@ class TestPgpassLookup:
 
         return write
 
+    def test_a_world_readable_pgpass_is_refused(self, pgpass, capsys):
+        """libpq ignores a password file others can read and warns about it.
+        The wrappers used to read it anyway, so pgcli_dump could authenticate
+        with a password psql would have refused."""
+        pgpass("db.example.com:5432:ventas:reader:s3cr3t", mode=0o644)
+        assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "reader") is None
+        err = capsys.readouterr().err
+        assert "group or world access" in err and "0600" in err
+
+    def test_a_group_readable_pgpass_is_refused(self, pgpass):
+        """0640 is enough for libpq to refuse it: any group bit counts."""
+        pgpass("db.example.com:5432:ventas:reader:s3cr3t", mode=0o640)
+        assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "reader") is None
+
+    def test_an_owner_only_pgpass_is_read_without_a_warning(self, pgpass, capsys):
+        pgpass("db.example.com:5432:ventas:reader:s3cr3t", mode=0o600)
+        assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "reader") == "s3cr3t"
+        assert capsys.readouterr().err == ""
+
+    def test_a_stricter_pgpass_is_still_read(self, pgpass):
+        """0400 is stricter than 0600, so libpq accepts it and so do we."""
+        pgpass("db.example.com:5432:ventas:reader:s3cr3t", mode=0o400)
+        assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "reader") == "s3cr3t"
+
     def test_exact_match(self, pgpass):
         pgpass("db.example.com:5432:ventas:reader:s3cr3t")
         assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "reader") == "s3cr3t"
