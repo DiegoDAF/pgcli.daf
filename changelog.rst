@@ -4,6 +4,30 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``pgcli_dump`` and ``pgcli_dumpall`` now route a URI connection string through
+  the SSH tunnel. Given ``-d postgresql://user@db.internal:5432/mydb`` they read
+  neither the host nor the port, so the tunnel was opened to ``localhost`` and
+  the URI, which libpq lets win over the appended ``-h``/``-p``, sent pg_dump
+  straight to the real host. Both halves failed silently. The URI is now parsed
+  and rewritten onto the tunnel, keeping userinfo, query and percent-encoding
+  verbatim, and IPv6 literals are bracketed. ``hostaddr=`` in a keyword/value
+  connection string is rewritten too, for the same reason: it is what libpq
+  actually dials. A connection string this code cannot rewrite honestly, such as
+  a multi-host URI or one that sets ``host=`` in its query, is now reported
+  instead of half-rewritten.
+
+* ``pgcli_dump`` and ``pgcli_dumpall`` now read the user and database out of a
+  connection string when looking up ``.pgpass``. Only the bare ``-d mydb`` form
+  was understood, so a tunnelled dump given a URI or a keyword/value string
+  asked ``.pgpass`` about the wrong user and, for a URI, about a database named
+  after the whole URI. The lookup found nothing, or matched a wildcard line
+  meant for somebody else.
+
+* ``pgcli_dump`` and ``pgcli_dumpall`` no longer traceback on a non-numeric port
+  in ``-p``, ``--port=`` or ``PGPORT``; they report which one is wrong. An empty
+  ``PGPORT``, which a profile writing ``PGPORT=`` produces, falls back to 5432
+  instead of taking the dump down.
+
 * Treat ``#`` as the bitwise XOR operator it is in PostgreSQL, not as a comment
   marker. ``select 17 # 5`` returned 17 instead of 20, silently, because
   ``sqlparse.format(strip_comments=True)`` follows MySQL and drops everything
@@ -61,6 +85,12 @@ Bug fixes:
 
 Internal:
 ---------
+
+* The pg_dump and pg_dumpall wrappers no longer carry a byte-identical copy of
+  ``parse_connection_args`` and ``build_tunneled_args``. The 167 duplicated lines
+  moved to ``pgcli/dump_args.py``, and only the ``pgcli.dump`` copy had ever been
+  tested, which is how the URI bug above survived in both. The new test module
+  runs every case against both wrappers so they cannot drift apart again.
 
 * ``tests/test_isready.py`` no longer depends on the developer's ``PGHOST``
   and ``PGPORT``: exporting a throwaway server for the dbtests (the documented

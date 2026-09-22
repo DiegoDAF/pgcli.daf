@@ -9,13 +9,17 @@ import logging
 import os
 import subprocess
 import sys
-from typing import List, Optional
+from typing import Optional
 
 import click
 
 from .config import get_config
 from .ssh_tunnel import get_tunnel_manager_from_config
 from .dump import get_password_from_pgpass, parse_user_and_database
+from .dump_args import (  # re-exported: both wrappers and their tests import these
+    build_tunneled_args,
+    parse_connection_args,
+)
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -59,177 +63,6 @@ def find_pg_dumpall() -> str:
             return path
 
     return "pg_dumpall"  # Fall back to PATH lookup
-
-
-def parse_connection_args(args: List[str]) -> tuple:
-    """
-    Parse connection-related arguments from the command line.
-
-    Returns:
-        Tuple of (host, port, remaining_args, has_host, has_port)
-    """
-    host = os.environ.get("PGHOST", "localhost")
-    port = int(os.environ.get("PGPORT", 5432))
-    remaining_args = []
-    has_host = False
-    has_port = False
-
-    i = 0
-    while i < len(args):
-        arg = args[i]
-
-        # Handle -h/--host
-        if arg in ("-h", "--host"):
-            if i + 1 < len(args):
-                host = args[i + 1]
-                has_host = True
-                remaining_args.extend([arg, args[i + 1]])
-                i += 2
-                continue
-        elif arg.startswith("--host="):
-            host = arg.split("=", 1)[1]
-            has_host = True
-            remaining_args.append(arg)
-            i += 1
-            continue
-
-        # Handle -p/--port
-        if arg in ("-p", "--port"):
-            if i + 1 < len(args):
-                port = int(args[i + 1])
-                has_port = True
-                remaining_args.extend([arg, args[i + 1]])
-                i += 2
-                continue
-        elif arg.startswith("--port="):
-            port = int(arg.split("=", 1)[1])
-            has_port = True
-            remaining_args.append(arg)
-            i += 1
-            continue
-
-        # Handle -d/--dbname with connection string
-        if arg in ("-d", "--dbname"):
-            if i + 1 < len(args):
-                dbname = args[i + 1]
-                if "host=" in dbname:
-                    # Extract host from connection string
-                    for part in dbname.split():
-                        if part.startswith("host="):
-                            host = part.split("=", 1)[1]
-                            has_host = True
-                        elif part.startswith("port="):
-                            port = int(part.split("=", 1)[1])
-                            has_port = True
-                remaining_args.extend([arg, dbname])
-                i += 2
-                continue
-        elif arg.startswith("--dbname="):
-            dbname = arg.split("=", 1)[1]
-            if "host=" in dbname:
-                for part in dbname.split():
-                    if part.startswith("host="):
-                        host = part.split("=", 1)[1]
-                        has_host = True
-                    elif part.startswith("port="):
-                        port = int(part.split("=", 1)[1])
-                        has_port = True
-            remaining_args.append(arg)
-            i += 1
-            continue
-
-        remaining_args.append(arg)
-        i += 1
-
-    return host, port, remaining_args, has_host, has_port
-
-
-def build_tunneled_args(
-    original_args: List[str],
-    tunnel_host: str,
-    tunnel_port: int,
-    original_host: str,
-    original_port: int,
-    has_host: bool,
-    has_port: bool,
-) -> List[str]:
-    """
-    Build new argument list with tunneled connection parameters.
-    """
-    new_args = []
-    i = 0
-
-    while i < len(original_args):
-        arg = original_args[i]
-
-        # Replace host arguments
-        if arg in ("-h", "--host"):
-            new_args.extend(["-h", tunnel_host])
-            i += 2  # Skip the original value
-            continue
-        elif arg.startswith("--host="):
-            new_args.append(f"--host={tunnel_host}")
-            i += 1
-            continue
-
-        # Replace port arguments
-        if arg in ("-p", "--port"):
-            new_args.extend(["-p", str(tunnel_port)])
-            i += 2
-            continue
-        elif arg.startswith("--port="):
-            new_args.append(f"--port={tunnel_port}")
-            i += 1
-            continue
-
-        # Handle connection strings in dbname
-        if arg in ("-d", "--dbname"):
-            if i + 1 < len(original_args):
-                dbname = original_args[i + 1]
-                if "host=" in dbname:
-                    # Replace host and port in connection string
-                    parts = dbname.split()
-                    new_parts = []
-                    for part in parts:
-                        if part.startswith("host="):
-                            new_parts.append(f"host={tunnel_host}")
-                        elif part.startswith("port="):
-                            new_parts.append(f"port={tunnel_port}")
-                        else:
-                            new_parts.append(part)
-                    new_args.extend(["-d", " ".join(new_parts)])
-                else:
-                    new_args.extend(["-d", dbname])
-                i += 2
-                continue
-        elif arg.startswith("--dbname="):
-            dbname = arg.split("=", 1)[1]
-            if "host=" in dbname:
-                parts = dbname.split()
-                new_parts = []
-                for part in parts:
-                    if part.startswith("host="):
-                        new_parts.append(f"host={tunnel_host}")
-                    elif part.startswith("port="):
-                        new_parts.append(f"port={tunnel_port}")
-                    else:
-                        new_parts.append(part)
-                new_args.append(f"--dbname={' '.join(new_parts)}")
-            else:
-                new_args.append(arg)
-            i += 1
-            continue
-
-        new_args.append(arg)
-        i += 1
-
-    # Add host/port if they weren't in original args
-    if not has_host:
-        new_args.extend(["-h", tunnel_host])
-    if not has_port:
-        new_args.extend(["-p", str(tunnel_port)])
-
-    return new_args
 
 
 @click.command(

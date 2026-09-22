@@ -332,12 +332,17 @@ class TestParseConnectionArgsEdgeCases:
         assert has_port is True
 
     def test_postgresql_uri_in_dbname(self):
-        """Test PostgreSQL URI in dbname (should not parse as host/port)."""
-        # URIs are handled differently - host extraction from URI is not done
-        args = ["-d", "postgresql://user@localhost:5432/mydb"]
+        """Test PostgreSQL URI in dbname (host and port come from the URI)."""
+        # This used to assert that a URI was NOT parsed. It was not a decision,
+        # it was the bug: the tunnel was then built to "localhost" and pg_dump,
+        # which lets the URI win over -h/-p, dialled the real host directly.
+        # The full case table lives in test_dump_args.py.
+        args = ["-d", "postgresql://user@db.example.com:5433/mydb"]
         host, port, remaining, has_host, has_port = parse_connection_args(args)
-        # URI doesn't contain "host=" so it won't extract host/port
-        assert has_host is False
+        assert host == "db.example.com"
+        assert port == 5433
+        assert has_host is True
+        assert has_port is True
 
     def test_environment_variables_default(self):
         """Test that PGHOST/PGPORT environment variables are used as defaults."""
