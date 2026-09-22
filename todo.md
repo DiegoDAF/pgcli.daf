@@ -18,8 +18,11 @@ Upcoming
       # database y user (soporta globs tipo `*.example.com`); el de pgpass.py compara por
       # igualdad o `*`. Cambiar de uno al otro puede dejar de matchear lineas que hoy matchean.
       # Por eso no se hizo de una: hay que medir contra el .pgpass real antes de tocar.
-- [ ] 2) INSTALAR LA BUILD CON EL FIX DE URI: `t` y `d` corren la build del 2026-09-22 de la
-      manana, que NO tiene el fix de `-d postgresql://...` ni los 139 tests nuevos.
+- [ ] 2) INSTALAR LA BUILD CON EL FIX DE URI en las dos maquinas de trabajo: corren la build del
+      2026-09-22 de la manana, que NO tiene el fix de `-d postgresql://...` ni los 139 tests.
+      # 2026-09-22: los 4 servidores SI quedaron con la build nueva (sha256 d3c989914a46...).
+      # El inventario por maquina vive FUERA de este repo, en ../instalaciones-locales.md:
+      # los hostnames de infra no van a un repo publico.
       # La version sigue en 4.7.2 SIN bumpear (a proposito), asi que `pgcli --version` no
       # distingue una build de la otra: comparar por el sha256 del codigo instalado.
       # Build de la manana, hoy instalada en las dos: a4de3d09e19eafa071c4d06c6f14d64e367c1233f4e7db1275113c06f3c3e6fe
