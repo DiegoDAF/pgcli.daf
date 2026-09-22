@@ -1,6 +1,31 @@
 Upcoming
 ==============
 
+### EN ESPERA, DECISION DE DIEGO (aplazado el 2026-09-22: "lo vemos mas tarde")
+- [ ] 1) PERMISOS DEL .pgpass: `get_password_from_pgpass` (pgcli/dump.py) lee el archivo sin
+      mirarle los permisos. libpq lo IGNORA si tiene acceso de grupo u otros (0640 o mas
+      abierto). O sea que hoy `pgcli_dump`/`pgcli_dumpall` pueden usar una password que `psql`
+      rechazaria, sin avisar nada.
+      # VERIFICADO 2026-09-22: no es una pregunta de diseno abierta, es una INCONSISTENCIA
+      # nuestra. `pgcli/pgpass.py` YA hace lo correcto: `_has_safe_permissions()` rechaza
+      # cualquier bit de grupo/otros (0o077) y `lookup_password()` no lee el archivo si falla.
+      # O sea que `pgcli` respeta la regla de libpq y `pgcli_dump`/`pgcli_dumpall` no, con dos
+      # lectores de .pgpass distintos conviviendo en el mismo repo.
+      # Arreglo natural: que los wrappers usen `pgcli.pgpass.lookup_password()` en vez de su
+      # propio `get_password_from_pgpass`, que ademas borraria otra copia duplicada (misma
+      # familia que las 167 lineas que ya sacamos a dump_args.py).
+      # A MIRAR antes: los dos no son identicos. El de los wrappers hace fnmatch sobre host,
+      # database y user (soporta globs tipo `*.example.com`); el de pgpass.py compara por
+      # igualdad o `*`. Cambiar de uno al otro puede dejar de matchear lineas que hoy matchean.
+      # Por eso no se hizo de una: hay que medir contra el .pgpass real antes de tocar.
+- [ ] 2) INSTALAR LA BUILD CON EL FIX DE URI: `t` y `d` corren la build del 2026-09-22 de la
+      manana, que NO tiene el fix de `-d postgresql://...` ni los 139 tests nuevos.
+      # La version sigue en 4.7.2 SIN bumpear (a proposito), asi que `pgcli --version` no
+      # distingue una build de la otra: comparar por el sha256 del codigo instalado.
+      # Build de la manana, hoy instalada en las dos: a4de3d09e19eafa071c4d06c6f14d64e367c1233f4e7db1275113c06f3c3e6fe
+      # Receta: python -m build --wheel && uv tool install --force --reinstall --python 3.12 \
+      #   "dist/pgcli-4.7.2-py3-none-any.whl[sshtunnel,keyring]"   (y scp del wheel a `d`)
+
 ### LECCION 2026-09-21: ESPERAR A QUE BAJE LA COLA NOS COSTO DOS PRs
 # Los dos eran fixes triviales y objetivos, de los que entran en un minuto:
 #   - CodeQL deprecado: lo mandamos (#1639) y dbaty ya lo tenia hecho y con mas cosas (#1641)
@@ -245,10 +270,8 @@ Upcoming
       para que no vuelvan a divergir. Suite: 3460 passed, 8 skipped, 1 xfailed. ruff/mypy limpios
 - [x] Un test viejo (test_dump.py::test_postgresql_uri_in_dbname) AFIRMABA el bug con el comentario
       "host extraction from URI is not done". Actualizado al comportamiento correcto
-- [ ] PENDIENTE DE DIEGO: get_password_from_pgpass lee el .pgpass sin mirar los permisos del
-      archivo. libpq lo IGNORA si tiene acceso de grupo u otros (0640+). O sea que pgcli_dump
-      puede usar una password que psql rechazaria. No lo cambie: es un cambio de comportamiento
-      en algo de seguridad y preferi preguntarte
+- [x] Los dos pendientes que salieron de aca subieron a Upcoming (permisos de .pgpass,
+      instalar la build con el fix). Diego: "lo vemos mas tarde", 2026-09-22
 - [ ] NO CORRIDO localmente: los escenarios behave de dump_commands.feature apuntan a
       `-h localhost` puerto 5432, que es tu Postgres real. Los valida el CI contra el suyo
 
