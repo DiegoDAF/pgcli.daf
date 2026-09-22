@@ -214,6 +214,40 @@ Upcoming
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
 
+2026-09-22
+===================
+
+### 4.7.2 COMPILADA E INSTALADA EN LAS DOS MAQUINAS (pedido de Diego)
+# NO es un release: no se toco `__version__` (ya estaba en 4.7.2 desde el 21/09), no hay tag
+# nuevo ni GitHub release. Es una build local para usar el codigo del dia a dia.
+- [x] Suite completa contra PG descartable (initdb trust, puerto 55432, `unix_socket_directories=''`):
+      3321 passed, 8 skipped, 1 xfailed. Sin la base eran 170 skipped, o sea que los `@dbtest`
+      corrieron de verdad. ruff, ruff format y mypy limpios
+- [x] Wheel `dist/pgcli-4.7.2-py3-none-any.whl` (md5 c44daa0a318a2b7cc83e86b158c610cb), copiado
+      a `d` en la MISMA ruta del repo (antes el receipt de `d` apuntaba a `/tmp`, que no dice nada)
+- [x] `uv tool install --force --reinstall --python 3.12 "<wheel>[sshtunnel,keyring]"` en `t` y en `d`.
+      Verificado en ambas: paramiko 5.0.0, sqlparse 0.6.0, keyring SecretService activo,
+      los 4 ejecutables responden
+
+### LECCION: `md5sum ~/.local/bin/pgcli` NO sirve para comparar versiones
+# Diego lo uso para comparar `t` con `d` y dieron distinto, pero ese archivo es el console script
+# que genera uv. La UNICA diferencia era el shebang: `.../bin/python3` en `t` y `.../bin/python`
+# en `d`, dos symlinks al MISMO interprete, escritos por versiones distintas de uv.
+# El md5 cambia aunque el codigo sea identico, y peor: NO cambia cuando el codigo si difiere.
+- [x] LO QUE SI HABIA: las dos decian `Version: 4.6.2` y el CODIGO era distinto (6 archivos:
+      ssh_tunnel, explain_output_formatter, key_bindings, pgexecute, pgtoolbar, pyev). A `d` se le
+      instalo la build del 16/09 y a `t` la del 17/09, que ya traia el fix de `Include` en
+      ~/.ssh/config (11f60e02) y los cinco commits de EXPLAIN/F5. Mismo numero, codigo distinto:
+      es exactamente la trampa de bumpear `__version__` tarde
+- [ ] FORMA CORRECTA de comparar dos maquinas (dejar a mano, da un solo hash del codigo instalado):
+      ssh <host> '~/.local/share/uv/tools/pgcli/bin/python3 -c "
+      import hashlib,pathlib,glob
+      p=pathlib.Path(glob.glob(\"/home/daf/.local/share/uv/tools/pgcli/lib/python3*/site-packages/pgcli\")[0])
+      h=hashlib.sha256()
+      for f in sorted(p.rglob(\"*.py\")): h.update(f.read_bytes())
+      print(h.hexdigest())"'
+      # 2026-09-22, las dos maquinas: a4de3d09e19eafa071c4d06c6f14d64e367c1233f4e7db1275113c06f3c3e6fe
+
 2026-09-17
 ===================
 
