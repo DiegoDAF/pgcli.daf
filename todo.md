@@ -217,6 +217,41 @@ Upcoming
 2026-09-22
 ===================
 
+### TESTS DE LOS WRAPPERS DE BACKUP + BUG DE URI EN -d (pedido de Diego: "subir la calidad")
+# Punto de partida medido con coverage, no a ojo: dumpall.py 51% y SIN archivo de test propio,
+# dump.py 68%. Lo no cubierto era justo parse_connection_args y build_tunneled_args, o sea el
+# corazon del wrapper. Los tests viejos importaban esas funciones SOLO de pgcli.dump; la copia
+# de dumpall no se probaba nunca.
+- [x] BUG REAL encontrado y arreglado: una URI en `-d` (postgresql://user@host:port/db) no se
+      parseaba ni se reescribia. Doble falla silenciosa: (a) el tunel se armaba a "localhost" en
+      vez de al host real, y (b) pg_dump recibia la URI intacta mas `-h 127.0.0.1`, y la URI GANA,
+      asi que se conectaba derecho al host real ignorando el tunel.
+      MEDIDO con pg_dump 18 real, no deducido:
+        viejo: pg_dump -d postgresql://daf@db.inexistente.invalid:5432/postgres -h 127.0.0.1 -p 55432
+               -> "could not translate host name db.inexistente.invalid"  (bypass del tunel)
+        nuevo: las 4 formas (URI, URI con query, keyword/value, flags) conectan por el tunel
+- [x] SEGUNDA MITAD del mismo bug: parse_user_and_database solo entendia `-d mydb` pelado. Con una
+      URI el "database" terminaba siendo la URI entera y el user quedaba en "postgres", asi que el
+      lookup de .pgpass buscaba lo que no era. Eso es lo que decide si un dump tunelizado autentica
+- [x] Tambien: `hostaddr=` en keyword/value ahora se reescribe (es lo que libpq realmente disca,
+      dejarlo en la IP real tambien saltea el tunel); puerto no numerico en -p/--port/PGPORT ya no
+      es un traceback sino un mensaje; PGPORT vacio cae al 5432 en vez de tumbar el dump
+- [x] URIs que NO se pueden reescribir con honestidad (multi-host, host=/hostaddr= en el query)
+      ahora se reportan en vez de reescribirse a medias
+- [x] DRY: las 167 lineas duplicadas byte a byte entre dump.py y dumpall.py se fueron a
+      `pgcli/dump_args.py`. Un fix en una sola copia era exactamente el modo de falla que tuvimos
+- [x] COVERAGE: dump_args.py 100%, dump.py 68->98%, dumpall.py 51->97%, total 81->85%.
+      139 tests nuevos en `tests/test_dump_args.py`, todos parametrizados sobre los DOS wrappers
+      para que no vuelvan a divergir. Suite: 3460 passed, 8 skipped, 1 xfailed. ruff/mypy limpios
+- [x] Un test viejo (test_dump.py::test_postgresql_uri_in_dbname) AFIRMABA el bug con el comentario
+      "host extraction from URI is not done". Actualizado al comportamiento correcto
+- [ ] PENDIENTE DE DIEGO: get_password_from_pgpass lee el .pgpass sin mirar los permisos del
+      archivo. libpq lo IGNORA si tiene acceso de grupo u otros (0640+). O sea que pgcli_dump
+      puede usar una password que psql rechazaria. No lo cambie: es un cambio de comportamiento
+      en algo de seguridad y preferi preguntarte
+- [ ] NO CORRIDO localmente: los escenarios behave de dump_commands.feature apuntan a
+      `-h localhost` puerto 5432, que es tu Postgres real. Los valida el CI contra el suyo
+
 ### 4.7.2 COMPILADA E INSTALADA EN LAS DOS MAQUINAS (pedido de Diego)
 # NO es un release: no se toco `__version__` (ya estaba en 4.7.2 desde el 21/09), no hay tag
 # nuevo ni GitHub release. Es una build local para usar el codigo del dia a dia.
