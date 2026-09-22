@@ -245,6 +245,30 @@ Upcoming
 2026-09-22
 ===================
 
+### MODULOS FLOJOS: LOS SEIS AL 100% (pedido de Diego, segunda tanda)
+# Se priorizo por VALOR, no por porcentaje: primero lo nuestro y lo que se ve en cada linea
+# que el usuario mira, no el numero global.
+- [x] `pgbuffer.py` 63->100%. NO tenia archivo de test propio, y es lo que decide si Enter
+      ejecuta la query. Incluye el guard de regresion del XOR (#1646): `select 17 # 5;` tiene
+      que verse como completo
+- [x] `pgtoolbar.py` 66->100%. Cubiertos los tres estados del ciclo de F5, F6, autocommit OFF,
+      el hint de F9 y los estados de transaccion
+- [x] `key_bindings.py` 61->100%. F2, F3, F4 y F6 no tenian ningun test (F5 y F9 si). Tambien
+      los dos bindings de `enter` que comparten tecla y se diferencian solo por el filtro
+- [x] `packages/prompt_utils.py` 48->100%. Lo importante: `-y/--yes` saltea la confirmacion
+      destructiva TAMBIEN sin tty, porque `force` se chequea ANTES del test de tty. Los dos
+      tests que habia estaban envueltos en `if not stdin.isatty()`, asi que en terminal no
+      probaban nada, y el primero ni llegaba al chequeo que su nombre menciona
+- [x] `completion_refresher.py` 64->100%. Los 9 refreshers nunca se habian ejecutado en un test
+- [x] `pgstyle.py` 48->100%. NO tenia archivo de test. Los tests definen su propio estilo de
+      pygments en vez de afirmar sobre "native", cuyos colores cambian entre versiones
+- [x] TOTAL del repo: 81 -> 87%. 3594 passed (eran 3321 al empezar el dia): +273 tests
+# DOS SUPUESTOS MIOS QUE LA MEDICION CORRIGIO, y por eso conviene medir antes de afirmar:
+#   1) El connstring de `-d` NO ignora `-h`/`-p`: lo que el connstring dice gana, lo que omite
+#      lo completan los flags. El codigo estaba bien; el test mio estaba mal.
+#   2) `get_app()` fuera de una aplicacion NO lanza: devuelve un DummyApplication con
+#      selection_state None. El comentario que escribi decia lo contrario
+
 ### TESTS DE LOS WRAPPERS DE BACKUP + BUG DE URI EN -d (pedido de Diego: "subir la calidad")
 # Punto de partida medido con coverage, no a ojo: dumpall.py 51% y SIN archivo de test propio,
 # dump.py 68%. Lo no cubierto era justo parse_connection_args y build_tunneled_args, o sea el
