@@ -9,12 +9,13 @@ Upcoming
 # mergeables y con CI verde (el codex-review rojo de #1637/#1640 es el ruido de siempre).
 - [ ] #1647 "# es XOR, no comentario" (arregla el issue #1646). MANDADO 2026-09-21, faltaba
       en la lista de "NUESTROS PRs". dbaty confirmo el bug en el issue; el PR sin review
-- [ ] MANDAR `upstream/test-future-proofing`: 2026-10-07 rebaseada sobre original/main
-      (101e523e), 579 tests de los 2 archivos verdes con -W error, autores limpios, PUSHEADA
-      al fork. Falta abrir el PR (mensaje a aprobar por Diego). SIN changelog: dbaty insistio
-      el 01/10 en el #1625 en que el changelog es para usuarios y los cambios de test no van
-- [ ] 4.7.2 esta bumpeada, en fork/main e instalada, pero SIN tag ni release (la ultima
-      release del fork es v4.6.2). Decidir si se taggea ahora o se espera al 17/10
+- [ ] `upstream/test-future-proofing`: 2026-10-07 rebaseada sobre original/main (101e523e),
+      579 tests verdes con -W error, autores limpios, pusheada al fork. Diego el 07/10: "nada
+      a upstream", asi que NO se abre PR por ahora; la rama queda lista. SIN changelog: dbaty
+      insistio el 01/10 en el #1625 en que los cambios de test no van al changelog
+- [x] 4.7.2 RELEASED 2026-10-07 a pedido de Diego ("saca la 4.7.2 en release"): tag v4.7.2,
+      GitHub release con el wheel y notas de todo lo que hay desde v4.6.2, instalada en `t`.
+      Falta instalarla en `d` (sin respuesta por ssh ese dia)
 - [ ] El .git de `d` quedo atras: `main` local en 9d6d114 (19/08), 146 commits detras de
       fork/main, con el working tree IDENTICO a fork/main (lo trae unison, que no sincroniza
       .git). Ademas user.name ahi sigue en "DiegoDAF" (el arreglo a "Diego" fue solo en `t`).
@@ -301,9 +302,22 @@ Upcoming
 - [x] Suite completa contra el descartable: 3600 passed, 8 skipped, 1 xfailed. ruff, format y
       mypy limpios. Changelog en Upcoming (y plegados dos "Bug fixes:" seguidos que habia)
 - [x] Rama `upstream/ef-failed-transaction` sobre original/main, pusheada al fork, autores
-      limpios. Falta abrir el PR (mensaje a aprobar por Diego)
-- [ ] Al mandar los PRs, revisar el comentario inline de CodeQL (regla del 21/09): los dos
+      limpios. Diego: "nada a upstream", sin PR por ahora
+- [ ] Si algun dia se manda, revisar el comentario inline de CodeQL (regla del 21/09): los dos
       `except psycopg.Error` nuevos llevan comentario explicando por que
+
+### RELEASE 4.7.2 (pedido de Diego: "nada a upstream, saca la 4.7.2 en release e instalala aca")
+- [x] Upcoming plegado en la seccion 4.7.2 del changelog, fechada 2026-10-07 (27 items: 8
+      fixes, 6 features, 13 internos; habia dos "Internal:" y quedaron en uno). Commit 55fbfc36
+- [x] Wheel nuevo (el del 22/09 fue a la papelera), instalado en `t` con
+      `--force --reinstall --python 3.12` y `[sshtunnel,keyring]`. Verificado: --version 4.7.2,
+      sha256 del codigo instalado = repo (765f7ae5...), keyring SecretService activo, paramiko
+      5.0, sqlparse 0.6.0, `-c` contra DEV por tunel SSH responde
+- [x] Tag anotado v4.7.2 + `git push fork main --tags` (se fue tambien el v4.7.1 de upstream,
+      como ya estaba el v4.7.0; inofensivo) + GitHub release "pgcli.daf 4.7.2" con el wheel
+- [x] El snippet de chequeo de keyring del CLAUDE.md estaba roto (`from pgcli import logging`);
+      corregido alli. Tabla de releases y proxima revision (2026-11-17) actualizadas
+- [ ] Instalar 4.7.2 en `d` cuando vuelva a responder (y alinear su .git, ver arriba)
 
 ### CI DEL FORK ROJO POR apt (no por el codigo)
 - [x] El run del push a2b603ab..d42bf016 cayo en "Install pgbouncer": el runner trae listas de
@@ -311,7 +325,7 @@ Upcoming
       (404). Fail-fast cancelo los otros 4 jobs. Relanzado: fallo igual, es la imagen
 - [x] FIX d1179ce6: `sudo apt-get update` antes del `apt install pgbouncer`. CI verde con ese
       commit. Misma linea en la rama `upstream/ci-apt-update` (upstream tiene el mismo paso
-      sin update), pusheada al fork, autores limpios. Falta abrir el PR (mensaje a aprobar)
+      sin update), pusheada al fork, autores limpios. Diego: "nada a upstream", sin PR
 
 ### GITHUB: push rechazado con "Internal Server Error" (16:00-16:30 UTC)
 - [x] 4 intentos seguidos rechazados para un commit nuevo, con cualquier nombre de rama; refs a
