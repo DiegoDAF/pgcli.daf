@@ -1,6 +1,9 @@
 Upcoming
 ========
 
+4.7.2 (2026-10-07) - upstream: 4.7.1
+====================================
+
 Bug fixes:
 ----------
 
@@ -59,27 +62,6 @@ Bug fixes:
   statement. Reported upstream as dbcli/pgcli#1646; the underlying sqlparse
   limitation is andialbrecht/sqlparse#539.
 
-Features:
----------
-
-* Accept SQL pasted out of a markdown document. A block copied from a chat or
-  an LLM answer carries its code fence, and sometimes the prose above it, so
-  the server replies with a syntax error at or near "\`\`\`", which says
-  nothing about the real problem. The fence is now removed and the statement
-  runs. Text inside a fence wins, because a fence states exactly where the
-  code is; without a fence, leading lines are dropped up to the first one that
-  starts a statement, and if there is no such line the text is passed through
-  untouched so the error still comes from the server. A lone fence is ignored
-  rather than sent. What was dropped is reported, so running something other
-  than what was pasted is never silent. Backslash commands, leading comments,
-  CTEs and parenthesised queries are left alone.
-
-4.7.2 (2026-09-21) - upstream: 4.7.1
-====================================
-
-Bug fixes:
-----------
-
 * SSH tunnel: honor ``ProxyJump`` from ``~/.ssh/config``. paramiko returns that
   directive verbatim instead of turning it into a ProxyCommand the way ssh
   does, so a database host reachable only through a jump host was dialed
@@ -101,6 +83,65 @@ Bug fixes:
   history or log with wider permissions is tightened on the next run (the
   config only when pgcli creates it); device nodes such as ``/dev/null``,
   FIFOs and files owned by someone else are left alone.
+
+Features:
+---------
+
+* Accept SQL pasted out of a markdown document. A block copied from a chat or
+  an LLM answer carries its code fence, and sometimes the prose above it, so
+  the server replies with a syntax error at or near "\`\`\`", which says
+  nothing about the real problem. The fence is now removed and the statement
+  runs. Text inside a fence wins, because a fence states exactly where the
+  code is; without a fence, leading lines are dropped up to the first one that
+  starts a statement, and if there is no such line the text is passed through
+  untouched so the error still comes from the server. A lone fence is ignored
+  rather than sent. What was dropped is reported, so running something other
+  than what was pasted is never silent. Backslash commands, leading comments,
+  CTEs and parenthesised queries are left alone.
+
+* EXPLAIN diagnostics. With ``explain_summary`` on, the plan is now read for
+  the problems its own numbers state outright: a hash or sort that spilled to
+  disk, a bitmap that went lossy, a filter discarding far more rows than it
+  keeps, an index-only scan still fetching from the heap, an inner side
+  re-executed thousands of times, and parallel workers the planner asked for
+  but did not get. Each one tags its node in the tree and is explained below
+  it, grouped by what you would change: ``work_mem``, ``index``, ``vacuum``,
+  ``parallel`` or ``plan``. The thresholds are deliberately conservative, since
+  a warning that fires on a healthy plan teaches you to ignore all of them.
+  Every rule was checked against a live server rather than read off the docs.
+
+* Fix explain mode (F5) rejecting a statement that already is an ``EXPLAIN``.
+  pgcli prepended its own ``EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT
+  JSON)`` unconditionally, so typing a full ``explain (analyze, buffers, wal,
+  memory, serialize) select ...`` produced ``EXPLAIN (...) explain (...)`` and
+  the server answered with a syntax error, while the same statement worked in
+  psql. The options written by the user are now kept, since they are usually
+  richer than the fixed prefix, and only what the visualizer needs is added:
+  ``ANALYZE``, ``COSTS`` and ``FORMAT JSON``. A plan requested as ``text``,
+  ``yaml`` or ``xml`` is shown verbatim instead of failing, and the visualizer
+  no longer raises ``KeyError`` or divides by zero on a plan that carries no
+  costs or no timings.
+
+* The EXPLAIN summary now reports the query statistics that
+  explain.depesz.com shows under its Stats tab: total I/O (blocks read and
+  written, with the temporary traffic called out separately), time grouped by
+  node type with a count of each, and time by table broken down by the scan
+  that read it. ``Time by relation`` became ``By table`` and gained the scan
+  counts.
+
+* F5 now cycles through three states instead of toggling two: off, the plan,
+  and the plan with the analysis summary. The toolbar says which one is
+  active, so the summary can be turned on for one query without editing the
+  config. Turning explain mode off restores whatever ``explain_summary`` says,
+  so a user who enabled it in the config keeps it.
+
+* Restore the output column for functions whose arguments have no names.
+  ``fields()`` zipped ``arg_names`` with ``arg_modes`` and gave up when the
+  names were missing, so a function such as
+  ``labels(variadic text[]) returns hstore`` offered no column at all and
+  ``select labels from labels(...)`` had nothing to complete. When no argument
+  carries an output mode, the function name is used as the column name, which
+  is what pgcli already does for functions without output parameters.
 
 Internal:
 ---------
@@ -170,60 +211,6 @@ Internal:
   bounded, and the enclosing ``Host`` context restored afterwards. Seventeen
   configurations were compared against ``ssh -G`` and all match.
 
-Features:
----------
-
-* EXPLAIN diagnostics. With ``explain_summary`` on, the plan is now read for
-  the problems its own numbers state outright: a hash or sort that spilled to
-  disk, a bitmap that went lossy, a filter discarding far more rows than it
-  keeps, an index-only scan still fetching from the heap, an inner side
-  re-executed thousands of times, and parallel workers the planner asked for
-  but did not get. Each one tags its node in the tree and is explained below
-  it, grouped by what you would change: ``work_mem``, ``index``, ``vacuum``,
-  ``parallel`` or ``plan``. The thresholds are deliberately conservative, since
-  a warning that fires on a healthy plan teaches you to ignore all of them.
-  Every rule was checked against a live server rather than read off the docs.
-
-* Fix explain mode (F5) rejecting a statement that already is an ``EXPLAIN``.
-  pgcli prepended its own ``EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT
-  JSON)`` unconditionally, so typing a full ``explain (analyze, buffers, wal,
-  memory, serialize) select ...`` produced ``EXPLAIN (...) explain (...)`` and
-  the server answered with a syntax error, while the same statement worked in
-  psql. The options written by the user are now kept, since they are usually
-  richer than the fixed prefix, and only what the visualizer needs is added:
-  ``ANALYZE``, ``COSTS`` and ``FORMAT JSON``. A plan requested as ``text``,
-  ``yaml`` or ``xml`` is shown verbatim instead of failing, and the visualizer
-  no longer raises ``KeyError`` or divides by zero on a plan that carries no
-  costs or no timings.
-
-
-* The EXPLAIN summary now reports the query statistics that
-  explain.depesz.com shows under its Stats tab: total I/O (blocks read and
-  written, with the temporary traffic called out separately), time grouped by
-  node type with a count of each, and time by table broken down by the scan
-  that read it. ``Time by relation`` became ``By table`` and gained the scan
-  counts.
-
-
-* F5 now cycles through three states instead of toggling two: off, the plan,
-  and the plan with the analysis summary. The toolbar says which one is
-  active, so the summary can be turned on for one query without editing the
-  config. Turning explain mode off restores whatever ``explain_summary`` says,
-  so a user who enabled it in the config keeps it.
-
-
-* Restore the output column for functions whose arguments have no names.
-  ``fields()`` zipped ``arg_names`` with ``arg_modes`` and gave up when the
-  names were missing, so a function such as
-  ``labels(variadic text[]) returns hstore`` offered no column at all and
-  ``select labels from labels(...)`` had nothing to complete. When no argument
-  carries an output mode, the function name is used as the column name, which
-  is what pgcli already does for functions without output parameters.
-
-
-Internal:
----------
-
 * Merged upstream 4.7.1. That release line is where our ``-c``/``--command``,
   ``-f``/``--file``, ``-y``/``--yes`` and ``-t``/``--tuples-only`` reached
   released pgcli: 4.7.0 shipped them and 4.7.1 fixed the version string it
@@ -231,6 +218,11 @@ Internal:
   ``@dbtest`` marker on
   ``test_execute_statements_does_not_split_inside_literals``, which we had
   applied here on 2026-09-16.
+
+* CI: refresh the apt lists before installing pgbouncer. The runner image
+  ships lists from the day it was built, and when the mirror has moved on the
+  install fails with a 404 for the old ``libevent`` and fail-fast cancels every
+  matrix job, which is what happened on 2026-10-07.
 
 4.6.2 (2026-09-16) - upstream: 4.6.0
 ====================================
