@@ -1,6 +1,37 @@
 Upcoming
 ==============
 
+### RELEVAMIENTO DE UPSTREAM 2026-10-02 (que cambio desde el 22/09)
+# original/main SIN commits nuevos desde la 4.7.1 (101e523e, 20/09). fork/main no tiene nada
+# de upstream sin mergear. La cola subio de 15 a 21 PRs abiertos y los mantenedores casi no
+# aparecieron: lo unico de un mantenedor desde el 21/09 es una linea de dbaty en el #1625.
+# Nuestros 5 abiertos (#1628, #1637, #1640, #1645, #1647) siguen SIN review humano, todos
+# mergeables y con CI verde (el codex-review rojo de #1637/#1640 es el ruido de siempre).
+- [ ] #1647 "# es XOR, no comentario" (arregla el issue #1646). MANDADO 2026-09-21, faltaba
+      en la lista de "NUESTROS PRs". dbaty confirmo el bug en el issue; el PR sin review
+- [ ] MANDAR `upstream/test-future-proofing`: 2026-10-07 rebaseada sobre original/main
+      (101e523e), 579 tests de los 2 archivos verdes con -W error, autores limpios, PUSHEADA
+      al fork. Falta abrir el PR (mensaje a aprobar por Diego). SIN changelog: dbaty insistio
+      el 01/10 en el #1625 en que el changelog es para usuarios y los cambios de test no van
+- [ ] 4.7.2 esta bumpeada, en fork/main e instalada, pero SIN tag ni release (la ultima
+      release del fork es v4.6.2). Decidir si se taggea ahora o se espera al 17/10
+- [ ] El .git de `d` quedo atras: `main` local en 9d6d114 (19/08), 146 commits detras de
+      fork/main, con el working tree IDENTICO a fork/main (lo trae unison, que no sincroniza
+      .git). Ademas user.name ahi sigue en "DiegoDAF" (el arreglo a "Diego" fue solo en `t`).
+      No commitear desde `d` hasta alinear: `git reset fork/main` (mixto, no toca archivos).
+      2026-10-07: `d` no respondio por ssh (timeout), sigue pendiente
+# TERCEROS con movimiento:
+#   - #1636 COPY (anandghegde): el autor volvio a contestar el 02/10 la pregunta de j-bennet
+#     del 14/09; sin respuesta de mantenedores. Nosotros ya lo tenemos
+#   - #1642 `\crosstabview` (anandghegde, NUEVO 19/09, +355 lineas, toca main.py, pgbuffer.py
+#     y pgexecute.py): sin reviews. No lo tenemos; cherry-pick cuando entre
+#   - #1633 Keychain macOS: dos approvals de UsmanGhias, que NO es mantenedor (association
+#     NONE); no destraba el merge
+#   - #1625 xfail: dbaty repitio el 01/10 que saque la entrada del changelog
+#   - #1629 (dbaty, SQL_ASCII) sigue en draft, parado desde el 04/09: 28 dias. Bloquea el #1628
+#   - #1641 (dbaty, pin de actions + Dependabot): abierto desde el 19/09, sin review
+#   - sin cambios: #1638, #1631, #1635, #1632, #1613, #1605, #1571 y la discussion #1603
+
 ### EN ESPERA, DECISION DE DIEGO (aplazado el 2026-09-22: "lo vemos mas tarde")
 - [x] 1) PERMISOS DEL .pgpass: RESUELTO 2026-09-22 (a2b603ab), con el alcance acotado que
       pidio Diego ("tirale el control de 0600"): se agrego SOLO el chequeo de permisos, no la
@@ -240,6 +271,52 @@ Upcoming
 - [x] CERRADO 2026-09-17: las tres ramas que figuraban como borrables (feature/stream-results,
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
+
+2026-10-07
+===================
+
+### RELEVAMIENTO DE UPSTREAM (pedido de Diego: "controla el proyecto principal por novedades")
+- [x] original/main SIGUE en 101e523e (4.7.1, 20/09): 17 dias sin commits. Cero actividad de
+      mantenedores desde la linea de dbaty del 01/10 en #1625. 21 PRs abiertos, los mismos del
+      02/10. Nuestros 5 (#1628, #1637, #1640, #1645, #1647) sin review humano, mergeables, CI
+      verde salvo el codex-review de siempre en #1637/#1640
+- [x] Issues: 29 abiertos, ninguno nuevo desde el 21/09. Triage de los que podiamos arreglar:
+      #1392 ARREGLADO HOY (abajo). #1204 (NoneType en fields()) YA guardado en el fork, es lo
+      mismo que proponen #1605 y #1638 arriba. #1512 (# en password de pg_service) y #1505
+      (COPY cuelga la sesion) ya resueltos en 4.6.2. #1422 (bytes por socket unix) cubierto por
+      los guards de SQL_ASCII. #1607 no reproducible segun devadathanmb. #1606/#1608 son
+      keybindings de vi-mode, territorio de prompt_toolkit (ya hay issue alla, el 2075)
+- [ ] #1521/#1478 (titulo de \d con comodines y \d+): arreglado en pgspecial PR 159 y
+      TAGGEADO como 2.3.0 el 14/09 en GitHub, pero NO ESTA EN PYPI (uv: "no version of
+      pgspecial==2.3.0"). Cuando lo publiquen: subir el piso a `pgspecial>=2.3.0` y correr la
+      suite entera (el titulo nuevo puede mover expectativas de \d). Nuestro venv tiene 2.2.1
+
+### FIX #1392: \ef y \ev dentro de una transaccion abortada tiraban abajo pgcli
+- [x] REPRODUCIDO contra PG 18 descartable: `begin; select 1/0;` y despues \ef f (o \ev v)
+      -> psycopg.errors.InFailedSqlTransaction sin atrapar. Root cause: es InternalError, no
+      ProgrammingError, y run_cli() solo atrapa RuntimeError alrededor del editor
+- [x] FIX en pgexecute.py (function_definition y view_definition): `except psycopg.Error`
+      -> RuntimeError con el mensaje del servidor. El REPL lo imprime en rojo y la transaccion
+      queda abierta para ROLLBACK, como psql. 2 tests @dbtest que fallan sin el fix
+- [x] Suite completa contra el descartable: 3600 passed, 8 skipped, 1 xfailed. ruff, format y
+      mypy limpios. Changelog en Upcoming (y plegados dos "Bug fixes:" seguidos que habia)
+- [x] Rama `upstream/ef-failed-transaction` sobre original/main, pusheada al fork, autores
+      limpios. Falta abrir el PR (mensaje a aprobar por Diego)
+- [ ] Al mandar los PRs, revisar el comentario inline de CodeQL (regla del 21/09): los dos
+      `except psycopg.Error` nuevos llevan comentario explicando por que
+
+### GITHUB: push rechazado con "Internal Server Error" (16:00-16:30 UTC)
+- [x] 4 intentos seguidos rechazados para un commit nuevo, con cualquier nombre de rama; refs a
+      objetos que ya tenia el repo pasaban. githubstatus decia "All Systems Operational". Al
+      quinto intento entro sin cambiar nada. Si vuelve a pasar: esperar y reintentar, no
+      recrear el commit
+
+2026-10-02
+===================
+
+### RELEVAMIENTO DE UPSTREAM (pedido de Diego: "ponete al dia con el proyecto padre")
+- [x] Fetch de `fork` y `original` desde `d`, PRs e issues por la API. Resultado y pendientes
+      en la seccion "RELEVAMIENTO DE UPSTREAM 2026-10-02" de Upcoming
 
 2026-09-22
 ===================
