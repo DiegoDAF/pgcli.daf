@@ -44,6 +44,7 @@ jobs:
 
       - name: Install pgbouncer
         run: |
+            sudo apt-get update
             sudo apt install pgbouncer -y
 
             sudo chmod 666 /etc/pgbouncer/*.*
