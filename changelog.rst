@@ -1,6 +1,13 @@
 Upcoming
 ========
 
+Bug fixes:
+----------
+* Fix a crash of `\ef` and `\ev` when run inside an aborted transaction
+  (issue #1392). The server's "current transaction is aborted" error is now
+  printed like any other error, and the transaction is left open for you to
+  `ROLLBACK`, as in `psql`.
+
 
 4.7.1 (2026-09-20)
 ==================
