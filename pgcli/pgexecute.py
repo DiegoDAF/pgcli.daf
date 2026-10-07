@@ -637,6 +637,13 @@ class PGExecute:
                 cur.execute(sql, (spec,))
             except psycopg.ProgrammingError:
                 raise RuntimeError(f"View {spec} does not exist.")
+            except psycopg.Error as e:
+                # Anything else the server refuses, typically
+                # InFailedSqlTransaction (25P02) when \ev runs inside an
+                # aborted transaction. The REPL only catches RuntimeError
+                # around the editor commands, so let the caller print the
+                # server message instead of crashing (upstream issue #1392).
+                raise RuntimeError(str(e).strip())
             result = ViewDef(*cur.fetchone())
             if result.relkind == "m":
                 template = "CREATE OR REPLACE MATERIALIZED VIEW {name} AS \n{stmt}"
@@ -664,6 +671,11 @@ class PGExecute:
                 return result[0]
             except psycopg.ProgrammingError:
                 raise RuntimeError(f"Function {spec} does not exist.")
+            except psycopg.Error as e:
+                # Same as view_definition(): \ef inside an aborted
+                # transaction raised InFailedSqlTransaction straight through
+                # the REPL (upstream issue #1392).
+                raise RuntimeError(str(e).strip())
 
     def schemata(self):
         """Returns a list of schema names in the database"""

@@ -4,6 +4,15 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``\ef`` and ``\ev`` no longer crash pgcli when run inside an aborted
+  transaction. The server answers "current transaction is aborted, commands
+  ignored until end of transaction block", which psycopg raises as
+  ``InFailedSqlTransaction``; only ``ProgrammingError`` was caught, so the
+  exception escaped the REPL with a traceback and the session was lost. The
+  server message is now printed in red, like any other error, and the
+  transaction stays open for you to ``ROLLBACK``, which is what ``psql`` does.
+  Upstream issue #1392.
+
 * ``pgcli_dump`` and ``pgcli_dumpall`` now apply libpq's rule to ``.pgpass``:
   a file that is readable by group or others is refused, with the same warning
   libpq prints. They read it regardless of its mode, so a backup could
@@ -13,9 +22,6 @@ Bug fixes:
   permission check now lives in one place (``pgpass.has_safe_permissions``)
   and both use it. The matching logic is untouched, so which line wins does
   not change.
-
-Bug fixes:
-----------
 
 * ``pgcli_dump`` and ``pgcli_dumpall`` now route a URI connection string through
   the SSH tunnel. Given ``-d postgresql://user@db.internal:5432/mydb`` they read

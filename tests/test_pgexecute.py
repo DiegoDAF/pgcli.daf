@@ -722,6 +722,37 @@ def test_nonexistent_view_definition(executor):
         executor.view_definition("mvw1")
 
 
+def _abort_transaction(executor):
+    """Open a transaction and fail a statement inside it, so the server
+    rejects everything until ROLLBACK (SQLSTATE 25P02)."""
+    with executor.conn.cursor() as cur:
+        cur.execute("begin")
+        with pytest.raises(psycopg.errors.DivisionByZero):
+            cur.execute("select 1/0")
+
+
+@dbtest
+def test_function_definition_in_failed_transaction(executor):
+    # Upstream issue #1392: \ef inside an aborted transaction took the whole
+    # REPL down, because InFailedSqlTransaction is not a ProgrammingError and
+    # run_cli() only catches RuntimeError around the editor commands.
+    run(executor, "create or replace function the_number_three() returns int language sql as 'select 3'")
+    _abort_transaction(executor)
+    with pytest.raises(RuntimeError, match="current transaction is aborted"):
+        executor.function_definition("the_number_three")
+    executor.conn.rollback()
+
+
+@dbtest
+def test_view_definition_in_failed_transaction(executor):
+    run(executor, "create table tbl1 (a text, b numeric)")
+    run(executor, "create view vw1 AS SELECT * FROM tbl1")
+    _abort_transaction(executor)
+    with pytest.raises(RuntimeError, match="current transaction is aborted"):
+        executor.view_definition("vw1")
+    executor.conn.rollback()
+
+
 @dbtest
 def test_short_host(executor):
     with patch.object(executor, "host", "localhost"):
