@@ -305,6 +305,14 @@ Upcoming
 - [ ] Al mandar los PRs, revisar el comentario inline de CodeQL (regla del 21/09): los dos
       `except psycopg.Error` nuevos llevan comentario explicando por que
 
+### CI DEL FORK ROJO POR apt (no por el codigo)
+- [x] El run del push a2b603ab..d42bf016 cayo en "Install pgbouncer": el runner trae listas de
+      apt del dia de la imagen (ubuntu24/20260927.320) y el mirror ya no tenia ese libevent
+      (404). Fail-fast cancelo los otros 4 jobs. Relanzado: fallo igual, es la imagen
+- [x] FIX d1179ce6: `sudo apt-get update` antes del `apt install pgbouncer`. CI verde con ese
+      commit. Misma linea en la rama `upstream/ci-apt-update` (upstream tiene el mismo paso
+      sin update), pusheada al fork, autores limpios. Falta abrir el PR (mensaje a aprobar)
+
 ### GITHUB: push rechazado con "Internal Server Error" (16:00-16:30 UTC)
 - [x] 4 intentos seguidos rechazados para un commit nuevo, con cualquier nombre de rama; refs a
       objetos que ya tenia el repo pasaban. githubstatus decia "All Systems Operational". Al
