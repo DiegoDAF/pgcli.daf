@@ -284,7 +284,14 @@ Upcoming
 - [x] FIX 0902ea1e: solo cuentan las lineas con contenido; si antes del statement hay solo
       blancos, el texto pasa intacto y sin mensaje. 2 tests nuevos (fallan sin el fix) y el
       test de prosa existente ahora espera 1 linea, no 2. En Upcoming del changelog, SIN
-      release: la 4.7.2 instalada en `t` todavia reporta el mensaje si el -c arranca con \n
+      release
+- [x] BUILD LOCAL INSTALADA EN `t` (pedido de Diego: "pasalo a t"): suite 3602 passed, 8
+      skipped, 1 xfailed contra PG 18 descartable; ruff, format y mypy limpios. Instalada con
+      `--force --reinstall --python 3.12` y `[sshtunnel,keyring]`. Sigue diciendo 4.7.2 (sin
+      bump) pero NO es el wheel del release: sha256 del codigo instalado b044e0d785373b05
+      (el del release era 765f7ae5...). keyring SecretService activo; `-c` con salto de linea
+      inicial contra DEV ya no muestra el mensaje. El wheel del release quedo en dist/ como
+      `pgcli-4.7.2-py3-none-any.whl.release-v4.7.2-bak-20261008-1109` (y en el GitHub release)
 
 2026-10-07
 ===================
