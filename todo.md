@@ -273,6 +273,19 @@ Upcoming
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
 
+2026-10-08
+===================
+
+### "(1 line(s) of text before the statement removed)" en un script con -c (reporte de Diego)
+- [x] NO se reproducia ni local ni por DSN dev con el texto actual del script. El log DEBUG de
+      pgcli (pgcli-Wed.log, 07/10 11:19) mostro que el `-c` de esa corrida empezaba con una
+      LINEA EN BLANCO antes del `select`; el script se edito el 08/10 10:57 y ya no la tiene.
+      El stripper de markdown contaba las lineas en blanco como prosa
+- [x] FIX 0902ea1e: solo cuentan las lineas con contenido; si antes del statement hay solo
+      blancos, el texto pasa intacto y sin mensaje. 2 tests nuevos (fallan sin el fix) y el
+      test de prosa existente ahora espera 1 linea, no 2. En Upcoming del changelog, SIN
+      release: la 4.7.2 instalada en `t` todavia reporta el mensaje si el -c arranca con \n
+
 2026-10-07
 ===================
 
