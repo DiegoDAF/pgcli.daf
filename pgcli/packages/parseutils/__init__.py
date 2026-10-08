@@ -136,7 +136,13 @@ def strip_markdown(text):
         if _SQL_LINE_START.match(line):
             if index == 0:
                 return text, ""  # already SQL: the common case, untouched
-            return "\n".join(lines[index:]), "%d line(s) of text before the statement" % index
+            # Blank lines are not prose: a -c string or a script that starts
+            # with a newline is SQL as written, and the server does not mind
+            # the whitespace. Report only lines that carried something.
+            prose = sum(1 for dropped in lines[:index] if dropped.strip())
+            if not prose:
+                return text, ""
+            return "\n".join(lines[index:]), "%d line(s) of text before the statement" % prose
     return text, ""  # nothing that looks like SQL: let the server complain
 
 

@@ -48,7 +48,7 @@ def test_several_statements_inside_the_fence_are_kept():
 def test_prose_without_a_fence_stops_at_the_first_statement():
     sql, removed = strip_markdown("Here is the query you asked for:\n\nselect 1;")
     assert sql == "select 1;"
-    assert "2 line(s)" in removed
+    assert "1 line(s)" in removed  # the blank line between prose and SQL is not counted
 
 
 # --- what must NOT be touched ---------------------------------------------
@@ -94,3 +94,18 @@ def test_backticks_inside_a_string_are_not_a_fence():
 
 def test_empty_input():
     assert strip_markdown("") == ("", "")
+
+
+def test_leading_blank_lines_are_not_reported():
+    # A -c "<newline>select ..." or a heredoc that opens with an empty line is
+    # SQL as written; the server does not mind the whitespace, and reporting
+    # "1 line(s) of text removed" made a script look as if it had dropped
+    # something.
+    text = "\nselect\n  1 as a;"
+    assert strip_markdown(text) == (text, "")
+    text = "\n\n   \nselect 1;"
+    assert strip_markdown(text) == (text, "")
+
+
+def test_blank_lines_do_not_count_as_dropped_prose():
+    assert strip_markdown("\nSome prose.\n\nselect 1;") == ("select 1;", "1 line(s) of text before the statement")

@@ -1,6 +1,16 @@
 Upcoming
 ========
 
+Bug fixes:
+----------
+
+* A ``-c`` string or a script that starts with a blank line no longer reports
+  ``1 line(s) of text before the statement removed``. The markdown stripper
+  counted every line before the first statement, blank ones included, so a
+  shell heredoc or a ``-c "`` followed by a newline was reported as if prose
+  had been dropped. Only lines that carried something are counted now, and
+  text made of blank lines only is passed through untouched.
+
 4.7.2 (2026-10-07) - upstream: 4.7.1
 ====================================
 
