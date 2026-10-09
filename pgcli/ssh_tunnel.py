@@ -185,16 +185,69 @@ def _proxy_command_from_host_config(host_config: "dict[str, Any]", target_host: 
     return None
 
 
+class _ChannelOpenFailure(logging.Filter):
+    """Keep the reason the SSH server gave for refusing a forwarded channel.
+
+    paramiko logs it ("Secsh channel 0 open FAILED: Name or service not known:
+    Connect failed") but raises only ``ChannelException(2, 'Connect failed')``,
+    which drops the part that says what went wrong on the far side.
+    """
+
+    _PATTERN = re.compile(r"open FAILED: (.*): [^:]*$")
+
+    def __init__(self):
+        super().__init__()
+        self.reason: Optional[str] = None
+
+    def filter(self, record):
+        match = self._PATTERN.search(record.getMessage())
+        if match:
+            self.reason = match.group(1)
+        return True
+
+
+def _bind_forward_handler(transport, remote_host, remote_port, ssh_hostname, logger, log_channel):
+    """Return a _ForwardHandler subclass bound to one tunnel.
+
+    The transport is moved to its own log channel under ``pgcli`` so that
+    paramiko's raw "Secsh channel ... open FAILED" line goes to pgcli's log
+    instead of the terminal, and so the reason it carries can be reported in a
+    message that names the hosts involved.
+    """
+    transport.set_log_channel(log_channel)
+    channel_logger = logging.getLogger(log_channel)
+    # Same level paramiko's own logger effectively had (no handler, so only
+    # warnings and up surfaced); keeps per-connection debug chatter out of
+    # pgcli's log.
+    channel_logger.setLevel(logging.WARNING)
+    channel_failure = _ChannelOpenFailure()
+    channel_logger.addFilter(channel_failure)
+    return type(
+        "BoundForwardHandler",
+        (_ForwardHandler,),
+        {
+            "ssh_transport": transport,
+            "remote_host": remote_host,
+            "remote_port": remote_port,
+            "ssh_hostname": ssh_hostname,
+            "logger": logger,
+            "channel_failure": channel_failure,
+        },
+    )
+
+
 class _ForwardHandler(socketserver.StreamRequestHandler):
     """Handles a single forwarded connection through the SSH tunnel.
 
-    Class attributes are set dynamically by _NativeSSHTunnel via type().
+    Class attributes are set dynamically by _bind_forward_handler().
     """
 
     ssh_transport: paramiko.Transport
     remote_host: str
     remote_port: int
+    ssh_hostname: str = "the SSH server"
     logger: logging.Logger
+    channel_failure: Optional[_ChannelOpenFailure] = None
 
     def handle(self):
         try:
@@ -204,7 +257,16 @@ class _ForwardHandler(socketserver.StreamRequestHandler):
                 self.request.getpeername(),
             )
         except Exception as e:
-            self.logger.error("Failed to open SSH channel: %s", e)
+            # Without this the user only sees libpq's "server closed the
+            # connection unexpectedly", which points at the database rather
+            # than at the SSH server that could not reach it (for example a
+            # typo in the DSN host, which only the far side fails to resolve).
+            reason = (self.channel_failure and self.channel_failure.reason) or getattr(e, "text", None) or str(e)
+            message = f"SSH tunnel: {self.ssh_hostname} could not open a connection to {self.remote_host}:{self.remote_port}: {reason}"
+            self.logger.error(message)
+            hint = f"Check the database host and port in the DSN, and that {self.ssh_hostname} can resolve and reach them."
+            sys.stderr.write(f"{message}\n{hint}\n")
+            sys.stderr.flush()
             return
 
         if channel is None:
@@ -365,15 +427,13 @@ class _NativeSSHTunnel:
                 self.secret_saver(context, kind, secret)
         self.logger.debug("SSH connection established to %s:%d", self.ssh_hostname, self.ssh_port)
 
-        handler_class = type(
-            "BoundForwardHandler",
-            (_ForwardHandler,),
-            {
-                "ssh_transport": self._ssh_client.get_transport(),
-                "remote_host": self.remote_host,
-                "remote_port": self.remote_port,
-                "logger": self.logger,
-            },
+        handler_class = _bind_forward_handler(
+            self._ssh_client.get_transport(),
+            self.remote_host,
+            self.remote_port,
+            self.ssh_hostname,
+            self.logger,
+            f"{__name__}.paramiko.{id(self)}",
         )
 
         self._server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler_class)

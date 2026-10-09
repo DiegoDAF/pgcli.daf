@@ -1225,3 +1225,48 @@ def test_ssh_tunnel_pgpass_not_consulted_when_password_given(mock_tunnel_manager
 
     mock_lookup.assert_not_called()
     assert mock_pgexecute.call_args[0][2] == "explicitpw"
+
+
+class _RefusingTransport:
+    """Stands in for paramiko.Transport when the SSH server refuses a
+    direct-tcpip channel: paramiko logs the server's reason, then raises an
+    exception that no longer carries it."""
+
+    def __init__(self, logged_reason):
+        self.logged_reason = logged_reason
+        self.log_name = None
+
+    def set_log_channel(self, name):
+        self.log_name = name
+
+    def open_channel(self, kind, dest, src):
+        if self.logged_reason:
+            logging.getLogger(self.log_name).error("Secsh channel 0 open FAILED: %s: Connect failed", self.logged_reason)
+        raise paramiko.ChannelException(2, "Connect failed")
+
+
+def _run_forward_handler(transport, log_channel):
+    from pgcli.ssh_tunnel import _bind_forward_handler
+
+    handler_class = _bind_forward_handler(transport, "db.internal", 5432, "bastion", logging.getLogger("test_tunnel"), log_channel)
+    near, far = socket.socketpair()
+    try:
+        handler_class(near, ("127.0.0.1", 0), None)
+    finally:
+        near.close()
+        far.close()
+
+
+def test_forward_handler_reports_why_the_ssh_server_refused_the_channel(capsys):
+    # Seen with a typo in a DSN host: the bastion cannot resolve it, and all
+    # the user got was libpq's "server closed the connection unexpectedly".
+    _run_forward_handler(_RefusingTransport("Name or service not known"), "pgcli.ssh_tunnel.paramiko.t1")
+    err = capsys.readouterr().err
+    assert "SSH tunnel: bastion could not open a connection to db.internal:5432: Name or service not known" in err
+    assert "Check the database host and port in the DSN" in err
+
+
+def test_forward_handler_falls_back_to_the_exception_text(capsys):
+    _run_forward_handler(_RefusingTransport(None), "pgcli.ssh_tunnel.paramiko.t2")
+    err = capsys.readouterr().err
+    assert "bastion could not open a connection to db.internal:5432: Connect failed" in err

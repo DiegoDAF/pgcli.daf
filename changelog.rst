@@ -12,6 +12,14 @@ Bug fixes:
   as written, and the service's own values win over pgcli's defaults.
   Upstream issue #1474.
 
+* When the SSH server cannot open the forwarded connection, pgcli now says so:
+  ``SSH tunnel: bastion could not open a connection to db.internal:5432: Name
+  or service not known``, followed by a hint to check the host and port. It
+  used to print paramiko's raw ``Secsh channel 0 open FAILED`` line and then
+  libpq's "server closed the connection unexpectedly", which points at the
+  database. A typo in a DSN host, which only the far side fails to resolve,
+  looked like a server crash. The raw paramiko line now goes to the log.
+
 * A ``-c`` string or a script that starts with a blank line no longer reports
   ``1 line(s) of text before the statement removed``. The markdown stripper
   counted every line before the first statement, blank ones included, so a
