@@ -1,27 +1,6 @@
 Upcoming
 ==============
 
-### CANDIDATOS 2026-10-09 (pedido de Diego: "algo mas en el todo o en los issues que nos sirva?")
-# Upstream quieto: original/main sin commits desde 4.7.1; desde el 07/10 solo un comentario en #1625.
-# pgspecial 2.3.0 sigue sin estar en PyPI (ultima 2.2.1).
-- [ ] BUG (upstream #1474, REPRODUCIDO en el fork): `pgcli service=x` descarta todo lo que no sea
-      host/port/user/dbname/password del .pg_service.conf. `connect_service()` arma la conexion
-      con esos 5 campos, asi que sslmode, sslrootcert, sslcert, sslkey, application_name,
-      connect_timeout, options... se pierden. Medido contra PG 18 sin SSL con `sslmode=require`
-      en el service: libpq rechaza ("server does not support SSL, but SSL was required") y pgcli
-      CONECTA sin cifrar, con su application_name por defecto. Fix probable: pasar `service=`
-      a libpq (que ya lee el archivo como corresponde) o mandar todos los campos del service
-- [ ] UX tunel SSH: cuando el bastion no puede abrir el canal (host mal escrito, DNS del lado
-      remoto), `_ForwardHandler.handle()` solo hace logger.error y cierra el socket, y el usuario
-      ve "server closed the connection unexpectedly" de libpq. Visto el 07/10 con un DSN con un
-      typo en el host. Mostrar en consola "el servidor SSH <bastion> no pudo conectar a
-      <host>:<port>: <motivo>" y sugerir revisar el host del DSN
-- [ ] Estado SSL al conectar, como el banner de psql ("SSL connection (protocol: TLSv1.3...)"),
-      y aviso cuando sslmode=prefer termino SIN cifrar. Motivo: un root.crt por defecto sin la
-      CA del servidor hace que prefer caiga a texto plano en silencio (medido el 08/10)
-- [ ] Higiene de DSN locales (fuera del repo): 20 DSN de RDS con sslmode=disable, la mayoria de
-      prod. Pasarlos a verify-ca con el bundle; dev/qa se pueden probar, prod lo prueba Diego
-
 ### RELEVAMIENTO DE UPSTREAM 2026-10-02 (que cambio desde el 22/09)
 # original/main SIN commits nuevos desde la 4.7.1 (101e523e, 20/09). fork/main no tiene nada
 # de upstream sin mergear. La cola subio de 15 a 21 PRs abiertos y los mantenedores casi no
@@ -293,6 +272,34 @@ Upcoming
 - [x] CERRADO 2026-09-17: las tres ramas que figuraban como borrables (feature/stream-results,
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
+
+2026-10-09
+===================
+
+### LOS 4 CANDIDATOS (pedido de Diego: "ok dale a los 4")
+- [x] 1) `pgcli service=x` respeta todo el service (upstream #1474), cf16232b. Medido: con
+      sslmode=require contra PG sin SSL, antes conectaba sin cifrar y ahora falla como libpq.
+      Se pasan las claves del archivo que pgcli ya parseo (no `service=` a libpq: busca los
+      archivos en otro orden y podria no encontrar un service que hoy anda). 2 tests
+- [x] 2) Error claro cuando el bastion no puede abrir el canal, cf05d666: "SSH tunnel: <bastion>
+      could not open a connection to <host>:<port>: Name or service not known" + pista. El
+      motivo solo viaja en el log de paramiko: el transporte del tunel loguea ahora a un canal
+      propio bajo pgcli con un filtro que lo guarda. La linea cruda de paramiko va al log, no
+      a la terminal. Probado con un host mal escrito via el bastion de dev. Tests con mutacion
+- [x] 3) Banner con `SSL: on/off (sslmode=...)` y aviso cuando prefer termino sin cifrar contra
+      un host remoto (incluye tunel), 35f4a277. Sin protocolo/cifrado: psycopg no expone
+      PQsslAttribute y pg_stat_ssl detras de un pooler es otro tramo. Probado contra dev:
+      prefer sin CA avisa, verify-ca con el bundle no. 6 tests (2 contra servidor vivo)
+- [x] Suite 3622 passed, 8 skipped, 1 xfailed; behave 50 escenarios ok (sin dump_commands,
+      que pega al PG local real); ruff, format, mypy y docutils limpios
+- [x] 4) DSN locales (fuera del repo): los 22 de RDS que iban con sslmode=disable o sin sslmode
+      pasaron a verify-ca con el bundle, con backup .bak-20261009-* de cada uno. Los 6 de
+      dev/qa probados: TLSv1.3. Los 16 archivos de prod (17 alias) NO se probaron (regla: no
+      conectar a prod); los prueba Diego con `bash ../check_dsn_ssl.sh`, que imprime el cp
+      para volver atras si alguno falla
+- [ ] Diego: correr `bash ~/scripts/pgcli/check_dsn_ssl.sh` y avisar si falla alguno
+- [ ] PUSH pendiente: `gh` estaba activo con la cuenta de trabajo; pushear cuando vuelva a DiegoDAF
+- [ ] Build local nueva para `t` cuando Diego quiera (la instalada no tiene estos 3 arreglos)
 
 2026-10-08
 ===================
