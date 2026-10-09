@@ -1,3 +1,4 @@
+import os
 import re
 from textwrap import dedent
 
@@ -1062,3 +1063,32 @@ def test_functions_str_unchanged(executor):
     assert func.arg_names == ("x",)
     assert func.return_type == "integer"
     assert func.arg_defaults == ()
+
+
+def _server_sees_ssl(executor):
+    with executor.conn.cursor() as cur:
+        cur.execute("select ssl from pg_stat_ssl where pid = pg_backend_pid()")
+        return cur.fetchone()[0]
+
+
+@dbtest
+def test_ssl_state_matches_the_server(executor):
+    # Whatever the test server is configured with, pgcli must report the
+    # same thing the server sees for this backend. No sslmode is given, so
+    # the effective value is libpq's default.
+    in_use, sslmode = executor.ssl_state()
+    assert in_use is _server_sees_ssl(executor)
+    assert sslmode == os.environ.get("PGSSLMODE", "prefer")
+
+
+@dbtest
+def test_ssl_state_with_ssl_disabled():
+    from pgcli.pgexecute import PGExecute
+    from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER
+
+    executor = PGExecute("postgres", POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT, None, sslmode="disable")
+    try:
+        assert executor.ssl_state() == (False, "disable")
+        assert _server_sees_ssl(executor) is False
+    finally:
+        executor.conn.close()

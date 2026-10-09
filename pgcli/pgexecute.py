@@ -624,6 +624,25 @@ class PGExecute:
                 cur.execute(fallback)
                 return cur.fetchone()[0]
 
+    def ssl_state(self):
+        """Return ``(in_use, sslmode)`` for the current connection, as libpq
+        sees it on the client side.
+
+        ``sslmode`` is the effective value, so one nobody set reads as libpq's
+        default, "prefer". Protocol and cipher are left out on purpose: psycopg
+        does not expose PQsslAttribute, and pg_stat_ssl describes the server's
+        side, which behind a pooler is a different hop.
+        """
+        if self.conn is None:
+            return False, None
+        pgconn = self.conn.pgconn
+        sslmode = None
+        for option in pgconn.info:
+            if option.keyword == b"sslmode":
+                sslmode = option.val.decode() if option.val else None
+                break
+        return bool(pgconn.ssl_in_use), sslmode
+
     def view_definition(self, spec):
         """Returns the SQL defining views described by `spec`"""
 

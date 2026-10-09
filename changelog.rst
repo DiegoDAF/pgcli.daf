@@ -27,6 +27,19 @@ Bug fixes:
   had been dropped. Only lines that carried something are counted now, and
   text made of blank lines only is passed through untouched.
 
+Features:
+---------
+
+* The startup banner shows whether the connection is encrypted, with the
+  effective ``sslmode``: ``SSL: on (sslmode=verify-ca)`` or ``SSL: off
+  (sslmode=prefer)``. And when ``sslmode=prefer`` ends up unencrypted against
+  a remote server, a warning says so, also with ``-c`` and ``-f``. ``prefer``
+  falls back to plaintext without an error, and libpq verifies against
+  ``~/.postgresql/root.crt`` whenever that file exists, so a ``root.crt``
+  without the server's CA silently turns every ``prefer`` connection into an
+  unencrypted one. A tunnelled connection counts as remote. Local sockets,
+  loopback and an explicit ``sslmode=disable`` or ``allow`` stay quiet.
+
 4.7.2 (2026-10-07) - upstream: 4.7.1
 ====================================
 

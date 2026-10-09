@@ -140,6 +140,39 @@ def notify_callback(notify: Notify):
     )
 
 
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def ssl_banner(in_use, sslmode):
+    """The SSL line of the startup banner, e.g. ``SSL: on (sslmode=verify-ca)``."""
+    state = "on" if in_use else "off"
+    return f"SSL: {state} (sslmode={sslmode})" if sslmode else f"SSL: {state}"
+
+
+def plaintext_warning(in_use, sslmode, host):
+    """Return a warning when sslmode=prefer quietly ended up unencrypted to a
+    remote server, else None.
+
+    prefer tries SSL and falls back to plaintext without an error, and libpq
+    also verifies against ~/.postgresql/root.crt whenever that file exists, so
+    a root.crt without the server's CA turns every prefer connection into an
+    unencrypted one. ``host`` is the host libpq was asked for: through an SSH
+    tunnel pgcli passes the real server there and 127.0.0.1 in hostaddr, so a
+    tunnelled connection still counts as remote. Local sockets and loopback
+    connections are not worth a warning, and an explicit sslmode=disable or
+    allow is the user's own choice.
+    """
+    if in_use or sslmode != "prefer":
+        return None
+    if not host or host.startswith("/") or host in _LOCAL_HOSTS:
+        return None
+    return (
+        f"Warning: the connection to {host} is not encrypted. sslmode=prefer falls back to plaintext "
+        "without an error, for example when the server's CA is missing from ~/.postgresql/root.crt. "
+        "Set sslmode=require or verify-ca to make that fail instead, or sslmode=disable to silence this warning."
+    )
+
+
 def get_connect_timeout(explicit, dsn, kwargs, default):
     """Pick the connection timeout to apply, in seconds.
 
@@ -1243,6 +1276,15 @@ class PGCli:
             sys.exit(1)
 
         self.pgexecute = pgexecute
+        try:
+            in_use, sslmode = pgexecute.ssl_state()
+            warning = plaintext_warning(in_use, sslmode, pgexecute.conn.info.host if pgexecute.conn else None)
+        except Exception as e:
+            # A diagnostic must never cost the user a working connection.
+            self.logger.debug("Could not read the SSL state: %r", e)
+            warning = None
+        if warning:
+            click.secho(warning, err=True, fg="yellow")
         # Apply the configured autocommit mode (safe here: no open transaction
         # right after connect). Preserved across reconnects via pgexecute.auto_commit.
         if not self.autocommit:
@@ -1530,6 +1572,11 @@ class PGCli:
 
         if not self.less_chatty:
             print("Server: PostgreSQL", self.pgexecute.server_version)
+            try:
+                print(ssl_banner(*self.pgexecute.ssl_state()))
+            except Exception as e:
+                # The banner is informational; never let it stop the REPL.
+                self.logger.debug("Could not read the SSL state: %r", e)
             print("Version:", __version__)
             print("Home: http://pgcli.com")
 

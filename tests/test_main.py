@@ -34,6 +34,7 @@ from pgcli.pgexecute import PGExecute
 from pgspecial.main import PAGER_OFF, PAGER_LONG_OUTPUT, PAGER_ALWAYS
 from psycopg.conninfo import conninfo_to_dict
 from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER, dbtest, run
+from pgcli.main import plaintext_warning, ssl_banner
 from collections import namedtuple
 
 
@@ -2447,3 +2448,64 @@ def test_cli_timeout_flag_passed_to_pgcli():
     with patch.object(PGCli, "__init__", autospec=True, return_value=None) as mock_pgcli:
         runner.invoke(cli, ["--timeout", "12", "mydb"])
         assert mock_pgcli.call_args[1]["connect_timeout"] == 12
+
+
+@pytest.mark.parametrize(
+    ("in_use", "sslmode", "expected"),
+    [
+        (True, "verify-ca", "SSL: on (sslmode=verify-ca)"),
+        (False, "prefer", "SSL: off (sslmode=prefer)"),
+        (False, None, "SSL: off"),
+    ],
+)
+def test_ssl_banner(in_use, sslmode, expected):
+    assert ssl_banner(in_use, sslmode) == expected
+
+
+@pytest.mark.parametrize(
+    ("in_use", "sslmode", "host", "warns"),
+    [
+        # prefer quietly fell back to plaintext against a remote server
+        (False, "prefer", "db.example.com", True),
+        # SSL negotiated: nothing to say
+        (True, "prefer", "db.example.com", False),
+        # explicit choices are the user's call
+        (False, "disable", "db.example.com", False),
+        (False, "allow", "db.example.com", False),
+        # local connections are not worth a warning
+        (False, "prefer", "localhost", False),
+        (False, "prefer", "127.0.0.1", False),
+        (False, "prefer", "::1", False),
+        (False, "prefer", "/var/run/postgresql", False),
+        (False, "prefer", None, False),
+    ],
+)
+def test_plaintext_warning(in_use, sslmode, host, warns):
+    warning = plaintext_warning(in_use, sslmode, host)
+    assert bool(warning) is warns
+    if warns:
+        assert host in warning
+        assert "sslmode=disable" in warning
+
+
+def test_connect_warns_when_prefer_ended_unencrypted(tmpdir, capsys):
+    # Through an SSH tunnel pgcli passes the real server as host and the
+    # tunnel's 127.0.0.1 as hostaddr, so the host is what libpq reports.
+    fake = mock.MagicMock()
+    fake.ssl_state.return_value = (False, "prefer")
+    fake.conn.info.host = "db.remote.example"
+    with mock.patch("pgcli.main.PGExecute", return_value=fake):
+        cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        cli.connect(database="d", host="db.remote.example", user="u", port="5432", passwd="p")
+    err = capsys.readouterr().err
+    assert "the connection to db.remote.example is not encrypted" in err
+
+
+def test_connect_is_quiet_when_ssl_is_in_use(tmpdir, capsys):
+    fake = mock.MagicMock()
+    fake.ssl_state.return_value = (True, "prefer")
+    fake.conn.info.host = "db.remote.example"
+    with mock.patch("pgcli.main.PGExecute", return_value=fake):
+        cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        cli.connect(database="d", host="db.remote.example", user="u", port="5432", passwd="p")
+    assert "not encrypted" not in capsys.readouterr().err
