@@ -33,7 +33,7 @@ from pgcli.main import (
 from pgcli.pgexecute import PGExecute
 from pgspecial.main import PAGER_OFF, PAGER_LONG_OUTPUT, PAGER_ALWAYS
 from psycopg.conninfo import conninfo_to_dict
-from utils import dbtest, run
+from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER, dbtest, run
 from collections import namedtuple
 
 
@@ -1294,6 +1294,63 @@ def test_pg_service_file(tmpdir):
     )
     del os.environ["PGPASSWORD"]
     del os.environ["PGSERVICEFILE"]
+
+
+def test_pg_service_file_passes_every_libpq_keyword(tmpdir, monkeypatch):
+    """Upstream issue #1474: only host/port/user/dbname/password reached the
+    connection, so sslmode, the certificate paths, application_name and
+    connect_timeout from the service were silently dropped. A service that
+    asked for sslmode=require then connected without SSL."""
+    path = tmpdir.join(".pg_service.conf")
+    path.write(
+        "[secure]\n"
+        "host=a_host\n"
+        "port=5433\n"
+        "user=a_user\n"
+        "dbname=a_dbname\n"
+        "sslmode=require\n"
+        "sslrootcert=/path/to/ca.crt\n"
+        "sslcert=/path/to/user.crt\n"
+        "sslkey=/path/to/user.key\n"
+        "application_name=from_service\n"
+        "connect_timeout=7\n"
+    )
+    monkeypatch.setenv("PGSERVICEFILE", path.strpath)
+    monkeypatch.delenv("PGPASSWORD", raising=False)
+    with mock.patch.object(PGExecute, "__init__", return_value=None) as mock_pgexecute:
+        cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        cli.connect_service("secure", None)
+    args, kwargs = mock_pgexecute.call_args
+    assert args[:5] == ("a_dbname", "a_user", "", "a_host", "5433")
+    assert kwargs["sslmode"] == "require"
+    assert kwargs["sslrootcert"] == "/path/to/ca.crt"
+    assert kwargs["sslcert"] == "/path/to/user.crt"
+    assert kwargs["sslkey"] == "/path/to/user.key"
+    # The service's own values win over pgcli's defaults, as with libpq.
+    assert kwargs["application_name"] == "from_service"
+    assert kwargs["connect_timeout"] == "7"
+
+
+@dbtest
+def test_pg_service_file_settings_reach_the_server(tmpdir, monkeypatch):
+    path = tmpdir.join(".pg_service.conf")
+    lines = [
+        "[live]",
+        f"host={POSTGRES_HOST}",
+        f"port={POSTGRES_PORT}",
+        f"user={POSTGRES_USER}",
+        "dbname=postgres",
+        "application_name=pgcli_service_1474",
+    ]
+    if POSTGRES_PASSWORD:
+        lines.append(f"password={POSTGRES_PASSWORD}")
+    path.write("\n".join(lines) + "\n")
+    monkeypatch.setenv("PGSERVICEFILE", path.strpath)
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.connect_service("live", None)
+    with cli.pgexecute.conn.cursor() as cur:
+        cur.execute("show application_name")
+        assert cur.fetchone()[0] == "pgcli_service_1474"
 
 
 def test_ssl_db_uri(tmpdir):

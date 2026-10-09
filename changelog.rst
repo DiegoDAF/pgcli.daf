@@ -4,6 +4,14 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``pgcli service=name`` honors every setting in the service, not just host,
+  port, user, dbname and password. ``sslmode``, ``sslrootcert``, ``sslcert``,
+  ``sslkey``, ``application_name``, ``connect_timeout`` and the rest were
+  dropped, so a service asking for ``sslmode=require`` connected without SSL
+  where ``psql service=name`` refuses. The remaining keys now reach libpq
+  as written, and the service's own values win over pgcli's defaults.
+  Upstream issue #1474.
+
 * A ``-c`` string or a script that starts with a blank line no longer reports
   ``1 line(s) of text before the statement removed``. The markdown stripper
   counted every line before the first statement, blank ones included, so a

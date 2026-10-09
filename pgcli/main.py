@@ -1043,12 +1043,24 @@ class PGCli:
         if service_config is None:
             click.secho(f"service '{service}' was not found in {file}", err=True, fg="red")
             sys.exit(1)
+        params = dict(service_config)
+        database = params.pop("dbname", None)
+        host = params.pop("host", None)
+        service_user = params.pop("user", None)
+        port = params.pop("port", None)
+        passwd = params.pop("password", None)
+        # Everything else in the section is a libpq keyword too (sslmode,
+        # sslrootcert, sslcert, sslkey, application_name, options,
+        # connect_timeout, ...) and `psql service=...` honors all of it. Only
+        # the five above used to be passed on, so a service asking for
+        # sslmode=require connected without SSL (upstream issue #1474).
         self.connect(
-            database=service_config.get("dbname"),
-            host=service_config.get("host"),
-            user=user or service_config.get("user"),
-            port=service_config.get("port"),
-            passwd=service_config.get("password"),
+            database=database,
+            host=host,
+            user=user or service_user,
+            port=port,
+            passwd=passwd,
+            **params,
         )
 
     def connect_uri(self, uri, user="", host="", port="", dbname=""):
