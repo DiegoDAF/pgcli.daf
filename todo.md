@@ -273,6 +273,27 @@ Upcoming
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
 
+2026-10-13
+===================
+
+### RELEVAMIENTO DE UPSTREAM (pedido de Diego: "ponete al dia con el proyecto padre")
+- [x] original/main: UN commit nuevo, baf0f01d (#1625 de pacocartones, mergeado el 12/10): saca
+      el xfail viejo del INSERT con schema y documenta el que sigue. Ya lo teniamos IDENTICO
+      desde 4.6.2. Mergeado en main (8fc73d14) sin cambio de contenido; entrada en Upcoming
+- [x] j-bennet volvio a aparecer el 12/10: mergeo #1625 y le pidio a dcavalcante resolver
+      conflictos en #1613 (meta-comandos de filesystem + completado de paths); el autor ya los
+      resolvio. #1632 (service name en el prompt) tambien se actualizo. Ninguno mergeado
+- [x] Merge simulado de los dos contra nuestro main: conflictos CHICOS. #1632: su
+      `self.service_name = None` choca con el aviso SSL al final de connect() (quedan los dos).
+      #1613: nosotros pasamos `Path` a clase NamedTuple y ellos le agregan `only_directories`
+      con default False + PATH_COMMANDS/DIRECTORY_COMMANDS (se combina en una sola clase);
+      imports de tests/test_main.py (quedan los dos). changelog, lo de siempre
+- [ ] Cuando mergeen #1613 o #1632, traerlos con esas resoluciones
+- [x] Nuestros 5 PRs (#1628, #1637, #1640, #1645, #1647) sin review, todos mergeables. Sin
+      pings: Diego pidio "nada a upstream" el 07/10
+- [x] Pusheados a fork los 8 commits locales (los 3 arreglos del 09/10 + todo + merge), con gh
+      de nuevo en DiegoDAF
+
 2026-10-09
 ===================
 
@@ -298,7 +319,7 @@ Upcoming
       conectar a prod); los prueba Diego con `bash ../check_dsn_ssl.sh`, que imprime el cp
       para volver atras si alguno falla
 - [ ] Diego: correr `bash ~/scripts/pgcli/check_dsn_ssl.sh` y avisar si falla alguno
-- [ ] PUSH pendiente: `gh` estaba activo con la cuenta de trabajo; pushear cuando vuelva a DiegoDAF
+- [x] PUSH hecho el 2026-10-13 con gh de nuevo en DiegoDAF
 - [ ] Build local nueva para `t` cuando Diego quiera (la instalada no tiene estos 3 arreglos)
 
 2026-10-08
