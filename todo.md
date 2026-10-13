@@ -289,6 +289,12 @@ Upcoming
       con default False + PATH_COMMANDS/DIRECTORY_COMMANDS (se combina en una sola clase);
       imports de tests/test_main.py (quedan los dos). changelog, lo de siempre
 - [ ] Cuando mergeen #1613 o #1632, traerlos con esas resoluciones
+- [x] BUILD INSTALADA EN `t` (pedido de Diego: "instala en t"), desde 0e80c560: suite 3622
+      passed contra PG 18 descartable, ruff y mypy limpios. `--force --reinstall --python 3.12`
+      con `[sshtunnel,keyring]`; sha256 del codigo instalado = repo (c54eb8e8d7539b41); keyring
+      SecretService; psycopg subio a 3.3.6. Probado contra dev: aviso de prefer sin cifrar,
+      DSN verify-ca sin aviso, error claro del tunel con host mal escrito. La linea `SSL:` del
+      banner no se ve en `t` porque el config tiene less_chatty = True (verificada con config vacio)
 - [x] Nuestros 5 PRs (#1628, #1637, #1640, #1645, #1647) sin review, todos mergeables. Sin
       pings: Diego pidio "nada a upstream" el 07/10
 - [x] Pusheados a fork los 8 commits locales (los 3 arreglos del 09/10 + todo + merge), con gh
@@ -320,7 +326,7 @@ Upcoming
       para volver atras si alguno falla
 - [ ] Diego: correr `bash ~/scripts/pgcli/check_dsn_ssl.sh` y avisar si falla alguno
 - [x] PUSH hecho el 2026-10-13 con gh de nuevo en DiegoDAF
-- [ ] Build local nueva para `t` cuando Diego quiera (la instalada no tiene estos 3 arreglos)
+- [x] Build local nueva instalada en `t` el 2026-10-13
 
 2026-10-08
 ===================
