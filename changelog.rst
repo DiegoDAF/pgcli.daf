@@ -40,6 +40,13 @@ Features:
   unencrypted one. A tunnelled connection counts as remote. Local sockets,
   loopback and an explicit ``sslmode=disable`` or ``allow`` stay quiet.
 
+Internal:
+---------
+
+* Merged upstream through ``baf0f01d`` (#1625, dropping the stale ``xfail`` on
+  the schema-qualified INSERT test and documenting the one still needed). Both
+  changes were already here, word for word, since 4.6.2.
+
 4.7.2 (2026-10-07) - upstream: 4.7.1
 ====================================
 
