@@ -1,6 +1,17 @@
 Upcoming
 ==============
 
+### BUG 2026-10-14: `-t` y `--no-status` OCULTAN los errores de SQL (encontrado deployando en `d`)
+- [ ] Los errores viajan en el campo `status` y salen por STDOUT como si fueran el pie de la
+      query, asi que `-t` (y `--no-status`) los suprimen: la query rota no imprime NADA.
+      Medido contra PG 18 con `-c "select nope"`:
+        fork  sin flags: error por stdout, exit 1 | `-t`: nada, exit 1 | `--no-status`: solo "Time"
+        upstream 4.7.x `-t`: nada y EXIT 0 (falla totalmente silenciosa; `-t` salio de NUESTRO PR)
+        psql -t: error por STDERR, exit 1
+      Fix propuesto: los errores van siempre a stderr, fuera de status, sin importar -t/--no-status
+      (como psql). Pega en scripts con -t (pgcli_q y similares) y en nuestro PR abierto #1637
+      (--no-status tiene el mismo agujero). Upstream: Diego pidio "nada a upstream" el 07/10
+
 ### RELEVAMIENTO DE UPSTREAM 2026-10-02 (que cambio desde el 22/09)
 # original/main SIN commits nuevos desde la 4.7.1 (101e523e, 20/09). fork/main no tiene nada
 # de upstream sin mergear. La cola subio de 15 a 21 PRs abiertos y los mantenedores casi no
@@ -272,6 +283,19 @@ Upcoming
 - [x] CERRADO 2026-09-17: las tres ramas que figuraban como borrables (feature/stream-results,
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
+
+2026-10-14
+===================
+
+### DEPLOY EN `d` (pedido de Diego: "d ya esta prendida, deployale esta misma version")
+- [x] `d` tenia la build del 22/09 (sha256 a4de3d09...). Mismo wheel que `t` copiado por scp al
+      mismo path (md5 a3c66156... identico; el de `d` quedo como .bak-20261014-1012; syncthing
+      NO sincroniza dist/). `uv tool install --force --reinstall --python 3.12` con
+      `[sshtunnel,keyring]`. Verificado: sha256 del codigo c54eb8e8d7539b41 = `t`, paramiko 5.0,
+      sqlparse 0.6.0, psycopg 3.3.6. Conecta a dev por el tunel via lm2 con SSL verificado
+- [x] Por SSH el keyring de `d` esta bloqueado ("Failed to unlock the collection!"): pgcli avisa
+      y sigue con .pgpass. Es la sesion SSH sin escritorio, no la build
+- [ ] Sigue pendiente alinear el .git de `d` (ver Upcoming); no se toco
 
 2026-10-13
 ===================
