@@ -293,8 +293,9 @@ Upcoming
       limpios. NO toca el exit 0 de -c ante errores (es otro tema, ver Upcoming)
 - [x] PR #1649 ABIERTO el 2026-10-14 con el texto que aprobo Diego, SIN la linea "Generated with
       Claude Code" (pedido explicito). Rama y autores limpios
-- [ ] Vigilar CI y review del #1649 (codex-review rojo es el ruido de siempre; mirar los
-      comentarios inline de CodeQL con `gh api repos/dbcli/pgcli/pulls/1649/comments`)
+- [x] CI del #1649 VERDE: build 3.10 a 3.14, CodeQL y Analyze ok, sin comentarios inline.
+      codex-review rojo, el ruido de siempre
+- [ ] Esperar review del #1649
 - [x] PUSH hecho con gh en DiegoDAF: main del fork y la rama `upstream/tuples-only-errors`
 - [ ] Nuestro PR abierto #1637 (--no-timings/--no-status) tiene el MISMO agujero con
       --no-status: sumarle el `failed` de format_output cuando Diego diga
