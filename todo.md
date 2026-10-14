@@ -1,17 +1,6 @@
 Upcoming
 ==============
 
-### BUG 2026-10-14: `-t` y `--no-status` OCULTAN los errores de SQL (encontrado deployando en `d`)
-- [ ] Los errores viajan en el campo `status` y salen por STDOUT como si fueran el pie de la
-      query, asi que `-t` (y `--no-status`) los suprimen: la query rota no imprime NADA.
-      Medido contra PG 18 con `-c "select nope"`:
-        fork  sin flags: error por stdout, exit 1 | `-t`: nada, exit 1 | `--no-status`: solo "Time"
-        upstream 4.7.x `-t`: nada y EXIT 0 (falla totalmente silenciosa; `-t` salio de NUESTRO PR)
-        psql -t: error por STDERR, exit 1
-      Fix propuesto: los errores van siempre a stderr, fuera de status, sin importar -t/--no-status
-      (como psql). Pega en scripts con -t (pgcli_q y similares) y en nuestro PR abierto #1637
-      (--no-status tiene el mismo agujero). Upstream: Diego pidio "nada a upstream" el 07/10
-
 ### RELEVAMIENTO DE UPSTREAM 2026-10-02 (que cambio desde el 22/09)
 # original/main SIN commits nuevos desde la 4.7.1 (101e523e, 20/09). fork/main no tiene nada
 # de upstream sin mergear. La cola subio de 15 a 21 PRs abiertos y los mantenedores casi no
@@ -286,6 +275,33 @@ Upcoming
 
 2026-10-14
 ===================
+
+### FIX: `-t` y `--no-status` ocultaban los errores de SQL (pedido de Diego: "arreglalo y prepara el pr")
+- [x] Causa: el error de un statement fallido viaja en `status`, el mismo campo del pie
+      "SELECT 3", y format_output() lo descarta con -t (y con --no-status). Medido con
+      `-c "select nope"`: con -t nada (exit 1), con --no-status solo "Time:". Upstream 4.7.x con
+      -t: nada y EXIT 0. psql -t: error por stderr, exit 1
+- [x] FORK 5df02030: con -t el error va a stderr (stdout queda solo con filas, como psql -t);
+      format_output() recibe `failed` y nunca descarta el status de un statement fallido, asi
+      --no-status lo sigue mostrando. 3 dbtests (2 fallan sin el fix; el tercero cuida que una
+      query sana no escriba en stderr), 1 unitario, 1 escenario behave con stdout/stderr
+      separados. Suite 3626 passed, behave 51 escenarios ok
+- [x] RAMA UPSTREAM `upstream/tuples-only-errors` (98ef37ad, desde original/main baf0f01d):
+      solo la parte de -t (upstream no tiene --no-status). 2 dbtests + escenario behave nuevo
+      en command_option.feature (upstream no tenia NINGUN escenario de -t). Suite de la rama
+      2791 passed; behave completo 34 ok; sin el fix fallan el test y el escenario. Autores
+      limpios. NO toca el exit 0 de -c ante errores (es otro tema, ver Upcoming)
+- [ ] Mensaje del PR mostrado a Diego: esperar su OK para abrirlo
+- [ ] PUSH pendiente de main del fork y de la rama: `gh` quedo otra vez en la cuenta de trabajo
+- [ ] Nuestro PR abierto #1637 (--no-timings/--no-status) tiene el MISMO agujero con
+      --no-status: sumarle el `failed` de format_output cuando Diego diga
+- [ ] Instalar en `t` y `d` la build con este fix cuando Diego quiera
+
+### UPSTREAM 2026-10-14: el PR #1648 (ac1982, abierto hoy) arregla el #1392
+- [x] Mismo bug que arreglamos el 07/10 (\ef/\ev en transaccion abortada) y que no mandamos:
+      ellos atrapan DatabaseError en run_cli(), nosotros convertimos el error en RuntimeError
+      dentro de pgexecute. Compatibles. Nuestra rama `upstream/ef-failed-transaction` queda
+      redundante. Cuando lo mergeen, traerlo (sin conflicto esperado mas alla del changelog)
 
 ### DEPLOY EN `d` (pedido de Diego: "d ya esta prendida, deployale esta misma version")
 - [x] `d` tenia la build del 22/09 (sha256 a4de3d09...). Mismo wheel que `t` copiado por scp al
