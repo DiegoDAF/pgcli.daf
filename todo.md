@@ -160,7 +160,7 @@ Upcoming
 # UPSTREAM PUBLICO 4.7.0 el 19/09 y 4.7.1 el 20/09. La 4.7.0 es LA RELEASE DONDE SALIERON
 # NUESTRAS FEATURES: -c/--command, -f/--file, -y/--yes y -t/--tuples-only. La 4.7.1 salio al
 # dia siguiente solo para arreglar el numero que reportaba `pgcli --version`.
-- [ ] #1637 "--no-timings / --no-status" (item 11 del #1603). Abierto 15/09, sin review. ESPERAR
+- [ ] #1637 "--no-timings / --no-status" (item 11 del #1603). OJO 2026-10-14: --no-status oculta errores, ver #1649. Abierto 15/09, sin review. ESPERAR
 - [ ] #1628 "SQL_ASCII". BLOQUEADO por el #1629 de dbaty, que lleva 17 DIAS SIN UN SOLO
       COMENTARIO (parado desde el 04/09). Ojo: la 4.7.0 trae un fix de encoding que SUENA igual
       ("TypeError: cannot use a string pattern on a bytes-like object ... SQL_ASCII") pero es el
@@ -291,8 +291,11 @@ Upcoming
       en command_option.feature (upstream no tenia NINGUN escenario de -t). Suite de la rama
       2791 passed; behave completo 34 ok; sin el fix fallan el test y el escenario. Autores
       limpios. NO toca el exit 0 de -c ante errores (es otro tema, ver Upcoming)
-- [ ] Mensaje del PR mostrado a Diego: esperar su OK para abrirlo
-- [ ] PUSH pendiente de main del fork y de la rama: `gh` quedo otra vez en la cuenta de trabajo
+- [x] PR #1649 ABIERTO el 2026-10-14 con el texto que aprobo Diego, SIN la linea "Generated with
+      Claude Code" (pedido explicito). Rama y autores limpios
+- [ ] Vigilar CI y review del #1649 (codex-review rojo es el ruido de siempre; mirar los
+      comentarios inline de CodeQL con `gh api repos/dbcli/pgcli/pulls/1649/comments`)
+- [x] PUSH hecho con gh en DiegoDAF: main del fork y la rama `upstream/tuples-only-errors`
 - [ ] Nuestro PR abierto #1637 (--no-timings/--no-status) tiene el MISMO agujero con
       --no-status: sumarle el `failed` de format_output cuando Diego diga
 - [ ] Instalar en `t` y `d` la build con este fix cuando Diego quiera
