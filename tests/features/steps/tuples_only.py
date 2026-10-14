@@ -92,3 +92,36 @@ def step_see_multiple_data_rows(context):
 
     # Should not have table formatting
     assert "+-" not in output, f"Expected no table borders, but got: {output}"
+
+
+@when('we run pgcli separating stderr with "{options}"')
+def step_run_pgcli_separating_stderr(context, options):
+    """Run pgcli keeping stdout and stderr apart, to check where errors go."""
+    import shlex
+
+    cmd = [
+        "pgcli",
+        "-h",
+        context.conf["host"],
+        "-p",
+        str(context.conf["port"]),
+        "-U",
+        context.conf["user"],
+        "-d",
+        context.conf["dbname"],
+        "--less-chatty",
+    ] + shlex.split(options)
+    result = subprocess.run(cmd, cwd=context.package_root, capture_output=True, timeout=10)
+    context.cmd_stdout = result.stdout.decode()
+    context.cmd_stderr = result.stderr.decode()
+    context.exit_code = result.returncode
+
+
+@then('we see "{text}" on stderr')
+def step_see_on_stderr(context, text):
+    assert text in context.cmd_stderr, f"Expected {text!r} on stderr, got: {context.cmd_stderr!r}"
+
+
+@then('we don\'t see "{text}" on stdout')
+def step_not_on_stdout(context, text):
+    assert text not in context.cmd_stdout, f"Did not expect {text!r} on stdout, got: {context.cmd_stdout!r}"

@@ -32,3 +32,9 @@ Feature: run the cli with -t/--tuples-only option,
      When we run pgcli with "-t -c '\dt'"
       then we see the command output
       and pgcli exits successfully
+
+  Scenario: run pgcli with -t and a failing query
+     When we run pgcli separating stderr with "-t -c 'select nope'"
+      then we see "does not exist" on stderr
+      and we don't see "does not exist" on stdout
+      and pgcli exits with error

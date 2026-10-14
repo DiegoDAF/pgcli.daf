@@ -1882,8 +1882,16 @@ class PGCli:
             ):
                 title = None
 
+            if not success and status and self.tuples_only:
+                # For a failed statement `status` is the error message, not
+                # the "SELECT 3" footer that -t drops, so -t used to hide the
+                # error completely. With -t stdout carries only rows, so the
+                # error goes to stderr, as psql does.
+                click.echo(status, err=True)
+                status = None
+
             execution = time() - start
-            formatted = format_output(title, cur, headers, status, settings, self.explain_mode)
+            formatted = format_output(title, cur, headers, status, settings, self.explain_mode, failed=not success)
 
             if paste_echo and sql:
                 # Echo the statement before its result (psql-paste look).
@@ -2692,7 +2700,7 @@ def exception_formatter(e, verbose_errors: bool = False):
     return click.style(s, fg="red")
 
 
-def format_output(title, cur, headers, status, settings, explain_mode=False):
+def format_output(title, cur, headers, status, settings, explain_mode=False, failed=False):
     output: Any = []
     expanded = settings.expanded or settings.table_format == "vertical"
     if settings.tuples_only:
@@ -2796,8 +2804,9 @@ def format_output(title, cur, headers, status, settings, explain_mode=False):
 
         output = itertools.chain(output, formatted)
 
-    # Only print the status if it's not None and not suppressed
-    if status and settings.show_status and not settings.tuples_only:
+    # Only print the status if it's not None and not suppressed. The status of
+    # a failed statement is its error message, which --no-status must not hide.
+    if status and (failed or (settings.show_status and not settings.tuples_only)):
         output = itertools.chain(output, [format_status(cur, status)])
 
     return output

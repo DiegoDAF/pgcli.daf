@@ -2509,3 +2509,38 @@ def test_connect_is_quiet_when_ssl_is_in_use(tmpdir, capsys):
         cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
         cli.connect(database="d", host="db.remote.example", user="u", port="5432", passwd="p")
     assert "not encrypted" not in capsys.readouterr().err
+
+
+@dbtest
+def test_tuples_only_sends_errors_to_stderr(executor, capsys):
+    # The error of a failed statement travels in `status`, the footer -t
+    # drops, so -t used to print nothing at all for a broken query.
+    cli = PGCli(pgexecute=executor, tuples_only=True)
+    output, query = cli._evaluate_command("select nope")
+    assert not query.successful
+    assert 'column "nope" does not exist' in capsys.readouterr().err
+    assert not any("nope" in line for line in output)
+
+
+@dbtest
+def test_tuples_only_rows_stay_on_stdout(executor, capsys):
+    cli = PGCli(pgexecute=executor, tuples_only=True)
+    output, query = cli._evaluate_command("select 42")
+    assert query.successful
+    assert any("42" in line for line in output)
+    assert capsys.readouterr().err == ""
+
+
+@dbtest
+def test_no_status_still_shows_errors(executor):
+    cli = PGCli(pgexecute=executor)
+    cli.show_status = False
+    output, query = cli._evaluate_command("select nope")
+    assert not query.successful
+    assert any('column "nope" does not exist' in line for line in output)
+
+
+def test_format_output_keeps_the_error_of_a_failed_statement():
+    settings = OutputSettings(table_format="psql", show_status=False)
+    assert list(format_output(None, None, None, "boom", settings, failed=True)) == ["boom"]
+    assert list(format_output(None, None, None, "SELECT 1", settings)) == []

@@ -4,6 +4,13 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``-t``/``--tuples-only`` no longer hides SQL errors. The error of a failed
+  statement travels where the status footer (``SELECT 3``) does, and ``-t``
+  drops that footer, so a broken query printed nothing at all: the only sign
+  was the exit code. Errors now go to stderr under ``-t``, as with
+  ``psql -t``, so stdout still carries only rows. ``--no-status`` hid them the
+  same way and now keeps them.
+
 * ``pgcli service=name`` honors every setting in the service, not just host,
   port, user, dbname and password. ``sslmode``, ``sslrootcert``, ``sslcert``,
   ``sslkey``, ``application_name``, ``connect_timeout`` and the rest were
