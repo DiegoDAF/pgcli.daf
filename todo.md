@@ -273,6 +273,21 @@ Upcoming
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
 
+2026-10-15
+===================
+
+### RELEVAMIENTO DE UPSTREAM (pedido de Diego: "volve a mirar el proyecto padre")
+- [x] j-bennet mergeo hoy #1632 (jackwalkerlabs): escape `\service` en el prompt con el nombre
+      del service (cierra el issue #1624). original/main = 3c3776cf, un commit adelante nuestro.
+      Nada mas se movio desde el 14/10: #1649 sin review, #1648 (el de \ef/\ev) sin review
+- [x] Merge simulado contra nuestro main: conflicto solo en changelog.rst y en el final de
+      connect(), su `self.service_name = None` contra nuestro aviso SSL. Resolucion: las dos,
+      `self.service_name = None` justo despues de `self.pgexecute = pgexecute`. Su linea en
+      connect_service() cae bien despues de nuestro connect(**params) del #1474
+- [ ] MERGEAR original/main (3c3776cf) cuando Diego diga
+- [x] Borrador de recordatorio a mantenedores NO enviado (Diego: "nada"); queda en
+      ../borrador_recordatorio_prs_upstream.md
+
 2026-10-14
 ===================
 
