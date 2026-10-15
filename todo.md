@@ -317,6 +317,23 @@ Upcoming
 - [ ] Borrar la rama upstream/ef-failed-transaction (423b8969, nunca tuvo PR; el fix esta en
       main como a902fab5 y el #1648 de upstream lo cubre). El borrado lo hace Diego
 
+### BUG: doble Ctrl-C deja la conexion trabada (pedido de Diego: "investiga este error")
+- [x] Sintoma (visto en prod por un tunel): `^C^C` sobre un SELECT largo, y despues todo
+      falla con "sending query failed: another command is already in progress"
+- [x] Causa: psycopg 3.3 (`Connection.wait`) atrapa el primer Ctrl-C, manda el cancel y lee la
+      respuesta (hasta 5s cada cosa); un segundo Ctrl-C durante esa limpieza la corta, el cancel
+      puede no salir y la respuesta queda sin leer. pgcli imprimia "cancelled query" sin mirar
+      la conexion. Upstream tiene el mismo handler
+- [x] Reproducido con pexpect + proxy TCP de 150ms por sentido: dos Ctrl-C a 0.15s o 0.4s dejan
+      la conexion trabada y el pg_sleep corriendo; sin latencia no pasa
+- [x] Fix c93a8209: `PGExecute.recover_from_interrupt()` (cancel de nuevo + lectura acotada con
+      psycopg.pq, 5s) y `abandon_connection()` (cancel con tope de 2s y cierre) para un Ctrl-C
+      mas durante la recuperacion; la sentencia siguiente reconecta por el camino de siempre.
+      4 tests que fallan sin el fix. Con 1, 2 y 3 Ctrl-C queda limpio; con 4 seguidos la
+      conexion anda pero el ultimo se saltea el cancel (se avisa que la query puede seguir)
+- [ ] PR a upstream (mismo handler) y reporte a psycopg (su limpieza no aguanta otro Ctrl-C),
+      cuando Diego diga
+
 2026-10-14
 ===================
 
