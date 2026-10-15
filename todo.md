@@ -284,7 +284,7 @@ Upcoming
       connect(), su `self.service_name = None` contra nuestro aviso SSL. Resolucion: las dos,
       `self.service_name = None` justo despues de `self.pgexecute = pgexecute`. Su linea en
       connect_service() cae bien despues de nuestro connect(**params) del #1474
-- [ ] MERGEAR original/main (3c3776cf) cuando Diego diga
+- [x] MERGEAR original/main (3c3776cf): hecho mas abajo, "4, 6, 5 y 8"
 - [x] Borrador de recordatorio a mantenedores NO enviado (Diego: "nada"); queda en
       ../borrador_recordatorio_prs_upstream.md
 
@@ -299,6 +299,23 @@ Upcoming
 - [x] #1640 y #1637 UNSTABLE solo por codex-review (ruido de todo el repo), builds verdes.
       #1628 CLEAN. Ningun comentario de mantenedores sin responder; el aviso CodeQL del #1645
       (except vacio) era del commit c7ce80e7 y ya estaba resuelto
+
+### 4, 6, 5 y 8 (pedido de Diego: "dale a 4 y 6. 5 solo en t")
+- [x] Merge de original/main (3c3776cf, #1632) en main: 3234239e. Conflictos en changelog.rst y
+      en el final de connect(), resueltos como estaba previsto. mypy rechazaba el
+      `self.service_name = None` de upstream seguido de un str (upstream no corre mypy):
+      anotado `Optional[str]`. Suite 3631 passed, ruff/format/mypy/docutils ok
+- [x] #1637: --no-status tambien escondia los errores de SQL (el mismo hueco que -t, ver #1649).
+      Fix de una linea: `show_status=self.show_status or not success`. 2 tests contra PG real,
+      uno falla sin el fix. Merge de original/main, y la entrada del changelog habia quedado en
+      la 4.7.0 ya publicada: movida a Upcoming. Suite 2804 passed, autores limpios
+- [ ] #1637: pushear 1f03e94e, 56b053a3, 5b6b7171 (LOCALES) y sumar al cuerpo del PR el parrafo
+      sobre errores, cuando Diego apruebe los mensajes
+- [x] Build de main 3234239e instalada en `t` (sha256 del codigo b9204718476aa6ce, sigue diciendo
+      4.7.2). Verificado: keyring, --no-status y -t con un error, DSN de dev por el tunel.
+      `d` sigue con la build de 0e80c560 (apagada)
+- [ ] Borrar la rama upstream/ef-failed-transaction (423b8969, nunca tuvo PR; el fix esta en
+      main como a902fab5 y el #1648 de upstream lo cubre). El borrado lo hace Diego
 
 2026-10-14
 ===================
