@@ -257,6 +257,7 @@ class PGCli:
         self.never_passwd_prompt = never_passwd_prompt
         self.pgexecute = pgexecute
         self.dsn_alias = None
+        self.service_name: Optional[str] = None
         self.watch_command = None
         self.force_destructive = force_destructive
         self.pgclirc_file = pgclirc_file
@@ -1095,6 +1096,7 @@ class PGCli:
             passwd=passwd,
             **params,
         )
+        self.service_name = service or os.getenv("PGSERVICE")
 
     def connect_uri(self, uri, user="", host="", port="", dbname=""):
         # Detect JDBC URIs and give a friendly error
@@ -1276,6 +1278,7 @@ class PGCli:
             sys.exit(1)
 
         self.pgexecute = pgexecute
+        self.service_name = None
         try:
             in_use, sslmode = pgexecute.ssl_state()
             warning = plaintext_warning(in_use, sslmode, pgexecute.conn.info.host if pgexecute.conn else None)
@@ -2006,6 +2009,7 @@ class PGCli:
     def get_prompt(self, string):
         # should be before replacing \\d
         string = string.replace("\\dsn_alias", self.dsn_alias or "")
+        string = string.replace("\\service", self.service_name or "")
         string = string.replace("\\t", self.now.strftime("%x %X"))
         string = string.replace("\\u", self.pgexecute.user or "(none)")
         string = string.replace("\\H", self.pgexecute.host or "(none)")

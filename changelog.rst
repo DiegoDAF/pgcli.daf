@@ -47,12 +47,19 @@ Features:
   unencrypted one. A tunnelled connection counts as remote. Local sockets,
   loopback and an explicit ``sslmode=disable`` or ``allow`` stay quiet.
 
+* A ``\service`` prompt token for connections made using ``service=...`` or
+  ``PGSERVICE``. For example, set ``prompt = '\service> '``. Follows upstream
+  #1632.
+
 Internal:
 ---------
 
 * Merged upstream through ``baf0f01d`` (#1625, dropping the stale ``xfail`` on
   the schema-qualified INSERT test and documenting the one still needed). Both
   changes were already here, word for word, since 4.6.2.
+* Merged upstream through ``3c3776cf`` (#1632, the ``\service`` prompt token),
+  annotating ``service_name`` as ``Optional[str]``: upstream assigns it
+  ``None`` first, so mypy, which upstream CI does not run, rejected it.
 
 4.7.2 (2026-10-07) - upstream: 4.7.1
 ====================================
