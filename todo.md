@@ -288,6 +288,18 @@ Upcoming
 - [x] Borrador de recordatorio a mantenedores NO enviado (Diego: "nada"); queda en
       ../borrador_recordatorio_prs_upstream.md
 
+### PRs EN CONFLICTO POR EL #1632 (pedido de Diego: "mira los prs, hay varios con conflicts")
+- [x] #1649, #1647 y #1645 quedaron DIRTY por el merge del #1632. Conflicto unico en los tres:
+      changelog.rst, su "Features:" (\service) contra nuestro "Bug fixes:" en Upcoming.
+      Resolucion: las dos secciones, Features primero (orden de las versiones publicadas)
+- [x] Merge de original/main en cada rama (7627513f, da42f8f0, 8cf8677e), pusheados al fork.
+      Antes de pushear: mismos archivos en el diff contra original/main, check_pr_authors
+      limpio, pytest completo contra PG descartable sin skips (2796 / 2816 / 2800), ruff,
+      ruff format y docutils ok, behave command_option 8/8 en #1649. Los tres MERGEABLE/CLEAN
+- [x] #1640 y #1637 UNSTABLE solo por codex-review (ruido de todo el repo), builds verdes.
+      #1628 CLEAN. Ningun comentario de mantenedores sin responder; el aviso CodeQL del #1645
+      (except vacio) era del commit c7ce80e7 y ya estaba resuelto
+
 2026-10-14
 ===================
 
