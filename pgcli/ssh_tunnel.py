@@ -33,8 +33,12 @@ SSH_TUNNEL_SUPPORT = True
 # includes" (readconf.c). Keeping the same number also bounds an include loop.
 _SSH_INCLUDE_MAX_DEPTH = 16
 
+# ssh reads the user's ~/.ssh/config first and then this file; the first value
+# obtained for each keyword wins (ssh_config(5)).
+_SYSTEM_SSH_CONFIG = "/etc/ssh/ssh_config"
 
-def _expand_ssh_includes(path: str, depth: int = 0, logger: Optional[logging.Logger] = None) -> str:
+
+def _expand_ssh_includes(path: str, depth: int = 0, logger: Optional[logging.Logger] = None, base_dir: Optional[str] = None) -> str:
     """Return the text of an ssh_config with its ``Include`` directives expanded.
 
     paramiko's ``SSHConfig`` ignores ``Include`` entirely, so a Host block that
@@ -42,7 +46,8 @@ def _expand_ssh_includes(path: str, depth: int = 0, logger: Optional[logging.Log
     This inlines the included files, following what ssh does (ssh_config(5)):
 
     * a directive may list several patterns, and each is globbed and sorted;
-    * a relative path is taken from ``~/.ssh``;
+    * a relative path is taken from ``base_dir``: ``~/.ssh`` (the default) for
+      the user's config, ``/etc/ssh`` for the system one;
     * a pattern matching nothing, or a file that cannot be read, is not an
       error and is skipped;
     * the enclosing ``Host``/``Match`` context is restored afterwards, so an
@@ -77,10 +82,10 @@ def _expand_ssh_includes(path: str, depth: int = 0, logger: Optional[logging.Log
         for pattern in shlex.split(stripped[len("include") :].strip()):
             pattern = os.path.expanduser(pattern)
             if not os.path.isabs(pattern):
-                pattern = os.path.join(os.path.expanduser("~/.ssh"), pattern)
+                pattern = os.path.join(base_dir or os.path.expanduser("~/.ssh"), pattern)
             for name in sorted(glob.glob(pattern)):
                 if os.path.isfile(name):
-                    included.append(_expand_ssh_includes(name, depth + 1, logger))
+                    included.append(_expand_ssh_includes(name, depth + 1, logger, base_dir))
         text = "\n".join(part for part in included if part)
         if context is not None and text:
             # Inside a Host/Match block ssh processes the include only when that
@@ -104,6 +109,32 @@ def _expand_ssh_includes(path: str, depth: int = 0, logger: Optional[logging.Log
         out.append(f"# Include: {stripped}")
         out.append(text)
     return "\n".join(out)
+
+
+def _lookup_ssh_config(hostname: str, user_path: str, system_path: str, logger: logging.Logger) -> "dict[str, Any]":
+    """Look ``hostname`` up the way ssh does: the user's config, then the system one.
+
+    Both get their Include directives inlined first. The system file goes after
+    a ``Host *`` line, so directives at its top level stay global instead of
+    landing in whatever Host block the user's file ends with. A broken user
+    config raises, for the caller to report; a system file paramiko cannot
+    parse is skipped with a warning rather than losing the user's config too.
+    """
+    user_text = _expand_ssh_includes(user_path, logger=logger) if os.path.isfile(user_path) else ""
+    system_text = ""
+    if os.path.isfile(system_path):
+        system_text = _expand_ssh_includes(system_path, logger=logger, base_dir=os.path.dirname(system_path))
+
+    user_config = paramiko.SSHConfig()
+    user_config.parse(io.StringIO(user_text))
+    if system_text.strip():
+        try:
+            combined = paramiko.SSHConfig()
+            combined.parse(io.StringIO(f"{user_text}\nHost *\n{system_text}\n"))
+            return dict(combined.lookup(hostname))
+        except Exception as e:
+            logger.warning("Could not read %s, using %s only: %s", system_path, user_path, e)
+    return dict(user_config.lookup(hostname))
 
 
 def _parse_jump_hop(hop: str) -> Tuple[Optional[str], str, Optional[int]]:
@@ -596,12 +627,9 @@ class SSHTunnelManager:
         ssh_config_path = os.path.expanduser("~/.ssh/config")
         ssh_config_error = None
         key_filenames = []
-        if ssh_hostname and os.path.isfile(ssh_config_path):
+        if ssh_hostname and (os.path.isfile(ssh_config_path) or os.path.isfile(_SYSTEM_SSH_CONFIG)):
             try:
-                ssh_config = paramiko.SSHConfig()
-                # Include directives are inlined first: paramiko ignores them.
-                ssh_config.parse(io.StringIO(_expand_ssh_includes(ssh_config_path, logger=self.logger)))
-                host_config = ssh_config.lookup(ssh_hostname)
+                host_config = _lookup_ssh_config(ssh_hostname, ssh_config_path, _SYSTEM_SSH_CONFIG, self.logger)
                 ssh_hostname = host_config.get("hostname", ssh_hostname)
                 if not ssh_username:
                     ssh_username = host_config.get("user")
@@ -668,11 +696,11 @@ class SSHTunnelManager:
             elif proxycommand:
                 hint = ""
             else:
-                # Say what was looked at: paramiko reads ~/.ssh/config only, and
-                # ignores Include, so a ProxyJump living elsewhere is invisible here.
+                # Say what was looked at, so a ProxyJump living somewhere else
+                # is not the last thing anyone suspects.
                 hint = (
-                    " (paramiko found no ProxyJump/ProxyCommand for it in ~/.ssh/config;"
-                    " Include directives are not read, so the host was dialed directly)"
+                    " (paramiko found no ProxyJump/ProxyCommand for it in ~/.ssh/config"
+                    f" or {_SYSTEM_SSH_CONFIG}, Include files followed, so the host was dialed directly)"
                 )
             msg = f"could not resolve SSH host '{ssh_hostname}' from this machine{hint}: {e}"
             self.logger.error("SSH tunnel failed: %s", msg)

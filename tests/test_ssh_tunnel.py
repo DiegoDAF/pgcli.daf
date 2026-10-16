@@ -941,6 +941,62 @@ class TestSSHConfigIncludes:
         assert _expand_ssh_includes(str(tmp_path / "does-not-exist")) == ""
 
 
+class TestSystemSSHConfig:
+    """ssh reads ~/.ssh/config and then /etc/ssh/ssh_config, and the first
+    value obtained for each keyword wins (ssh_config(5)). Expectations were
+    measured against `ssh -G` (OpenSSH 9.6) with the same files."""
+
+    def _start(self, tmp_path, user_text, system_text, alias="dbalias"):
+        user = tmp_path / "config"
+        user.write_text(user_text)
+        system = tmp_path / "etc-ssh" / "ssh_config"
+        system.parent.mkdir(exist_ok=True)
+        system.write_text(system_text)
+        manager = SSHTunnelManager(ssh_tunnel_url=f"ssh://{alias}", logger=logging.getLogger("test"))
+        with (
+            patch("pgcli.ssh_tunnel._SYSTEM_SSH_CONFIG", str(system)),
+            patch("pgcli.ssh_tunnel.os.path.expanduser", side_effect=lambda p: str(user) if p == "~/.ssh/config" else p),
+        ):
+            manager.start_tunnel(host="db", port=5432)
+        return manager
+
+    def test_system_config_supplies_what_the_user_config_lacks(self, tmp_path, mock_native_tunnel):
+        self._start(tmp_path, "", "Host dbalias\n    HostName db.internal\n    User sysuser\n    Port 2022\n")
+        kwargs = mock_native_tunnel["client"].connect.call_args[1]
+        assert (kwargs["hostname"], kwargs["username"], kwargs["port"]) == ("db.internal", "sysuser", 2022)
+
+    def test_user_config_wins_over_the_system_one(self, tmp_path, mock_native_tunnel):
+        self._start(
+            tmp_path,
+            "Host dbalias\n    User me\n",
+            "Host dbalias\n    HostName db.internal\n    User sysuser\n",
+        )
+        kwargs = mock_native_tunnel["client"].connect.call_args[1]
+        assert kwargs["username"] == "me"
+        assert kwargs["hostname"] == "db.internal"
+
+    def test_proxyjump_from_the_system_config_is_used(self, tmp_path, mock_native_tunnel):
+        with patch("pgcli.ssh_tunnel.paramiko.ProxyCommand") as proxy_command:
+            self._start(tmp_path, "", "Host dbalias\n    HostName db.internal\n    ProxyJump bastion\n")
+        assert proxy_command.call_args[0][0] == "ssh -W '[db.internal]:22' bastion"
+
+    def test_relative_include_in_the_system_config_is_taken_from_its_directory(self, tmp_path, mock_native_tunnel):
+        (tmp_path / "etc-ssh" / "ssh_config.d").mkdir(parents=True)
+        (tmp_path / "etc-ssh" / "ssh_config.d" / "db.conf").write_text("Host dbalias\n    HostName db.internal\n")
+        self._start(tmp_path, "", "Include ssh_config.d/*.conf\n")
+        assert mock_native_tunnel["client"].connect.call_args[1]["hostname"] == "db.internal"
+
+    def test_top_level_system_directives_stay_global(self, tmp_path, mock_native_tunnel):
+        """The user's file ends inside `Host other`: the system file's top-level
+        User must still apply to every host, not only to `other`."""
+        self._start(tmp_path, "Host other\n    HostName other.internal\n", "User sysuser\n")
+        assert mock_native_tunnel["client"].connect.call_args[1]["username"] == "sysuser"
+
+    def test_a_system_config_paramiko_cannot_parse_does_not_lose_the_user_one(self, tmp_path, mock_native_tunnel):
+        self._start(tmp_path, "Host dbalias\n    HostName db.internal\n", "Host *\n  this is not a keyword value pair = =\n")
+        assert mock_native_tunnel["client"].connect.call_args[1]["hostname"] == "db.internal"
+
+
 class TestGetTunnelManagerFromConfig:
     """Tests for get_tunnel_manager_from_config function."""
 

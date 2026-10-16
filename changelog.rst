@@ -57,6 +57,15 @@ Bug fixes:
 Features:
 ---------
 
+* The SSH tunnel also reads ``/etc/ssh/ssh_config`` and what it includes
+  (``ssh_config.d/``), after ``~/.ssh/config``, the way ssh does: the first
+  value found for a keyword wins, so a ``ProxyJump``, ``User`` or ``Port`` set
+  system-wide now applies when the user's config does not set it. Relative
+  ``Include`` paths in the system file are taken from ``/etc/ssh``. If paramiko
+  cannot parse the system file it is skipped with a warning instead of losing
+  the user's config too. On a stock Ubuntu ``/etc/ssh/ssh_config`` nothing the
+  tunnel uses changes: 38 real hosts resolve the same, and as ``ssh -G`` does.
+
 * The startup banner shows whether the connection is encrypted, with the
   effective ``sslmode``: ``SSL: on (sslmode=verify-ca)`` or ``SSL: off
   (sslmode=prefer)``. And when ``sslmode=prefer`` ends up unencrypted against

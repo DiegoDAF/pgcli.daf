@@ -47,6 +47,13 @@ def exception_formatter():
     return lambda e: str(e)
 
 
+@pytest.fixture(autouse=True)
+def no_system_ssh_config(monkeypatch, tmp_path):
+    # The SSH tunnel also reads /etc/ssh/ssh_config; point it at a file that
+    # does not exist so no test depends on the machine it runs on.
+    monkeypatch.setattr("pgcli.ssh_tunnel._SYSTEM_SSH_CONFIG", str(tmp_path / "no-system-ssh-config"))
+
+
 @pytest.fixture(scope="session", autouse=True)
 def temp_config(tmpdir_factory):
     # this function runs on start of test session.
