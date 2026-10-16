@@ -1122,8 +1122,8 @@ def test_file_mode_runs_statements_and_exits_zero(tmpdir):
 
 
 def test_file_mode_failed_statement_exits_nonzero(tmpdir):
-    """-f with a failed statement and on_error = STOP exits 1, like psql
-    with ON_ERROR_STOP."""
+    """-f with a failed statement and on_error = STOP exits 3, like psql
+    with ON_ERROR_STOP (measured with psql 18)."""
     sql_file = tmpdir.join("script.sql")
     sql_file.write("select boom;")
     cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
@@ -1131,17 +1131,104 @@ def test_file_mode_failed_statement_exits_nonzero(tmpdir):
     with mock.patch.object(cli, "_execute_statements", return_value=False):
         with pytest.raises(SystemExit) as e:
             cli.run_cli()
-    assert e.value.code == 1
+    assert e.value.code == 3
 
 
 def test_command_mode_failed_statement_exits_nonzero(tmpdir):
-    """-c behaves the same as -f on failure."""
+    """A failed -c exits 1, like psql -c."""
     cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
     cli.commands = ["select boom;"]
     with mock.patch.object(cli, "_execute_statements", return_value=False):
         with pytest.raises(SystemExit) as e:
             cli.run_cli()
     assert e.value.code == 1
+
+
+def test_command_and_file_both_run(tmpdir):
+    """psql runs both -c and -f when given together; -c must not exit first."""
+    sql_file = tmpdir.join("script.sql")
+    sql_file.write("select 2;")
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.commands = ["select 1;"]
+    cli.input_files = [str(sql_file)]
+    with mock.patch.object(cli, "_execute_statements", return_value=True) as mock_exec:
+        with pytest.raises(SystemExit) as e:
+            cli.run_cli()
+    assert e.value.code == 0
+    assert [c[0][0] for c in mock_exec.call_args_list] == ["select 1;", "select 2;"]
+
+
+def test_command_mode_alone_still_exits(tmpdir):
+    """With no -f, the -c block still exits on its own."""
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.commands = ["select 1;"]
+    with mock.patch.object(cli, "_execute_statements", return_value=True) as mock_exec:
+        with pytest.raises(SystemExit) as e:
+            cli.run_cli()
+    assert e.value.code == 0
+    mock_exec.assert_called_once_with("select 1;")
+
+
+# Each case is psql 18 measured against a live server, with on_error = STOP
+# standing for psql's ON_ERROR_STOP and RESUME for its default.
+@pytest.mark.parametrize(
+    "on_error, commands, files, expected_code, expected_runs",
+    [
+        # psql -c "select nope"  -> 1
+        ("STOP", ["bad"], [], 1, ["bad"]),
+        # psql -v ON_ERROR_STOP=1 -c "select nope" -c "select 9"  -> 1, 9 never runs
+        ("STOP", ["bad", "good"], [], 1, ["bad"]),
+        # psql -c "select 1" -c "select nope"  -> 1, the last -c failed
+        ("RESUME", ["good", "bad"], [], 1, ["good", "bad"]),
+        # psql -c "select 1" -c "select nope" -c "select 2"  -> 0, the last -c worked
+        ("RESUME", ["good", "bad", "good"], [], 0, ["good", "bad", "good"]),
+        # psql -v ON_ERROR_STOP=1 -f err.sql  -> 3
+        ("STOP", [], ["bad"], 3, ["bad"]),
+        # psql -v ON_ERROR_STOP=1 -f err.sql -f ok.sql  -> 3, ok.sql never runs
+        ("STOP", [], ["bad", "good"], 3, ["bad"]),
+        # psql -f err.sql -f ok.sql  -> 0, both run
+        ("RESUME", [], ["bad", "good"], 0, ["bad", "good"]),
+        # psql -v ON_ERROR_STOP=1 -c "select nope" -f err.sql  -> 1, the file never runs
+        ("STOP", ["bad"], ["good"], 1, ["bad"]),
+        # psql -c "select nope" -f err.sql  -> 0, the script ran last
+        ("RESUME", ["bad"], ["bad"], 0, ["bad", "bad"]),
+    ],
+)
+def test_exit_status_matches_psql(tmpdir, on_error, commands, files, expected_code, expected_runs):
+    paths = []
+    for i, content in enumerate(files):
+        sql_file = tmpdir.join(f"script{i}.sql")
+        sql_file.write(content)
+        paths.append(str(sql_file))
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.on_error = on_error
+    cli.commands = commands or None
+    cli.input_files = paths or None
+    with mock.patch.object(cli, "_execute_statements", side_effect=lambda text: text != "bad") as mock_exec:
+        with pytest.raises(SystemExit) as e:
+            cli.run_cli()
+    assert e.value.code == expected_code
+    assert [c[0][0] for c in mock_exec.call_args_list] == expected_runs
+
+
+@dbtest
+def test_failed_command_exits_1(executor, tmpdir):
+    cli = PGCli(pgexecute=executor, pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.commands = ["select nope"]
+    with pytest.raises(SystemExit) as e:
+        cli.run_cli()
+    assert e.value.code == 1
+
+
+@dbtest
+def test_failed_script_exits_3(executor, tmpdir):
+    sql_file = tmpdir.join("script.sql")
+    sql_file.write("select 1;\nselect nope;\nselect 2;\n")
+    cli = PGCli(pgexecute=executor, pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.input_files = [str(sql_file)]
+    with pytest.raises(SystemExit) as e:
+        cli.run_cli()
+    assert e.value.code == 3
 
 
 def test_missing_rc_dir(tmpdir):

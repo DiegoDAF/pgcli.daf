@@ -4,6 +4,14 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``-c`` together with ``-f`` ran only the ``-c``: the file was skipped
+  without a word, a leftover of this fork's ``run_cli`` from before upstream
+  made both run (#1542), as psql does. And the exit status now follows psql
+  exactly: that of the last ``-c`` or ``-f``, a failed ``-c`` exits 1, and with
+  ``on_error = STOP`` (psql's ``ON_ERROR_STOP``) the first failure stops the
+  rest and a failed script exits 3 instead of 1. With ``RESUME`` a failed last
+  ``-c`` exits 1 too, where it used to exit 0.
+
 * A second Ctrl-C while a query is being cancelled no longer leaves the
   connection stuck. psycopg answers Ctrl-C by cancelling the query and then
   reading the server's reply; another Ctrl-C during that cleanup, easy over an

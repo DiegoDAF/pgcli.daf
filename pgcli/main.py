@@ -1511,18 +1511,26 @@ class PGCli:
     def run_cli(self):
         logger = self.logger
 
+        # Exit status, like psql: that of the last -c or -f that ran. A failed
+        # -c exits 1, while a script exits 0 even with errors in it, unless
+        # on_error = STOP (psql's ON_ERROR_STOP): then the first failure stops
+        # everything after it, and a failed script exits 3.
+        exit_code = 0
+
         # Handle command mode (-c flag) - similar to psql behavior
         # Multiple -c options are executed sequentially
         if hasattr(self, 'commands') and self.commands:
             try:
-                all_ok = True
                 for command in self.commands:
                     logger.debug("Running command: %s", command)
                     # Same path as typing it at the prompt, one statement at
                     # a time so \watch only repeats its own statement.
-                    all_ok = self._execute_statements(command)
-                    if not all_ok and self.on_error != "RESUME":
-                        break
+                    if self._execute_statements(command):
+                        exit_code = 0
+                    else:
+                        exit_code = 1
+                        if self.on_error != "RESUME":
+                            sys.exit(1)
             except PgCliQuitError:
                 # Normal exit from quit command
                 sys.exit(0)
@@ -1531,15 +1539,15 @@ class PGCli:
                 logger.error("traceback: %r", traceback.format_exc())
                 click.secho(str(e), err=True, fg="red")
                 sys.exit(1)
-            # Like psql with ON_ERROR_STOP: a failed statement means a
-            # non-zero exit. With on_error = RESUME errors keep exit code 0.
-            sys.exit(0 if all_ok or self.on_error == "RESUME" else 1)
+            # psql runs both -c and -f when they are given together, so only
+            # exit here when there is no file left to run.
+            if not (hasattr(self, 'input_files') and self.input_files):
+                sys.exit(exit_code)
 
         # Handle file mode (-f flag) - execute SQL from files
         # Multiple -f options are executed sequentially
         if hasattr(self, 'input_files') and self.input_files:
             try:
-                all_ok = True
                 for input_file in self.input_files:
                     logger.debug("Reading commands from file: %s", input_file)
                     with open(input_file, 'r', encoding='utf-8') as f:
@@ -1548,9 +1556,9 @@ class PGCli:
                         logger.debug("Executing commands from file: %s", input_file)
                         # Statement by statement, like psql -f: \watch only
                         # repeats its own statement, not the whole file.
-                        all_ok = self._execute_statements(file_content)
-                        if not all_ok and self.on_error != "RESUME":
-                            break
+                        if not self._execute_statements(file_content) and self.on_error != "RESUME":
+                            sys.exit(3)
+                    exit_code = 0
             except PgCliQuitError:
                 # Normal exit from quit command
                 sys.exit(0)
@@ -1559,9 +1567,7 @@ class PGCli:
                 logger.error("traceback: %r", traceback.format_exc())
                 click.secho(str(e), err=True, fg="red")
                 sys.exit(1)
-            # Like psql with ON_ERROR_STOP: a failed statement means a
-            # non-zero exit. With on_error = RESUME errors keep exit code 0.
-            sys.exit(0 if all_ok or self.on_error == "RESUME" else 1)
+            sys.exit(exit_code)
 
         history_file = self.config["main"]["history_file"]
         if history_file == "default":
