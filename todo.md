@@ -331,8 +331,15 @@ Upcoming
       mas durante la recuperacion; la sentencia siguiente reconecta por el camino de siempre.
       4 tests que fallan sin el fix. Con 1, 2 y 3 Ctrl-C queda limpio; con 4 seguidos la
       conexion anda pero el ultimo se saltea el cancel (se avisa que la query puede seguir)
-- [ ] PR a upstream (mismo handler) y reporte a psycopg (su limpieza no aguanta otro Ctrl-C),
-      cuando Diego diga
+- [x] Build de main 51ccf4c8 instalada en `t` (sha256 del codigo 6e0de6c5535bcd9c); doble
+      Ctrl-C con 150ms de latencia verificado contra el binario instalado
+- [x] PR a upstream #1651 (rama upstream/ctrl-c-recovery, 66099085, sobre original/main
+      3c3776cf). Reproductor punta a punta sobre el codigo de upstream: trabada sin el fix, OK
+      con el fix. 4 tests que fallan en main, suite 2798 passed
+- [x] Issue psycopg/psycopg#1444: reproductor solo con psycopg 3.3.6 + propuesta minima
+      (cerrar la conexion con pgconn.finish() si otra interrupcion cae en la limpieza, como
+      ya hacen con el timeout en #1371). Ojo: en #1435 dvarrazzo dijo que cancelar durante una
+      cancelacion es "undefined realm" pero que consideraria un PR no invasivo; ofrecimos PR
 
 2026-10-14
 ===================
