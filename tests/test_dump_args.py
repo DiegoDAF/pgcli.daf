@@ -372,7 +372,7 @@ class TestPgpassLookup:
             path = tmp_path / ".pgpass"
             path.write_text("".join(line + "\n" for line in lines))
             path.chmod(mode)
-            monkeypatch.setattr(dump.Path, "home", staticmethod(lambda: tmp_path))
+            monkeypatch.setenv("PGPASSFILE", str(path))
             return path
 
         return write
@@ -406,7 +406,7 @@ class TestPgpassLookup:
         assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "reader") == "s3cr3t"
 
     def test_no_pgpass_at_all(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(dump.Path, "home", staticmethod(lambda: tmp_path))
+        monkeypatch.setenv("PGPASSFILE", str(tmp_path / "missing"))
         assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "reader") is None
 
     def test_wildcards_match_everything(self, pgpass):
@@ -461,6 +461,31 @@ class TestPgpassLookup:
         finally:
             path.chmod(0o600)
 
+    # The wrappers now read the file the way pgcli and libpq do
+    # (pgpass.lookup_password), instead of a second, looser reader.
+
+    def test_an_escaped_colon_in_the_password(self, pgpass):
+        # libpq: "\\:" is a literal colon, the backslash is not part of the password.
+        pgpass("db.example.com:5432:ventas:reader:a\\:b")
+        assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "reader") == "a:b"
+
+    def test_an_escaped_colon_in_a_field(self, pgpass):
+        pgpass("db.example.com:5432:ventas:odd\\:user:s3cr3t")
+        assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "odd:user") == "s3cr3t"
+
+    def test_pgpassfile_is_honored(self, tmp_path, monkeypatch):
+        elsewhere = tmp_path / "custom.pgpass"
+        elsewhere.write_text("db.example.com:5432:ventas:reader:from-env\n")
+        elsewhere.chmod(0o600)
+        monkeypatch.setenv("PGPASSFILE", str(elsewhere))
+        assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "reader") == "from-env"
+
+    def test_a_partial_glob_is_not_a_wildcard(self, pgpass):
+        # libpq takes a field literally unless it is exactly "*", so psql and
+        # pgcli never use this line; the wrappers no longer do either.
+        pgpass("*.example.com:5432:ventas:reader:s3cr3t")
+        assert dump.get_password_from_pgpass("db.example.com", 5432, "ventas", "reader") is None
+
 
 class TestRemainingCorners:
     def test_tunnel_host_that_is_an_ipv6_literal_gets_bracketed(self, mod, clean_pg_env):
@@ -502,7 +527,7 @@ class TestTunneledRunEndToEnd:
             if pgpass_lines:
                 (tmp_path / ".pgpass").write_text("".join(line + "\n" for line in pgpass_lines))
                 (tmp_path / ".pgpass").chmod(0o600)
-            monkeypatch.setattr(dump.Path, "home", staticmethod(lambda: tmp_path))
+            monkeypatch.setenv("PGPASSFILE", str(tmp_path / ".pgpass"))
 
             manager = MagicMock()
             manager.start_tunnel.return_value = tunnel
@@ -616,7 +641,7 @@ class TestWrapperPlumbing:
 
         for var in ("PGHOST", "PGPORT", "PGPASSWORD"):
             monkeypatch.delenv(var, raising=False)
-        monkeypatch.setattr(dump.Path, "home", staticmethod(lambda: tmp_path))
+        monkeypatch.setenv("PGPASSFILE", str(tmp_path / ".pgpass"))
         manager = MagicMock()
         manager.start_tunnel.return_value = ("db.internal", 5432)
         with (

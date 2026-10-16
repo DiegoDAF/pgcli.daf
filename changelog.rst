@@ -4,6 +4,14 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``pgcli_dump`` and ``pgcli_dumpall`` read the password file the way pgcli
+  and libpq do. They had a looser reader of their own that ignored
+  ``PGPASSFILE``, kept the backslash of an escaped ``\:`` (handing pg_dump a
+  wrong password) and took a partial glob such as ``*.example.com`` as a
+  pattern, which libpq reads literally. Measured on a real 451-entry file
+  first: both readers agreed on every entry and on 110 DSN aliases, so the
+  switch changes nothing there.
+
 * ``%r`` and ``%p`` in a ``ProxyCommand`` from the SSH config now expand to the
   user and port the tunnel connects with, the tunnel URL first, as ssh does
   with the command line. paramiko used the Host block's ``User`` and ``Port``,

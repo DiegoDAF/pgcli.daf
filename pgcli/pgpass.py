@@ -42,8 +42,11 @@ def _split_pgpass_line(line):
     return fields
 
 
-def _pgpass_path():
-    """Return the path libpq would use: PGPASSFILE env, else ~/.pgpass."""
+def pgpass_path():
+    """Return the path libpq would use: PGPASSFILE env, else ~/.pgpass.
+
+    Public because pgcli_dump and pgcli_dumpall read the same file.
+    """
     env = os.environ.get("PGPASSFILE")
     if env:
         return os.path.expanduser(env)
@@ -77,7 +80,7 @@ def lookup_password(host, port, database, user, path=None):
     Returns ``None`` if there is no match, or the file is missing or has unsafe
     permissions.
     """
-    path = path or _pgpass_path()
+    path = path or pgpass_path()
     if not has_safe_permissions(path):
         return None
     host = host or "localhost"

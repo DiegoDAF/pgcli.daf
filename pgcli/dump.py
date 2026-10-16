@@ -5,18 +5,16 @@ This tool provides the same functionality as pg_dump but adds support for
 SSH tunnels using pgcli's configuration.
 """
 
-import fnmatch
 import logging
 import os
 import subprocess
 import sys
-from pathlib import Path
 from typing import List, Optional
 
 import click
 
 from .config import get_config
-from .pgpass import has_safe_permissions
+from .pgpass import has_safe_permissions, lookup_password, pgpass_path
 from .ssh_tunnel import get_tunnel_manager_from_config
 from .dump_args import (  # re-exported: both wrappers and their tests import these
     build_tunneled_args,
@@ -26,58 +24,32 @@ from .dump_args import (  # re-exported: both wrappers and their tests import th
 
 
 def get_password_from_pgpass(host: str, port: int, database: str, user: str) -> Optional[str]:
-    """
-    Read password from ~/.pgpass file.
+    """Return the password for these connection values from the password file.
 
-    The .pgpass format is: hostname:port:database:username:password
-    Wildcards (*) are supported for hostname, port, database, and username.
-
-    Returns:
-        Password if found, None otherwise
+    The lookup is pgpass.lookup_password(), the same one pgcli uses and the
+    way libpq reads the file: PGPASSFILE or ~/.pgpass, ``\\:`` and ``\\\\``
+    escapes, each field matched exactly or by a whole ``*``, first match wins.
+    These wrappers used to keep a looser reader of their own (fnmatch globs,
+    no escapes, no PGPASSFILE), so they could disagree with psql and pgcli.
     """
-    pgpass_path = Path.home() / ".pgpass"
-    if not pgpass_path.exists():
+    path = pgpass_path()
+    if not os.path.exists(path):
         return None
 
     # libpq refuses a password file that others can read, and says so. Without
     # this the wrappers would authenticate with a password psql itself would
     # have ignored, which is the kind of difference that only shows up when
     # somebody tightens the file and the backup stops working.
-    if not has_safe_permissions(pgpass_path):
+    if not has_safe_permissions(path):
         click.secho(
-            f'WARNING: password file "{pgpass_path}" has group or world access; permissions should be u=rw (0600) or less',
+            f'WARNING: password file "{path}" has group or world access; permissions should be u=rw (0600) or less',
             err=True,
             fg="yellow",
         )
         return None
 
-    try:
-        with open(pgpass_path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-
-                parts = line.split(":")
-                if len(parts) < 5:
-                    continue
-
-                # Handle escaped colons in password (last field)
-                pg_host, pg_port, pg_db, pg_user = parts[:4]
-                pg_pass = ":".join(parts[4:])  # Password may contain colons
-
-                # Match using fnmatch for wildcard support
-                if (
-                    (pg_host == "*" or fnmatch.fnmatch(host, pg_host))
-                    and (pg_port == "*" or str(port) == pg_port)
-                    and (pg_db == "*" or fnmatch.fnmatch(database, pg_db))
-                    and (pg_user == "*" or fnmatch.fnmatch(user, pg_user))
-                ):
-                    return pg_pass
-    except (IOError, PermissionError):
-        pass
-
-    return None
+    password: Optional[str] = lookup_password(host, port, database, user, path=path)
+    return password
 
 
 def parse_user_and_database(args: List[str]) -> tuple:

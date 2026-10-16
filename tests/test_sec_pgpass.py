@@ -8,7 +8,7 @@ These assertions guard the security-sensitive behavior of the parser:
 - treats ``*`` wildcards for host/port/db/user as intended,
 - recovers a password that itself contains a colon,
 - ignores a missing file or a non-regular file (e.g. a directory), and
-- honors the ``PGPASSFILE`` env override through ``_pgpass_path``.
+- honors the ``PGPASSFILE`` env override through ``pgpass_path``.
 
 Every test is hermetic: it uses pytest's ``tmp_path`` / ``monkeypatch`` and a
 throwaway file. The real ``~/.pgpass`` is never read or written.
@@ -21,7 +21,7 @@ import pytest
 
 from pgcli.pgpass import (
     has_safe_permissions,
-    _pgpass_path,
+    pgpass_path,
     _split_pgpass_line,
     lookup_password,
 )
@@ -223,33 +223,33 @@ def test_wildcard_is_not_regex_or_prefix(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# PGPASSFILE env override via _pgpass_path
+# PGPASSFILE env override via pgpass_path
 # --------------------------------------------------------------------------- #
 
 
 def test_pgpassfile_env_override_used(tmp_path, monkeypatch):
     path = _write_pgpass(tmp_path, "h:5432:db:u:fromenv\n")
     monkeypatch.setenv("PGPASSFILE", path)
-    # path=None -> falls back to _pgpass_path() which reads PGPASSFILE.
+    # path=None -> falls back to pgpass_path() which reads PGPASSFILE.
     assert lookup_password("h", 5432, "db", "u") == "fromenv"
 
 
-def test_pgpass_path_prefers_env(tmp_path, monkeypatch):
+def testpgpass_path_prefers_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PGPASSFILE", str(tmp_path / "custom.pgpass"))
-    assert _pgpass_path() == str(tmp_path / "custom.pgpass")
+    assert pgpass_path() == str(tmp_path / "custom.pgpass")
 
 
-def test_pgpass_path_expands_tilde_in_env(monkeypatch):
+def testpgpass_path_expands_tilde_in_env(monkeypatch):
     monkeypatch.setenv("PGPASSFILE", "~/somewhere/pgpass")
-    result = _pgpass_path()
+    result = pgpass_path()
     assert "~" not in result
     assert result.endswith("/somewhere/pgpass")
     assert os.path.isabs(result)
 
 
-def test_pgpass_path_default_without_env(monkeypatch):
+def testpgpass_path_default_without_env(monkeypatch):
     monkeypatch.delenv("PGPASSFILE", raising=False)
-    assert _pgpass_path() == os.path.expanduser("~/.pgpass")
+    assert pgpass_path() == os.path.expanduser("~/.pgpass")
 
 
 def test_env_override_also_enforces_permissions(tmp_path, monkeypatch):
