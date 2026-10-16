@@ -302,8 +302,12 @@ Upcoming
 - [x] 8c) Los wrappers de dump usan pgpass.lookup_password (libpq): PGPASSFILE, escapes, sin
       globs parciales. Medido antes sobre el .pgpass real: 451 entradas y 110 aliases, cero
       diferencias (ae285aac)
-- [ ] Instalar en `t` una build con todo lo de hoy (cuando Diego diga)
-- [ ] Proponer a upstream el arreglo del test por cli-helpers 2.15.2 (cuando Diego diga)
+- [x] Build de main 5ef8267c instalada en `t` (sha256 del codigo e61a6b86a90227fa, cli-helpers 2.15.2).
+      Verificado: -c + -f corren los dos, exit 1 / 3, doble Ctrl-C limpio, DSN de workforce dev por
+      el tunel, y pgcli_dump autentica por el tunel con el lector nuevo del .pgpass
+- [x] PR #1653 a upstream: expectativa del test + piso cli_helpers >= 2.15.2 (rama upstream/cli-helpers-2.15.2)
+- [x] PR #1652 a upstream: exit codes de -c/-f como psql (rama upstream/exit-status-like-psql).
+      Su build puede caer en test_format_array_output_expanded hasta que entre #1653
 
 2026-10-15
 ===================
