@@ -44,7 +44,7 @@ Upcoming
       # los permisos el backup falla sin explicacion.
       # MEDIDO contra el .pgpass real antes de tocar: 544 lineas, 541 con comodin, 3 concretas,
       # y las 3 siguen resolviendo. 4 tests, verificados con mutacion (fallan sin el chequeo).
-- [ ] QUEDA ABIERTO de esa familia: unificar el MATCHEO de los dos lectores. Siguen siendo dos
+- [x] RESUELTO 2026-10-16 (ae285aac), ver abajo. Era: unificar el MATCHEO de los dos lectores. Siguen siendo dos
       implementaciones: la de los wrappers hace fnmatch sobre host/database/user (soporta globs
       tipo `*.example.com`) y la de pgpass.py compara por igualdad o `*`. Cambiar de una a otra
       puede dejar de matchear lineas que hoy matchean, y en el .pgpass real 541 de 544 lineas
@@ -83,7 +83,7 @@ Upcoming
       el incluido abre, asi que en ese caso se conservan las directivas sueltas que si aplican
       al padre y se descarta el resto con un debug. El config real de Diego (39 hosts, sin
       Include) resuelve identico que antes
-- [ ] QUEDA de la misma familia: `/etc/ssh/ssh_config` y `/etc/ssh/ssh_config.d/` siguen sin
+- [x] RESUELTO 2026-10-16 (2ffb2a91 y 9466290d), ver abajo. Era: `/etc/ssh/ssh_config` y `/etc/ssh/ssh_config.d/` siguen sin
       leerse (ssh los lee DESPUES del config del usuario). Y `%r`/`%p` dentro de un ProxyJump se
       expanden con el User/Port del bloque o el usuario LOCAL, nunca con los de la URL del tunel:
       eso es de paramiko y no se arregla por la API publica
@@ -114,7 +114,7 @@ Upcoming
       (#1639 CodeQL y #1640 sqlparse) y los otros dos quedaron en rama, listos (ver la seccion
       "LISTOS PARA MANDAR"). El de ProxyJump no va a pgcli: upstream usa la libreria `sshtunnel`,
       cuyo `_read_ssh_config` tambien lee solo proxycommand; ese PR iria a pahaz/sshtunnel
-- [ ] Upstream mergeo #1542/#1543/#1544 con `-c`/`-f` saliendo con exit 0 aunque falle un statement;
+- [x] 2026-10-16: rama upstream/exit-status-like-psql lista, PR a la espera del OK de Diego. Era: upstream mergeo #1542/#1543/#1544 con `-c`/`-f` saliendo con exit 0 aunque falle un statement;
       el fork sale con 1 (psql -c tambien sale 1; -f sale 3 con ON_ERROR_STOP). Evaluar PR
       "exit non-zero on error like psql" cuando haya lugar en la cola
 
@@ -272,6 +272,38 @@ Upcoming
 - [x] CERRADO 2026-09-17: las tres ramas que figuraban como borrables (feature/stream-results,
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
+
+2026-10-16
+===================
+
+### TANDA "dale a 4, 5 6, cerra 7 y segui con 8"
+- [x] 4) Rama `upstream/ef-failed-transaction` borrada del fork y local (era 423b8969)
+- [x] 7) #1628 (SQL_ASCII) CERRADO con comentario: #1629 primero, la oferta del fixture sigue
+- [x] 5) #1651: Ctrl-C ignorado durante el cancel de ultimo recurso (max 2s), asi la query no
+      queda huerfana en el servidor. Fork 99e45343, PR 709267d8 + cuerpo actualizado. Punta a
+      punta con 150ms: 2, 3, 4 y 6 Ctrl-C rapidos dejan todo limpio (antes 4 dejaba el sleep)
+- [x] 6) Exit codes de -c/-f como psql (medido con psql 18): el de la ultima accion; -c que
+      falla = 1; con STOP (ON_ERROR_STOP) la primera falla corta todo y un -f que falla = 3;
+      con RESUME corre todo. Rama upstream/exit-status-like-psql (9dde7db0), 11 tests + 2
+      escenarios behave que afirmaban "exits successfully" con una query invalida (los
+      escribimos nosotros en #1542). PR SIN ABRIR: el texto espera el OK de Diego
+- [x] 6 en el fork (75744246): `-c` junto con `-f` corria SOLO el -c, el archivo se ignoraba
+      callado (el fork se quedo con su run_cli viejo al tomar #1542). Arreglado + exit codes
+- [x] CI del fork rojo por cli-helpers 2.15.2 (salio hoy 16:15 UTC, su #117): alinea la salida
+      vertical por ancho de pantalla y `test_format_array_output_expanded` tenia la
+      desalineacion vieja escrita. 572a4f8f: expectativa corregida + piso cli_helpers >= 2.15.2.
+      OJO: upstream tiene el MISMO test, se le va a poner rojo a todos los PRs al re-correr
+- [x] 8a) El tunel lee tambien /etc/ssh/ssh_config (+ ssh_config.d), despues del del usuario,
+      el primer valor gana. Include relativos desde /etc/ssh, "Host *" de separador. 38 hosts
+      reales identicos a antes y a `ssh -G`. Fixture autouse para que ningun test dependa del
+      config de sistema de la maquina (2ffb2a91)
+- [x] 8b) %r/%p en ProxyCommand con el usuario/puerto efectivos (URL primero), y %% literal.
+      En ProxyJump NO: OpenSSH 9.6 rechaza el config entero ("Invalid ProxyJump") (9466290d)
+- [x] 8c) Los wrappers de dump usan pgpass.lookup_password (libpq): PGPASSFILE, escapes, sin
+      globs parciales. Medido antes sobre el .pgpass real: 451 entradas y 110 aliases, cero
+      diferencias (ae285aac)
+- [ ] Instalar en `t` una build con todo lo de hoy (cuando Diego diga)
+- [ ] Proponer a upstream el arreglo del test por cli-helpers 2.15.2 (cuando Diego diga)
 
 2026-10-15
 ===================
