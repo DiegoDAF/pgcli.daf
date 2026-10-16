@@ -4,6 +4,14 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``%r`` and ``%p`` in a ``ProxyCommand`` from the SSH config now expand to the
+  user and port the tunnel connects with, the tunnel URL first, as ssh does
+  with the command line. paramiko used the Host block's ``User`` and ``Port``,
+  so ``ssh://alice@db:2222`` handed the proxy ``blockuser`` and ``2022``, and it
+  turned a literal ``%%`` into a broken token. ``%h`` and ``%n`` already
+  matched. Tokens in ``ProxyJump`` stay as they were: OpenSSH 9.6 rejects them
+  outright (``Invalid ProxyJump``), so there is no behaviour to match.
+
 * ``-c`` together with ``-f`` ran only the ``-c``: the file was skipped
   without a word, a leftover of this fork's ``run_cli`` from before upstream
   made both run (#1542), as psql does. And the exit status now follows psql

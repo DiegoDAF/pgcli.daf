@@ -111,6 +111,33 @@ def _expand_ssh_includes(path: str, depth: int = 0, logger: Optional[logging.Log
     return "\n".join(out)
 
 
+# Stand-ins for %%, %r and %p in a ProxyCommand while paramiko parses it, put
+# back by _fill_proxy_command_tokens() once the real user and port are known.
+_PROXY_TOKENS = {"%%": "\x01pct\x01", "%r": "\x01user\x01", "%p": "\x01port\x01"}
+
+
+def _protect_proxy_command_tokens(text: str) -> str:
+    """Hide %%, %r and %p in ProxyCommand lines from paramiko.
+
+    ssh expands %r and %p with the user and port it actually connects with,
+    the command line (here, the tunnel URL) first; paramiko uses the Host
+    block's User and Port, and turns a literal %% into a broken token. %h and
+    %n are left to paramiko, which expands them the way ssh does.
+    """
+    out = []
+    for line in text.splitlines():
+        if re.match(r"\s*proxycommand[\s=]", line, re.IGNORECASE):
+            line = re.sub(r"%[%rp]", lambda m: _PROXY_TOKENS[m.group(0)], line)
+        out.append(line)
+    return "\n".join(out)
+
+
+def _fill_proxy_command_tokens(command: str, user: str, port: int) -> str:
+    """Put the effective user and port where %r and %p stood, and % for %%."""
+    command = command.replace(_PROXY_TOKENS["%r"], user).replace(_PROXY_TOKENS["%p"], str(port))
+    return command.replace(_PROXY_TOKENS["%%"], "%")
+
+
 def _lookup_ssh_config(hostname: str, user_path: str, system_path: str, logger: logging.Logger) -> "dict[str, Any]":
     """Look ``hostname`` up the way ssh does: the user's config, then the system one.
 
@@ -119,11 +146,15 @@ def _lookup_ssh_config(hostname: str, user_path: str, system_path: str, logger: 
     landing in whatever Host block the user's file ends with. A broken user
     config raises, for the caller to report; a system file paramiko cannot
     parse is skipped with a warning rather than losing the user's config too.
+    A ProxyCommand comes back with stand-ins for %%, %r and %p, for
+    _fill_proxy_command_tokens().
     """
     user_text = _expand_ssh_includes(user_path, logger=logger) if os.path.isfile(user_path) else ""
     system_text = ""
     if os.path.isfile(system_path):
         system_text = _expand_ssh_includes(system_path, logger=logger, base_dir=os.path.dirname(system_path))
+    user_text = _protect_proxy_command_tokens(user_text)
+    system_text = _protect_proxy_command_tokens(system_text)
 
     user_config = paramiko.SSHConfig()
     user_config.parse(io.StringIO(user_text))
@@ -640,14 +671,17 @@ class SSHTunnelManager:
                 if key_filenames:
                     self.logger.debug("SSH identity files from config: %s", key_filenames)
                 proxycommand = _proxy_command_from_host_config(host_config, ssh_hostname, ssh_port)
-                if proxycommand:
-                    self.logger.debug("SSH proxy command from config: %s", proxycommand)
             except Exception as e:
                 ssh_config_error = str(e)
                 self.logger.warning("Could not read SSH config: %s", e)
 
         if not ssh_username:
             ssh_username = getpass.getuser()
+
+        if proxycommand:
+            # Now that the user and port are settled, the way ssh settles them.
+            proxycommand = _fill_proxy_command_tokens(proxycommand, ssh_username, ssh_port)
+            self.logger.debug("SSH proxy command from config: %s", proxycommand)
 
         if not ssh_hostname:
             self.logger.error("SSH tunnel URL has no hostname: %s", tunnel_url)

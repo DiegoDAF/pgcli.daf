@@ -997,6 +997,49 @@ class TestSystemSSHConfig:
         assert mock_native_tunnel["client"].connect.call_args[1]["hostname"] == "db.internal"
 
 
+class TestProxyCommandTokens:
+    """ssh expands %r and %p in ProxyCommand with the user and port it really
+    connects with, command line first; paramiko uses the Host block's, and
+    mangles a literal %%. Each expectation is what OpenSSH 9.6 ran, captured
+    with a ProxyCommand that echoes its expanded arguments."""
+
+    BLOCK = "Host cmdalias\n    HostName db2.internal\n    User blockuser\n    Port 2022\n    ProxyCommand {}\n"
+
+    def _proxy_command(self, tmp_path, command, url="ssh://cmdalias", block=None):
+        config = tmp_path / "config"
+        config.write_text((block or self.BLOCK).format(command))
+        manager = SSHTunnelManager(ssh_tunnel_url=url, logger=logging.getLogger("test"))
+        with (
+            patch("pgcli.ssh_tunnel.paramiko.ProxyCommand") as proxy_command,
+            patch("pgcli.ssh_tunnel.paramiko.SSHClient"),
+            patch("pgcli.ssh_tunnel.socketserver.ThreadingTCPServer") as server,
+            patch("pgcli.ssh_tunnel.threading.Thread"),
+            patch("pgcli.ssh_tunnel.os.path.expanduser", side_effect=lambda p: str(config) if p == "~/.ssh/config" else p),
+        ):
+            server.return_value.server_address = ("127.0.0.1", 12345)
+            manager.start_tunnel(host="db", port=5432)
+        return proxy_command.call_args[0][0]
+
+    def test_url_user_and_port_win(self, tmp_path):
+        # ssh -l alice -p 2222 cmdalias
+        assert self._proxy_command(tmp_path, "ssh -W %h:%p %r@bastion", url="ssh://alice@cmdalias:2222") == (
+            "ssh -W db2.internal:2222 alice@bastion"
+        )
+
+    def test_block_user_and_port_without_them_in_the_url(self, tmp_path):
+        # ssh cmdalias
+        assert self._proxy_command(tmp_path, "ssh -W %h:%p %r@bastion") == "ssh -W db2.internal:2022 blockuser@bastion"
+
+    def test_escaped_percent_stays_literal(self, tmp_path):
+        # ssh -p 2222 cmdalias, ProxyCommand ... lit=%%r mixed=%%%p
+        assert self._proxy_command(tmp_path, "echo lit=%%r mixed=%%%p", url="ssh://cmdalias:2222") == "echo lit=%r mixed=%2222"
+
+    def test_no_user_anywhere_means_the_local_user(self, tmp_path):
+        block = "Host cmdalias\n    HostName db2.internal\n    ProxyCommand {}\n"
+        with patch("pgcli.ssh_tunnel.getpass.getuser", return_value="localme"):
+            assert self._proxy_command(tmp_path, "ssh -W %h:%p %r@bastion", block=block) == "ssh -W db2.internal:22 localme@bastion"
+
+
 class TestGetTunnelManagerFromConfig:
     """Tests for get_tunnel_manager_from_config function."""
 
