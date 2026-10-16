@@ -74,6 +74,11 @@ Features:
 Internal:
 ---------
 
+* ``cli_helpers >= 2.15.2``. That release aligns vertical (expanded) output
+  by display width, so a header made of wide characters like ``配列`` lines up;
+  ``test_format_array_output_expanded`` had the old misalignment written down
+  and failed in CI the day it came out.
+
 * Merged upstream through ``baf0f01d`` (#1625, dropping the stale ``xfail`` on
   the schema-qualified INSERT test and documenting the one still needed). Both
   changes were already here, word for word, since 4.6.2.
