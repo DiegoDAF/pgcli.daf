@@ -276,6 +276,22 @@ Upcoming
 2026-10-19
 ===================
 
+### `d` PUESTA AL DIA (pedido de Diego: "si" a .pgpass y .git en d)
+- [x] Descubierto: syncthing NO sincroniza ~/.config/pgcli (ni el .pgpass) entre t y d, solo el arbol
+      de scripts y otras carpetas. El dsn.d de d estaba semanas atras: 26 aliases sin el
+      sslmode=verify-ca + bundle de RDS del 09/10 (caian a texto plano por la trampa del root.crt),
+      7 aliases que no tenia y los 3 muertos todavia ahi
+- [x] dsn.d de d: backup completo en d, copia desde t (nuevos y actualizados + carpeta de archivo),
+      los 3 muertos retirados (identicos a los archivados, a la papelera). Los .conf quedan con hash
+      identico en las dos maquinas
+- [x] .pgpass de d: ya estaba copiado de t despues del archivado del 15/10 (0 hosts muertos, workforce
+      con el host nuevo). Solo 3 lineas de rnd-dify con una password vieja: desde d pedia password,
+      desde t conectaba. Reemplazadas por las de t (con backup en d), ahora conecta
+- [x] .git del fork en d: HEAD estaba en 9d6d1140 (19/08). Verificado antes: los 157 archivos de
+      fork/main identicos en el working tree, HEAD ancestro de fork/main. `reset --mixed fork/main`
+      (no toca archivos) y user.name = Diego. La rama local fix/function-fields-variadic-column
+      (2bea3311, 22/06) no esta en ningun remoto pero su contenido ya esta en main; queda en d
+
 ### RELEASE 4.7.3 (pedido de Diego: "instala la version en t y prepara el release de nuestro fork")
 - [x] `__version__` 4.7.3 y seccion del changelog cerrada como `4.7.3 (2026-10-19) - upstream: 4.7.1`
       (c7d12637, pusheado, SIN tag). Upstream sigue en 4.7.1 (GitHub y PyPI)
