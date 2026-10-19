@@ -276,6 +276,16 @@ Upcoming
 2026-10-19
 ===================
 
+### RELEASE 4.7.3 (pedido de Diego: "instala la version en t y prepara el release de nuestro fork")
+- [x] `__version__` 4.7.3 y seccion del changelog cerrada como `4.7.3 (2026-10-19) - upstream: 4.7.1`
+      (c7d12637, pusheado, SIN tag). Upstream sigue en 4.7.1 (GitHub y PyPI)
+- [x] Control de release contra PG descartable: pytest 3663 passed, behave 15 features / 62
+      escenarios sin fallos (pgbouncer salteado local, lo corre el CI), ruff, mypy, docutils
+- [x] Wheel 4.7.3 instalado en `t` (codigo 8a59ca959643ffce): -c + -f, exit 1 / 3, DSN de dev
+      por el tunel y pgcli_dump autenticando por el tunel
+- [ ] PUBLICAR cuando Diego pruebe y diga "publicalo": tag v4.7.3, push del tag, GitHub release
+      con el wheel y las notas (borrador fuera del repo: ../release_notes_v4.7.3.md)
+
 ### RELEVAMIENTO DE UPSTREAM (pedido de Diego: "lo de siempre, ponete al dia")
 - [x] original/main sin commits nuevos desde 3c3776cf (15/10). Nuestros 8 PRs abiertos sin
       comentarios ni reviews de terceros desde el 16/10; #1645, #1647, #1649 CLEAN, el resto
