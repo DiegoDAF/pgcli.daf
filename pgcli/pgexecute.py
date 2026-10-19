@@ -580,7 +580,7 @@ class PGExecute:
         so that the next statement reconnects.
         """
         conn = self.conn
-        if conn is None or conn.closed or conn.pgconn.transaction_status != psycopg.pq.TransactionStatus.ACTIVE:
+        if conn is None or conn.closed or conn.info.transaction_status != psycopg.pq.TransactionStatus.ACTIVE:
             return "idle"
         try:
             # cancel_safe() is psycopg >= 3.2; cancel() blocks but works on 3.0.
@@ -608,7 +608,7 @@ class PGExecute:
         if conn is None or conn.closed:
             return
         try:
-            if conn.pgconn.transaction_status == psycopg.pq.TransactionStatus.ACTIVE:
+            if conn.info.transaction_status == psycopg.pq.TransactionStatus.ACTIVE:
                 with _sigint_ignored():
                     if hasattr(conn, "cancel_safe"):
                         conn.cancel_safe(timeout=timeout)
