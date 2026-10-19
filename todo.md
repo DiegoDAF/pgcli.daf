@@ -283,8 +283,9 @@ Upcoming
       escenarios sin fallos (pgbouncer salteado local, lo corre el CI), ruff, mypy, docutils
 - [x] Wheel 4.7.3 instalado en `t` (codigo 8a59ca959643ffce): -c + -f, exit 1 / 3, DSN de dev
       por el tunel y pgcli_dump autenticando por el tunel
-- [ ] PUBLICAR cuando Diego pruebe y diga "publicalo": tag v4.7.3, push del tag, GitHub release
-      con el wheel y las notas (borrador fuera del repo: ../release_notes_v4.7.3.md)
+- [x] PUBLICADA (Diego: "publique nomas"): tag anotado v4.7.3 sobre c7d12637, GitHub release
+      "pgcli.daf 4.7.3" (Latest) con el wheel; el asset descargado da el mismo sha256 que el local
+- [ ] Instalar 4.7.3 en `d` cuando vuelva a estar prendida
 
 ### RELEVAMIENTO DE UPSTREAM (pedido de Diego: "lo de siempre, ponete al dia")
 - [x] original/main sin commits nuevos desde 3c3776cf (15/10). Nuestros 8 PRs abiertos sin
