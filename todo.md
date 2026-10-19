@@ -285,7 +285,10 @@ Upcoming
       por el tunel y pgcli_dump autenticando por el tunel
 - [x] PUBLICADA (Diego: "publique nomas"): tag anotado v4.7.3 sobre c7d12637, GitHub release
       "pgcli.daf 4.7.3" (Latest) con el wheel; el asset descargado da el mismo sha256 que el local
-- [ ] Instalar 4.7.3 en `d` cuando vuelva a estar prendida
+- [x] 4.7.3 instalada en `d` el mismo dia (wheel por scp, sha256 7c665eec igual al de t; codigo
+      8a59ca959643ffce, el mismo que en t). DSN de dev por el tunel OK. Por ssh el keyring de `d`
+      esta bloqueado ("Failed to unlock the collection!"): sin sesion de escritorio que lo abra,
+      pgcli avisa y usa el .pgpass. No es de la 4.7.3
 
 ### RELEVAMIENTO DE UPSTREAM (pedido de Diego: "lo de siempre, ponete al dia")
 - [x] original/main sin commits nuevos desde 3c3776cf (15/10). Nuestros 8 PRs abiertos sin
