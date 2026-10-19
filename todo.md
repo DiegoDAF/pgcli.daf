@@ -285,9 +285,9 @@ Upcoming
       apart" del issue era falsa (info.transaction_status da ACTIVE). Ese mismo dia un tercero
       (devpryan7792) abrio psycopg#1448 con exactamente el arreglo propuesto (cerrar la conexion
       si otra interrupcion cae en la limpieza, sync y async, con tests). Sin comentarios aun
-- [ ] Responder en psycopg#1444 reconociendo el error (texto propuesto a Diego)
-- [ ] pgcli: usar el publico `conn.info.transaction_status` en vez de `conn.pgconn.transaction_status`
-      en recover_from_interrupt/abandon_connection (fork + #1651), cuando Diego diga
+- [x] Respondido en psycopg#1444 reconociendo el error, y la frase falsa tachada en el cuerpo del issue
+- [x] pgcli usa el publico `conn.info.transaction_status` en la recuperacion del Ctrl-C: fork
+      12dffa1e, #1651 769b3d34. Mismo valor, sin cambio de comportamiento
 - [x] Terceros: #1605 (crash completando funciones con args variadicos sin nombre) se movio el
       18/10; el fork YA lo cubre (`self.arg_names or []`). j-bennet comento #1613 y #1650 el 16/10
 
