@@ -273,6 +273,24 @@ Upcoming
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
 
+2026-10-19
+===================
+
+### RELEVAMIENTO DE UPSTREAM (pedido de Diego: "lo de siempre, ponete al dia")
+- [x] original/main sin commits nuevos desde 3c3776cf (15/10). Nuestros 8 PRs abiertos sin
+      comentarios ni reviews de terceros desde el 16/10; #1645, #1647, #1649 CLEAN, el resto
+      UNSTABLE por codex-review o por el test de cli-helpers 2.15.2 (#1653 lo arregla)
+- [x] psycopg#1444: dvarrazzo contesto el 18/10 "I'll look into this slop, but, FYI, yes, there
+      is: Connection.info.transaction_status". Tiene razon: la frase "no public way to tell it
+      apart" del issue era falsa (info.transaction_status da ACTIVE). Ese mismo dia un tercero
+      (devpryan7792) abrio psycopg#1448 con exactamente el arreglo propuesto (cerrar la conexion
+      si otra interrupcion cae en la limpieza, sync y async, con tests). Sin comentarios aun
+- [ ] Responder en psycopg#1444 reconociendo el error (texto propuesto a Diego)
+- [ ] pgcli: usar el publico `conn.info.transaction_status` en vez de `conn.pgconn.transaction_status`
+      en recover_from_interrupt/abandon_connection (fork + #1651), cuando Diego diga
+- [x] Terceros: #1605 (crash completando funciones con args variadicos sin nombre) se movio el
+      18/10; el fork YA lo cubre (`self.arg_names or []`). j-bennet comento #1613 y #1650 el 16/10
+
 2026-10-16
 ===================
 
