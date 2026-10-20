@@ -94,9 +94,16 @@ Bug fixes:
   decision, and ``-p abc`` is one line instead of a traceback.
 
 * ``pgcli_dump`` and ``pgcli_dumpall`` read getopt's attached short options
-  (``-hHOST``, ``-p5433``, ``-dDB``) for the tunnel decision; only the spaced
-  forms were seen, so ``pgcli_dump -hdb.example.com mydb`` dialed the host
-  directly and skipped its tunnel.
+  and flag clusters (``-hHOST``, ``-p5433``, ``-dDB``, ``-ch HOST``) for the
+  tunnel decision; only the spaced forms were seen, so
+  ``pgcli_dump -hdb.example.com mydb`` dialed the host directly and skipped
+  its tunnel.
+
+* A multi-host connection string (``host=a,b``, ``postgresql://a,b/db``) is
+  refused only when an SSH tunnel would have to rewrite it. The URI form was
+  refused before the tunnel decision, so a dump that needed no tunnel died
+  with a message about tunnels, while the key=value form was quietly rewritten
+  to one host with the tunnel pointed at ``a,b``.
 
 * Saving a named query (``\ns``, ``\ne``) no longer drops every statement after
   the first when the text has a ``--`` comment. Line comments are turned into

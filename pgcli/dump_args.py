@@ -96,17 +96,24 @@ def _reject_ambiguous_uri(uri: str) -> None:
 
 
 def uri_host_port(uri: str) -> Tuple[Optional[str], Optional[int]]:
-    """The host and port a URI names, or ``None`` for whichever it omits."""
-    _reject_ambiguous_uri(uri)
+    """The host and port a URI names, or ``None`` for whichever it omits.
+
+    A multi-host URI (``a:5432,b:5433``) reports its first host: that is
+    enough to decide whether a tunnel applies, and only then is the URI
+    refused (``_reject_ambiguous_uri`` in the rewrite). Refusing it here
+    rejected dumps that never needed a tunnel, while pg_dump itself takes
+    several hosts.
+    """
     _, hostport = _split_userinfo(urlsplit(uri).netloc)
     if not hostport:
         return None, None
-    host, port = _split_hostport(hostport)
+    host, port = _split_hostport(hostport.split(",", 1)[0])
     return (host or None), (_coerce_port(port, "the URI") if port is not None else None)
 
 
 def rewrite_uri(uri: str, host: str, port: int) -> str:
     """Point a URI at ``host:port``, keeping everything else verbatim."""
+    _reject_ambiguous_uri(uri)
     parts = urlsplit(uri)
     userinfo, _ = _split_userinfo(parts.netloc)
     return urlunsplit((
@@ -119,21 +126,40 @@ def rewrite_uri(uri: str, host: str, port: int) -> str:
 
 
 def connstring_host_port(value: str) -> Tuple[Optional[str], Optional[int]]:
-    """The host and port a keyword/value connection string names."""
+    """The host and port a keyword/value connection string names.
+
+    Like uri_host_port(), a multi-host ``host=a,b`` reports its first host and
+    port; the string is refused only if a tunnel then has to rewrite it.
+    """
     host: Optional[str] = None
     port: Optional[int] = None
     for part in value.split():
         if part.startswith("host="):
-            host = part.split("=", 1)[1]
+            host = part.split("=", 1)[1].split(",", 1)[0]
         elif part.startswith("hostaddr=") and host is None:
-            host = part.split("=", 1)[1]
+            host = part.split("=", 1)[1].split(",", 1)[0]
         elif part.startswith("port="):
-            port = _coerce_port(part.split("=", 1)[1], "the connection string")
+            port = _coerce_port(part.split("=", 1)[1].split(",", 1)[0], "the connection string")
     return host, port
+
+
+def _reject_ambiguous_connstring(value: str) -> None:
+    """Refuse a keyword/value string that names several hosts.
+
+    Rewriting ``host=a,b`` to the tunnel's ``127.0.0.1`` would keep only one
+    of them and open the tunnel towards "a,b", which no SSH server resolves.
+    """
+    for part in value.split():
+        if part.startswith(("host=", "hostaddr=", "port=")) and "," in part:
+            raise ValueError(
+                f"cannot route a multi-host connection string through an SSH tunnel: {value!r}. "
+                "Name a single host, or pass the tunnel target with -h and -p."
+            )
 
 
 def rewrite_connstring(value: str, host: str, port: int) -> str:
     """Point a keyword/value connection string at ``host:port``."""
+    _reject_ambiguous_connstring(value)
     parts = []
     for part in value.split():
         if part.startswith("host="):
@@ -182,41 +208,62 @@ def parse_connection_args(args: List[str]) -> tuple:
     while i < len(args):
         arg = args[i]
 
-        if arg in ("-h", "--host") and i + 1 < len(args):
+        if arg == "--host" and i + 1 < len(args):
             host = args[i + 1]
             has_host = True
             remaining_args.extend([arg, args[i + 1]])
             i += 2
             continue
-        if arg.startswith("--host=") or _attached_short(arg, "h"):
-            host = arg.split("=", 1)[1] if arg.startswith("--") else arg[2:]
+        if arg.startswith("--host="):
+            host = arg.split("=", 1)[1]
             has_host = True
             remaining_args.append(arg)
             i += 1
             continue
 
-        if arg in ("-p", "--port") and i + 1 < len(args):
-            port = _coerce_port(args[i + 1], "-p")
+        if arg == "--port" and i + 1 < len(args):
+            port = _coerce_port(args[i + 1], "--port")
             has_port = True
             remaining_args.extend([arg, args[i + 1]])
             i += 2
             continue
-        if arg.startswith("--port=") or _attached_short(arg, "p"):
-            port = _coerce_port(arg.split("=", 1)[1] if arg.startswith("--") else arg[2:], arg[:2] if arg[1] != "-" else "--port")
+        if arg.startswith("--port="):
+            port = _coerce_port(arg.split("=", 1)[1], "--port")
             has_port = True
             remaining_args.append(arg)
             i += 1
             continue
 
-        if arg in ("-d", "--dbname") and i + 1 < len(args):
+        if arg == "--dbname" and i + 1 < len(args):
             read_dbname(args[i + 1])
             remaining_args.extend([arg, args[i + 1]])
             i += 2
             continue
-        if arg.startswith("--dbname=") or _attached_short(arg, "d"):
-            read_dbname(arg.split("=", 1)[1] if arg.startswith("--") else arg[2:])
+        if arg.startswith("--dbname="):
+            read_dbname(arg.split("=", 1)[1])
             remaining_args.append(arg)
             i += 1
+            continue
+
+        # -h HOST, -hHOST and the flag clusters getopt accepts (-ch HOST, -chHOST).
+        letter, attached, _flags = _short_option_value(arg)
+        if letter in ("h", "p", "d"):
+            if attached:
+                value, consumed = attached, 1
+            elif i + 1 < len(args):
+                value, consumed = args[i + 1], 2
+            else:
+                remaining_args.append(arg)  # dangling option: pg_dump reports it
+                i += 1
+                continue
+            if letter == "h":
+                host, has_host = value, True
+            elif letter == "p":
+                port, has_port = _coerce_port(value, "-p"), True
+            else:
+                read_dbname(value)
+            remaining_args.extend(args[i : i + consumed])
+            i += consumed
             continue
 
         remaining_args.append(arg)
@@ -225,13 +272,25 @@ def parse_connection_args(args: List[str]) -> tuple:
     return host, port, remaining_args, has_host, has_port
 
 
-def _attached_short(arg: str, letter: str) -> bool:
-    """True for getopt's attached form of a short option with a value: -hHOST, -p5433, -dDB.
+def _short_option_value(arg: str) -> Tuple[Optional[str], str, str]:
+    """Split a short-option argument the way getopt does.
 
-    The tunnel decision used to read only ``-h HOST``, so ``pgcli_dump
-    -hdb.example.com`` dialed the host directly and skipped the tunnel.
+    For ``-h x``, ``-hx``, ``-ch x`` and ``-chx`` returns ``(letter, attached,
+    flags)``: the first letter that takes a value, the value attached to it
+    (``""`` when it is the next argument) and the flags that precede it
+    (``"c"`` above, ``""`` for a bare ``-h``). Anything else, long options
+    included, gives ``(None, "", "")``.
+
+    The tunnel decision used to read only ``-h HOST``, so
+    ``pgcli_dump -hdb.example.com`` and ``pgcli_dump -ch db.example.com``
+    dialed the host directly and skipped the tunnel.
     """
-    return arg.startswith("-" + letter) and len(arg) > 2 and not arg.startswith("--")
+    if len(arg) < 2 or not arg.startswith("-") or arg.startswith("--"):
+        return None, "", ""
+    for j, letter in enumerate(arg[1:], 1):
+        if letter in SHORT_OPTIONS_WITH_VALUE:
+            return letter, arg[j + 1 :], arg[1:j]
+    return None, "", ""
 
 
 def build_tunneled_args(
@@ -258,6 +317,9 @@ def build_tunneled_args(
     def rewrite_dbname(value: str) -> str:
         nonlocal rewrote_uri
         if is_uri(value):
+            # A URI the rewrite cannot honour (several hosts, host= or port=
+            # in its query) is refused here, where a tunnel is actually in play.
+            _reject_ambiguous_uri(value)
             if uri_host_port(value)[0]:
                 rewrote_uri = True
                 return rewrite_uri(value, tunnel_host, tunnel_port)
@@ -269,7 +331,7 @@ def build_tunneled_args(
     while i < len(original_args):
         arg = original_args[i]
 
-        if arg in ("-h", "--host"):
+        if arg == "--host":
             new_args.extend([arg, tunnel_host])
             i += 2
             continue
@@ -277,12 +339,8 @@ def build_tunneled_args(
             new_args.append(f"--host={tunnel_host}")
             i += 1
             continue
-        if _attached_short(arg, "h"):
-            new_args.extend(["-h", tunnel_host])
-            i += 1
-            continue
 
-        if arg in ("-p", "--port"):
+        if arg == "--port":
             new_args.extend([arg, str(tunnel_port)])
             i += 2
             continue
@@ -290,12 +348,8 @@ def build_tunneled_args(
             new_args.append(f"--port={tunnel_port}")
             i += 1
             continue
-        if _attached_short(arg, "p"):
-            new_args.extend(["-p", str(tunnel_port)])
-            i += 1
-            continue
 
-        if arg in ("-d", "--dbname") and i + 1 < len(original_args):
+        if arg == "--dbname" and i + 1 < len(original_args):
             new_args.extend([arg, rewrite_dbname(original_args[i + 1])])
             i += 2
             continue
@@ -303,9 +357,21 @@ def build_tunneled_args(
             new_args.append(f"--dbname={rewrite_dbname(arg.split('=', 1)[1])}")
             i += 1
             continue
-        if _attached_short(arg, "d"):
-            new_args.extend(["-d", rewrite_dbname(arg[2:])])
-            i += 1
+
+        # -h HOST, -hHOST, -ch HOST, -chHOST: the flags stay, the value changes.
+        letter, attached, flags = _short_option_value(arg)
+        if letter in ("h", "p", "d") and (attached or i + 1 < len(original_args)):
+            value = attached if attached else original_args[i + 1]
+            if letter == "h":
+                value = tunnel_host
+            elif letter == "p":
+                value = str(tunnel_port)
+            else:
+                value = rewrite_dbname(value)
+            if flags:
+                new_args.append("-" + flags)
+            new_args.extend(["-" + letter, value])
+            i += 1 if attached else 2
             continue
 
         new_args.append(arg)

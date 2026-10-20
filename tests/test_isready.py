@@ -372,3 +372,17 @@ def test_verbose_does_not_log_the_password(mock_tunnel_mgr, mock_config, mock_ru
     assert "s3cr3t" not in caplog.text
     assert "reader:***@127.0.0.1:54321" in caplog.text
 
+
+@patch("pgcli.isready.subprocess.run")
+@patch("pgcli.isready.get_config")
+@patch("pgcli.isready.get_tunnel_manager_from_config")
+def test_a_multi_host_string_through_a_tunnel_is_one_line(mock_tunnel_mgr, mock_config, mock_run):
+    mock_config.return_value = {}
+    mock_manager = MagicMock()
+    mock_manager.start_tunnel.return_value = ("127.0.0.1", 54321)
+    mock_tunnel_mgr.return_value = mock_manager
+    result = CliRunner().invoke(cli, ["-d", "host=a,b dbname=db"])
+    assert result.exit_code == 1
+    assert "cannot route a multi-host connection string through an SSH tunnel" in result.output
+    mock_run.assert_not_called()
+    mock_manager.stop_tunnel.assert_called()

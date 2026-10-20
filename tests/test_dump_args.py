@@ -241,9 +241,15 @@ class TestUrisWeRefuseToGuessAt:
         ids=["multihost", "host-in-query", "hostaddr-in-query", "port-in-query", "two-ports"],
     )
     def test_ambiguous_uri_is_reported_not_guessed(self, mod, clean_pg_env, uri):
+        # Refused where the tunnel has to rewrite it, not before: pg_dump itself
+        # takes several hosts, and a dump that needs no tunnel must run.
         with pytest.raises(ValueError) as excinfo:
-            mod.parse_connection_args(["-d", uri])
+            mod.build_tunneled_args(["-d", uri], "127.0.0.1", 40000, None, None, True, False)
         assert "tunnel" in str(excinfo.value).lower()
+        host, _, _, has_host, _ = mod.parse_connection_args(["-d", uri])
+        assert has_host is (uri.split("//", 1)[1][0] != "/")  # postgresql:///mydb names no host
+        if has_host:
+            assert "," not in host
 
 
 class TestMalformedInput:
@@ -866,3 +872,92 @@ class TestAttachedShortOptions:
 
         with pytest.raises(ValueError, match="not a valid port number"):
             parse_connection_args(["-pabc"])
+
+    def test_parse_reads_a_flag_cluster_ending_in_h(self):
+        # getopt: -ch HOST is --clean plus -h HOST; -chHOST attaches the value.
+        from pgcli.dump_args import parse_connection_args
+
+        for args in (["-ch", "db.internal", "mydb"], ["-chdb.internal", "mydb"]):
+            host, port, remaining, has_host, has_port = parse_connection_args(args)
+            assert (host, has_host, has_port) == ("db.internal", True, False), args
+            assert remaining == args
+
+    def test_build_rewrites_a_flag_cluster_keeping_its_flags(self):
+        from pgcli.dump_args import build_tunneled_args
+
+        assert build_tunneled_args(["-ch", "db.internal", "mydb"], "127.0.0.1", 40000, None, None, True, False) == [
+            "-c", "-h", "127.0.0.1", "mydb", "-p", "40000",
+        ]  # fmt: skip
+        assert build_tunneled_args(["-Ochdb.internal", "-p5433"], "127.0.0.1", 40000, None, None, True, True) == [
+            "-Oc", "-h", "127.0.0.1", "-p", "40000",
+        ]  # fmt: skip
+
+    def test_a_dangling_short_option_is_left_to_pg_dump(self):
+        from pgcli.dump_args import build_tunneled_args, parse_connection_args
+
+        assert parse_connection_args(["mydb", "-h"])[2] == ["mydb", "-h"]
+        assert build_tunneled_args(["mydb", "-h"], "127.0.0.1", 40000, None, None, False, False) == [
+            "mydb",
+            "-h",
+            "-h",
+            "127.0.0.1",
+            "-p",
+            "40000",
+        ]
+
+
+class TestMultiHostConnectionStrings:
+    """pg_dump takes libpq's multi-host strings; only a tunnel cannot rewrite
+    them. They were refused before the tunnel decision, so a plain dump with
+    postgresql://a,b/db (no tunnel anywhere) died with a message about tunnels,
+    while host=a,b was quietly rewritten to one host."""
+
+    def test_parsing_reports_the_first_host_and_does_not_refuse(self):
+        from pgcli.dump_args import parse_connection_args
+
+        host, port, _, has_host, has_port = parse_connection_args(["-d", "postgresql://a:5432,b:5433/db"])
+        assert (host, port, has_host, has_port) == ("a", 5432, True, True)
+        host, port, _, has_host, has_port = parse_connection_args(["-d", "host=a,b port=5432,5433 dbname=db"])
+        assert (host, port, has_host, has_port) == ("a", 5432, True, True)
+
+    def test_the_rewrite_for_a_tunnel_refuses_both_forms(self):
+        from pgcli.dump_args import build_tunneled_args
+
+        for value in ("postgresql://a,b/db", "host=a,b dbname=db", "postgresql://a/db?host=c"):
+            with pytest.raises(ValueError, match="through an SSH tunnel"):
+                build_tunneled_args(["-d", value], "127.0.0.1", 40000, None, None, True, False)
+
+    @pytest.mark.parametrize("value", ["postgresql://a,b/db", "host=a,b dbname=db"])
+    def test_without_a_tunnel_the_dump_runs_untouched(self, value):
+        from unittest.mock import MagicMock, patch
+        from click.testing import CliRunner
+        import pgcli.dump as mod
+
+        manager = MagicMock()
+        manager.start_tunnel.side_effect = lambda host, port, dsn_alias=None: (host, port)
+        with (
+            patch.object(mod, "get_config", return_value={}),
+            patch.object(mod, "get_tunnel_manager_from_config", return_value=manager),
+            patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=0)) as srun,
+        ):
+            result = CliRunner().invoke(mod.cli, ["-d", value, "-f", "/dev/null"])
+        assert result.exit_code == 0, result.output
+        assert srun.call_args[0][0][1:] == ["-d", value, "-f", "/dev/null"]
+
+    def test_with_a_tunnel_the_dump_is_refused_in_one_line(self):
+        from unittest.mock import MagicMock, patch
+        from click.testing import CliRunner
+        import pgcli.dump as mod
+
+        manager = MagicMock()
+        manager.start_tunnel.return_value = ("127.0.0.1", 54321)
+        with (
+            patch.object(mod, "get_config", return_value={}),
+            patch.object(mod, "get_tunnel_manager_from_config", return_value=manager),
+            patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=0)) as srun,
+        ):
+            result = CliRunner().invoke(mod.cli, ["-d", "host=a,b dbname=db", "-f", "/dev/null"])
+        assert result.exit_code == 1
+        assert "cannot route a multi-host connection string through an SSH tunnel" in result.output
+        srun.assert_not_called()
+        manager.stop_tunnel.assert_called()

@@ -241,15 +241,22 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
     if tunnel_host != host or tunnel_port != port:
         # Tunnel is active, modify connection args
         logger.debug("SSH tunnel active: %s:%d -> %s:%d", host, port, tunnel_host, tunnel_port)
-        final_args = build_tunneled_args(
-            remaining_args,
-            tunnel_host,
-            tunnel_port,
-            host,
-            port,
-            has_host,
-            has_port,
-        )
+        try:
+            final_args = build_tunneled_args(
+                remaining_args,
+                tunnel_host,
+                tunnel_port,
+                host,
+                port,
+                has_host,
+                has_port,
+            )
+        except ValueError as e:
+            # A connection string the tunnel cannot rewrite (several hosts,
+            # host= or port= in a URI's query): one line, not a traceback.
+            tunnel_manager.stop_tunnel()
+            click.secho(f"Error: {e}", err=True, fg="red")
+            sys.exit(1)
 
         # Look up password from .pgpass using ORIGINAL host (not tunneled)
         # This is needed because pg_dump will see 127.0.0.1 but .pgpass has the real host
