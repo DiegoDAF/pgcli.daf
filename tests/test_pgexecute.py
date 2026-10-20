@@ -1111,3 +1111,20 @@ def test_ssl_state_with_ssl_disabled():
         assert _server_sees_ssl(executor) is False
     finally:
         executor.conn.close()
+
+
+@pytest.mark.parametrize(
+    "sql, expected",
+    [
+        ("\\restrict KEY\nselect 1;", ("\\restrict KEY", "select 1;")),
+        ("\\echo hi\n\\unrestrict KEY", ("\\echo hi", "\\unrestrict KEY")),
+        ("\\ns q select 1,\n2", ("\\ns q select 1,\n2", "")),
+        ("select 1,\n2", ("select 1,\n2", "")),
+        ("\\dt", ("\\dt", "")),
+        ("  \\d t\n", ("  \\d t\n", "")),  # nothing to cut: returned as given
+    ],
+)
+def test_split_meta_command(sql, expected):
+    from pgcli.pgexecute import split_meta_command
+
+    assert split_meta_command(sql) == expected

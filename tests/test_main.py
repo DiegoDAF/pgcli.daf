@@ -2745,3 +2745,18 @@ def test_auto_expand_without_a_prompt_asks_the_terminal(executor):
         output, query = cli._evaluate_command("select 1 as a, 2 as b")
     assert query.successful
     assert any("RECORD 1" in line for line in output)
+
+
+@dbtest
+def test_a_multi_line_ns_is_saved_whole_in_command_mode(executor, tmpdir):
+    # PGExecute.run() exempts \ns from the backslash-ends-at-its-newline rule
+    # (it saves a query, which may span lines). The -c/-f path kept its own
+    # copy of the rule without the exemption: "\ns q select 1,\n2;" saved
+    # "select 1," and ran "2" as SQL.
+    cli = PGCli(pgexecute=executor, pgclirc_file=str(tmpdir.join("rcfile")))
+    with mock.patch.object(cli, "echo_via_pager"):
+        ok = cli._execute_statements("\\ns two_lines_cmd select 1 as a,\n2 as b;")
+    from pgspecial.namedqueries import NamedQueries
+
+    assert ok is True
+    assert NamedQueries.instance.get("two_lines_cmd") == "select 1 as a,\n2 as b"

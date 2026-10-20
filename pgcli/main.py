@@ -63,7 +63,7 @@ from . import pgpass
 from .pgcompleter import PGCompleter
 from .pgtoolbar import create_toolbar_tokens_func
 from .pgstyle import style_factory, style_factory_output
-from .pgexecute import PGExecute
+from .pgexecute import PGExecute, split_meta_command
 from .completion_refresher import CompletionRefresher
 from .config import (
     get_casing_file,
@@ -1733,7 +1733,7 @@ class PGCli:
 
         A backslash command spans only its own line, like in psql, so a
         metacommand followed by SQL on the next line does not swallow the
-        SQL (sqlparse only cuts at semicolons).
+        SQL (sqlparse only cuts at semicolons); see split_meta_command().
 
         Honors on_error: with STOP (the default), the first failed statement
         stops the run. Returns True when every statement succeeded.
@@ -1742,15 +1742,12 @@ class PGCli:
         statements = sqlparse.split(self._strip_markdown(text))
         while statements:
             statement = statements.pop(0)
-            stripped = statement.strip()
-            if not stripped:
+            if not statement.strip():
                 continue
-            if stripped.startswith("\\") and "\n" in stripped:
-                # psql's rule: a backslash command ends at its newline. Put
-                # the rest back through the splitter.
-                first_line, rest = stripped.split("\n", 1)
+            statement, rest = split_meta_command(statement)
+            if rest:
+                # Put what followed the backslash command back through the splitter.
                 statements = sqlparse.split(rest) + statements
-                statement = first_line
             query = self.handle_watch_command(statement)
             if query is not None and not query.successful:
                 ok = False

@@ -79,6 +79,26 @@ def _decode_row(row):
     return [[_decode_if_bytes(item) for item in value] if isinstance(value, list) else _decode_if_bytes(value) for value in row]
 
 
+def split_meta_command(sql):
+    """Cut a backslash command at its newline, the way psql does.
+
+    Returns ``(command, rest)``: the first line, and whatever followed it,
+    which is more statements to run. Anything that is not a backslash command
+    comes back whole with an empty ``rest``, and so does ``\\ns``, which saves
+    a query that may well span several lines.
+
+    Without the cut a pasted dump's "\\restrict KEY" swallowed the next line
+    into its token (so the closing "\\unrestrict KEY" never matched), and any
+    meta-command took the SQL after it as its arguments. The one rule serves
+    both the prompt (PGExecute.run) and -c/-f (PGCli._execute_statements):
+    two copies of it had already drifted apart on the ``\\ns`` exception.
+    """
+    first_line, newline, rest = sql.strip().partition("\n")
+    if newline and first_line.startswith("\\") and first_line.split(maxsplit=1)[0] != "\\ns":
+        return first_line, rest
+    return sql, ""
+
+
 # pg3: I don't know what is this
 @contextlib.contextmanager
 def _sigint_ignored():
@@ -445,16 +465,9 @@ class PGExecute:
         # run each sql query
         sqlarr = list(sqlarr)
         while sqlarr:
-            sql = sqlarr.pop(0)
-            first_line, newline, rest = sql.strip().partition("\n")
-            if newline and first_line.startswith("\\") and first_line.split(maxsplit=1)[0] != "\\ns":
-                # psql's rule: a backslash command ends at its newline, and
-                # what follows is more statements. Otherwise a pasted dump's
-                # "\restrict KEY" swallowed the next line into its token (so
-                # the closing "\unrestrict KEY" never matched), and any
-                # meta-command took the SQL after it as arguments. \ns is the
-                # exception: it saves a query, which may span several lines.
-                sql = first_line
+            sql, rest = split_meta_command(sqlarr.pop(0))
+            if rest:
+                # What followed the backslash command on later lines.
                 sqlarr[:0] = sqlparse.split(rest)
             # Remove spaces, eol and semi-colons.
             # Strip trailing comments first so rstrip(";") works when there are
