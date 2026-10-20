@@ -18,9 +18,34 @@ DESCRIPTIONS = {
     "Index Only Scan": "Finds relevant records based on an Index. Index Only Scans perform a single read operation from the index and do not read from the corresponding table.",
     "Bitmap Heap Scan": "Searches through the pages returned by the Bitmap Index Scan for relevant rows.",
     "Bitmap Index Scan": "Uses a Bitmap Index (index which uses 1 bit per page) to find all relevant pages. Results of this node are fed to the Bitmap Heap Scan.",
-    "CTEScan": "Performs a sequential scan of Common Table Expression (CTE) query results. Note that results of a CTE are materialized (calculated and temporarily stored).",
+    "CTE Scan": "Performs a sequential scan of Common Table Expression (CTE) query results. Note that results of a CTE are materialized (calculated and temporarily stored).",
     "ProjectSet": "ProjectSet appears when the SELECT or ORDER BY clause of the query.  They basically just execute the set-returning function(s) for each tuple until none of the functions return any more records.",
     "Result": "Returns result",
+    "Gather": "Collects the rows produced by the parallel workers into one stream; the plan below it runs in every worker.",
+    "Gather Merge": "Collects the sorted rows of the parallel workers and merges them, keeping the sort order.",
+    "Memoize": "Caches the inner side of a nested loop by parameter value, so a repeated lookup with the same key is not executed again.",
+    "Incremental Sort": "Sorts a record set already sorted on a prefix of the keys, one group of equal prefix values at a time.",
+    "WindowAgg": "Computes window functions (OVER ...) over the rows of each partition.",
+    "Unique": "Removes consecutive duplicate rows from a sorted input (DISTINCT, UNION).",
+    "Materialize": "Stores the input rows in memory, or on disk, so they can be rescanned without running the plan below again.",
+    "Subquery Scan": "Scans the result of a subquery in the FROM clause.",
+    "Function Scan": "Scans the rows returned by a set-returning function.",
+    "Values Scan": "Scans the rows of a VALUES list.",
+    "ModifyTable": "Applies the INSERT, UPDATE, DELETE or MERGE to the target table with the rows produced below.",
+    "LockRows": "Locks the selected rows (SELECT ... FOR UPDATE / FOR SHARE).",
+    "Group": "Groups adjacent rows of a sorted input by the GROUP BY keys.",
+    "SetOp": "Computes INTERSECT or EXCEPT over its inputs.",
+    "Tid Scan": "Fetches rows directly by their physical location (ctid).",
+    "Foreign Scan": "Reads rows from a foreign table through its foreign data wrapper.",
+    "Merge Append": "Merges several sorted inputs, typically partitions, keeping the sort order.",
+    "Recursive Union": "Evaluates a recursive CTE, iterating until no new rows are produced.",
+    "WorkTable Scan": "Scans the rows produced by the previous iteration of a recursive CTE.",
+    "BitmapAnd": "Combines the bitmaps of several Bitmap Index Scans with AND.",
+    "BitmapOr": "Combines the bitmaps of several Bitmap Index Scans with OR.",
+    "Named Tuplestore Scan": "Scans a trigger's transition table (OLD TABLE / NEW TABLE).",
+    "Table Function Scan": "Scans the rows produced by a table function such as XMLTABLE or JSON_TABLE.",
+    "Sample Scan": "Reads a sample of the table (TABLESAMPLE).",
+    "Custom Scan": "A scan provided by an extension.",
 }
 
 
@@ -518,7 +543,8 @@ class Visualizer:
                     % (
                         self.muted_format("filter"),
                         plan["Filter"],
-                        self.muted_format("[-%s rows]" % self.intcomma(plan["Rows Removed by Filter"])),
+                        # Absent without ANALYZE (EXPLAIN (ANALYZE false, FORMAT JSON) with F5 on).
+                        self.muted_format("[-%s rows]" % self.intcomma(plan.get("Rows Removed by Filter", 0))),
                     ),
                 )
             )

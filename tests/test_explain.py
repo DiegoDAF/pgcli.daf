@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from pgcli.pyev import Visualizer
 from pgcli.explain_output_formatter import ExplainOutputFormatter
 from pgcli.pgexecute import PGExecute
@@ -422,3 +424,54 @@ def test_format_output_passes_explain_summary_through():
     settings = OutputSettings(table_format="psql", explain_summary=False, max_width=100)
     out = "\n".join(format_output("title", cur, ["QUERY PLAN"], "status", settings, explain_mode=True))
     assert "Summary" not in out
+
+
+def _render(plan):
+    v = Visualizer(100, color=False)
+    v.load(plan)
+    return v.get_list()
+
+
+def _leaf(node_type, **extra):
+    node = {
+        "Node Type": node_type,
+        "Actual Total Time": 1.0,
+        "Actual Loops": 1,
+        "Total Cost": 1,
+        "Plan Rows": 1,
+        "Actual Rows": 1,
+        "Plans": [],
+    }
+    node.update(extra)
+    return node
+
+
+def test_cte_scan_is_described():
+    # PostgreSQL spells the node "CTE Scan"; the table said "CTEScan".
+    plan = {"Plan": _leaf("CTE Scan", **{"CTE Name": "c"}), "Planning Time": 0.1, "Execution Time": 1.0}
+    out = _render(plan)
+    assert "Not found" not in out
+    assert "Common Table Expression" in out
+
+
+def test_a_filter_without_actual_rows_does_not_crash():
+    # EXPLAIN (ANALYZE false, FORMAT JSON) with F5 on: a Filter, but no
+    # "Rows Removed by Filter", was a KeyError and the statement failed.
+    plan = {
+        "Plan": {"Node Type": "Seq Scan", "Relation Name": "t", "Filter": "(k = 3)", "Plan Rows": 10, "Total Cost": 5, "Plans": []},
+        "Planning Time": 0.1,
+    }
+    assert "filter (k = 3)" in _render(plan)
+
+
+@pytest.mark.parametrize(
+    "node_type",
+    [
+        "Gather", "Gather Merge", "Memoize", "Incremental Sort", "WindowAgg", "Unique", "Materialize", "Subquery Scan",
+        "Function Scan", "Values Scan", "ModifyTable", "LockRows", "Group", "SetOp", "Tid Scan", "Foreign Scan",
+        "Merge Append", "Recursive Union", "WorkTable Scan", "BitmapAnd", "BitmapOr",
+    ],
+)  # fmt: skip
+def test_common_node_types_are_described(node_type):
+    plan = {"Plan": _leaf(node_type), "Planning Time": 0.1, "Execution Time": 1.0}
+    assert "Not found" not in _render(plan)
