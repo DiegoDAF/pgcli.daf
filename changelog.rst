@@ -127,12 +127,17 @@ Bug fixes:
   connection strings inside SQL (``create subscription ... connection '...'``,
   ``dblink('...')``) and every spelling of a role password literal
   (``password'x'`` with no blank, a comment before it, ``U&'...'``, adjacent
-  literals, a non-ASCII dollar tag). The process title also hides
-  ``sslpassword=`` and ``password = x``, and keeps the arguments that follow a
-  masked password instead of cutting the title there. A tunnel URL written as
-  ``ssh://user:password@bastion`` is masked in the log and in error messages,
-  and ``pgcli_dump``, ``pgcli_dumpall`` and ``pgcli_isready`` rewrite their
-  own process title the way pgcli does.
+  literals, a non-ASCII dollar tag). The process title masks URL passwords and
+  key=value passwords in the same command line (it used to mask one kind or
+  the other, so ``host=h password=x --ssh-tunnel ssh://me@bastion`` stayed in
+  ``ps``), also hides ``sslpassword=`` and ``password = x``, and keeps the
+  arguments that follow a masked password instead of cutting the title there.
+  A URL whose query string holds ``@`` (``?application_name=me@laptop``) is no
+  longer shown as a fake masked password by ``--list-dsn``. A tunnel URL
+  written as ``ssh://user:password@bastion`` is masked in the log and in error
+  messages, ``pgcli_isready -v`` redacts the command line it logs as the dump
+  wrappers do, and ``pgcli_dump``, ``pgcli_dumpall`` and ``pgcli_isready``
+  rewrite their own process title the way pgcli does.
 
 * A reconnect through a revived SSH tunnel whose first connection attempt
   failed (bastion back before the network, database restarting) is retried
@@ -146,7 +151,10 @@ Bug fixes:
 
 * A tunnel URL with an invalid port (``bastion:2222x``) and a connection
   string with a non-numeric port (``postgresql://h:abc/db``) are one line
-  each instead of Python tracebacks.
+  each instead of Python tracebacks. Stopping a tunnel whose forwarding
+  thread never started no longer hangs, and Ctrl-C while the tunnel starts
+  (at the passphrase prompt of a second authentication attempt) closes the
+  first attempt's SSH session instead of leaving it open to the bastion.
 
 * The dump wrappers read the database operand as a connection string, as
   pg_dump does: ``pgcli_dump postgresql://db.internal/mydb`` took its tunnel
