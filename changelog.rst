@@ -9,6 +9,11 @@ Bug fixes:
   ``/* */`` before saving, and that pass rebuilt only the first statement, so
   ``select 1; select 2 -- note`` was stored as ``select 1;``.
 
+* A NOTICE is shown once, not once per statement run so far. Each statement
+  registered a notice handler that was never removed, and with the streamed
+  NOTICE output every one of them echoed it: after ten statements a
+  ``VACUUM VERBOSE`` printed each line eleven times.
+
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================
 

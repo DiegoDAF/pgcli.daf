@@ -671,6 +671,25 @@ def test_function_definition(executor):
 
 
 @dbtest
+def test_streamed_notice_arrives_once_after_earlier_statements(executor):
+    # Every statement registered a notice handler and none was removed, so
+    # after N statements a NOTICE reached the streaming callback N + 1 times.
+    seen = []
+    for _ in range(5):
+        list(executor.run("select 1", notice_callback=seen.append))
+    list(executor.run("do $$ begin raise notice 'once'; end $$", notice_callback=seen.append))
+    assert seen == ["once"]
+
+
+@dbtest
+def test_buffered_notice_shows_once_after_earlier_statements(executor):
+    for _ in range(3):
+        list(executor.run("select 1"))
+    title = list(executor.run("do $$ begin raise notice 'once'; end $$"))[0][0]
+    assert title.count("once") == 1
+
+
+@dbtest
 def test_function_notice_order(executor):
     run(
         executor,

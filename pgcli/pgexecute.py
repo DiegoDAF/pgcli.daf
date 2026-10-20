@@ -675,38 +675,43 @@ class PGExecute:
                 title = f"{title}\n{msg}" if msg else title
 
         self.conn.add_notice_handler(handle_notices)  # type: ignore[union-attr]
-
-        if self.is_virtual_database() and "show help" in split_sql.lower():
-            # see https://github.com/psycopg/psycopg/issues/303
-            # special case "show help" in pgbouncer
-            res = self.conn.pgconn.exec_(split_sql.encode())  # type: ignore[union-attr]
-            return title, None, None, res.command_status.decode()
-
-        cur = self.conn.cursor()  # type: ignore[union-attr]
+        # One handler per statement, removed when the statement is done: left
+        # in place they pile up, and with notice_callback every NOTICE would be
+        # echoed once per statement run so far on this connection.
         try:
-            cur.execute(split_sql)
-        except psycopg.ProgrammingError as e:
-            # psycopg refuses COPY ... TO STDOUT / FROM STDIN here, but only
-            # after the server has already entered the COPY state, which leaves
-            # the connection busy: every later statement then fails with
-            # "another command is already in progress" and pgcli believes a
-            # transaction is open. Close the COPY before reporting the error.
-            if self.conn.info.transaction_status != psycopg.pq.TransactionStatus.ACTIVE:  # type: ignore[union-attr]
-                raise
-            self._end_stray_copy()
-            raise psycopg.ProgrammingError("COPY to STDOUT or from STDIN is not supported, use \\copy instead") from e
+            if self.is_virtual_database() and "show help" in split_sql.lower():
+                # see https://github.com/psycopg/psycopg/issues/303
+                # special case "show help" in pgbouncer
+                res = self.conn.pgconn.exec_(split_sql.encode())  # type: ignore[union-attr]
+                return title, None, None, res.command_status.decode()
 
-        # cur.description will be None for operations that do not return
-        # rows.
-        if cur.description:
-            headers = [x[0] for x in cur.description]
-            return title, cur, headers, cur.statusmessage
-        elif cur.protocol_error:
-            _logger.debug("Protocol error, unsupported command.")
-            return title, None, None, cur.protocol_message
-        else:
-            _logger.debug("No rows in result.")
-            return title, None, None, cur.statusmessage
+            cur = self.conn.cursor()  # type: ignore[union-attr]
+            try:
+                cur.execute(split_sql)
+            except psycopg.ProgrammingError as e:
+                # psycopg refuses COPY ... TO STDOUT / FROM STDIN here, but only
+                # after the server has already entered the COPY state, which leaves
+                # the connection busy: every later statement then fails with
+                # "another command is already in progress" and pgcli believes a
+                # transaction is open. Close the COPY before reporting the error.
+                if self.conn.info.transaction_status != psycopg.pq.TransactionStatus.ACTIVE:  # type: ignore[union-attr]
+                    raise
+                self._end_stray_copy()
+                raise psycopg.ProgrammingError("COPY to STDOUT or from STDIN is not supported, use \\copy instead") from e
+
+            # cur.description will be None for operations that do not return
+            # rows.
+            if cur.description:
+                headers = [x[0] for x in cur.description]
+                return title, cur, headers, cur.statusmessage
+            elif cur.protocol_error:
+                _logger.debug("Protocol error, unsupported command.")
+                return title, None, None, cur.protocol_message
+            else:
+                _logger.debug("No rows in result.")
+                return title, None, None, cur.statusmessage
+        finally:
+            self.conn.remove_notice_handler(handle_notices)  # type: ignore[union-attr]
 
     def search_path(self):
         """Returns the current search path as a list of schema names"""
