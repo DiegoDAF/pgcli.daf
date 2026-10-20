@@ -273,3 +273,54 @@ def test_a_revived_tunnel_is_adopted_even_when_the_first_connect_through_it_fail
         cli._handle_server_closed_connection("select 1")
     assert [c.kwargs for c in cli.pgexecute.connect.call_args_list] == [{"port": 50002}, {"port": 50002}]
     assert cli._tunnel_manager.start_tunnel.call_count == 1
+
+
+def test_c_elsewhere_drops_the_alias_and_c_back_restores_its_tunnel(cli):
+    # After pgcli --dsn prod (tunnel chosen by the alias) and \c to another
+    # server, the alias stayed: the prompt and the destructive warning kept
+    # naming prod, a reconnect reopened the other server's tunnel through
+    # prod's bastion, and \c back to prod's server dialed it directly.
+    cli.dsn_alias = cli._alias_name = "prod"
+    cli._alias_target = ("workforce.internal", 5432)
+    cli._tunnel_manager.start_tunnel.side_effect = _tunnel_to(cli._tunnel_manager, 50001)
+    with patch("pgcli.main.pgpass.lookup_password", return_value=None):
+        list(cli.change_db("postgres postgres other.internal 5432"))
+    cli._tunnel_manager.start_tunnel.assert_called_with(host="other.internal", port=5432, dsn_alias=None)
+    assert cli.dsn_alias is None
+
+    with patch("pgcli.main.pgpass.lookup_password", return_value=None):
+        list(cli.change_db("postgres postgres workforce.internal 5432"))
+    cli._tunnel_manager.start_tunnel.assert_called_with(host="workforce.internal", port=5432, dsn_alias="prod")
+    assert cli.dsn_alias == "prod"
+
+
+def test_reconnect_after_c_elsewhere_does_not_borrow_the_alias_bastion(cli):
+    cli.dsn_alias = cli._alias_name = "prod"
+    cli._alias_target = ("workforce.internal", 5432)
+    cli._tunnel_manager.start_tunnel.side_effect = _tunnel_to(cli._tunnel_manager, 50001)
+    with patch("pgcli.main.pgpass.lookup_password", return_value=None):
+        list(cli.change_db("postgres postgres other.internal 5432"))
+    cli._tunnel_manager.tunnel.is_active = False
+    cli.auto_retry_closed_connection = False
+    with patch("pgcli.main.confirm", return_value=False):
+        cli._handle_server_closed_connection("select 1")
+    assert cli._tunnel_manager.start_tunnel.call_args.kwargs == {"host": "other.internal", "port": 5432, "dsn_alias": None}
+
+
+def test_connect_records_the_alias_with_its_server(tmpdir):
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.dsn_alias = "prod"
+    with (
+        patch.object(cli._tunnel_manager, "start_tunnel", side_effect=lambda host, port, dsn_alias=None: (host, port)),
+        patch("pgcli.main.PGExecute"),
+    ):
+        cli.connect(database="db", host="db.internal", user="me", port=5432)
+    assert (cli._alias_name, cli._alias_target) == ("prod", ("db.internal", 5432))
+
+
+def test_a_port_that_is_not_a_number_is_one_line_not_a_traceback(tmpdir, capsys):
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    with pytest.raises(SystemExit) as e:
+        cli.connect(dsn="postgresql://db.internal:abc/db")
+    assert e.value.code == 1
+    assert 'invalid port number: "abc"' in capsys.readouterr().err

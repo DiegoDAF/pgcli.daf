@@ -257,7 +257,7 @@ class PGCli:
         self.force_passwd_prompt = force_passwd_prompt
         self.never_passwd_prompt = never_passwd_prompt
         self.pgexecute = pgexecute
-        self.dsn_alias = None
+        self.dsn_alias: Optional[str] = None
         self.service_name: Optional[str] = None
         self.watch_command = None
         self.force_destructive = force_destructive
@@ -414,6 +414,13 @@ class PGCli:
             secret_saver=self._ssh_tunnel_secret_saver,
         )
         self.ssh_tunnel: Optional[Any] = None
+        # The server the connection was asked for (before a tunnel turns it
+        # into 127.0.0.1:<local port>), and the DSN alias that named it: \c
+        # back to that server gets the alias's tunnel again, and the reconnect
+        # never borrows the alias's bastion for another server.
+        self._target: Optional[tuple] = None
+        self._alias_name: Optional[str] = None
+        self._alias_target: Optional[tuple] = None
 
         if log_file:
             # Every statement and every result lands here: owner-only, like
@@ -806,7 +813,11 @@ class PGCli:
         """
         manager = self._tunnel_manager
         previous = manager.tunnel
-        tunnel_host, tunnel_port = manager.start_tunnel(host=host, port=port)
+        # Only the server the alias named gets the alias's tunnel; any other
+        # server is looked up by host, and the prompt and the destructive
+        # warning stop naming an alias that is not where we are.
+        alias = self._alias_name if (host, port) == self._alias_target else None
+        tunnel_host, tunnel_port = manager.start_tunnel(host=host, port=port, dsn_alias=alias)
         opened = manager.tunnel if manager.tunnel is not previous else None
         params = {"host": host, "port": tunnel_port}
         password = None
@@ -827,6 +838,7 @@ class PGCli:
         manager.tunnel = opened
         self.ssh_tunnel = opened
         self._target = (host, port)
+        self.dsn_alias = alias
 
     def change_db(self, pattern, **_):
         if pattern:
@@ -1255,11 +1267,19 @@ class PGCli:
 
         # The server actually asked for, before a tunnel turns it into
         # 127.0.0.1:<local port>: \c and reconnects compare against it.
-        self._target = (host or "localhost", int(port or 5432))
+        try:
+            self._target = (host or "localhost", int(port or 5432))
+        except (TypeError, ValueError):
+            # libpq would say the same a moment later; without this it was a
+            # Python traceback out of int().
+            click.secho(f'invalid port number: "{port}"', err=True, fg="red")
+            sys.exit(1)
+        self._alias_name = self.dsn_alias
+        self._alias_target = self._target if self.dsn_alias else None
         try:
             tunnel_host, tunnel_port = self._tunnel_manager.start_tunnel(
-                host=host or "localhost",
-                port=int(port or 5432),
+                host=self._target[0],
+                port=self._target[1],
                 dsn_alias=self.dsn_alias,
             )
         except SSHTunnelError as e:
@@ -2059,6 +2079,7 @@ class PGCli:
         self.logger.debug("SSH tunnel is down, reopening it")
         dead.stop()
         manager.tunnel = None
+        assert self._target is not None, "a tunnel exists, so connect() recorded its target"
         host, port = self._target
         try:
             _, tunnel_port = manager.start_tunnel(host=host, port=port, dsn_alias=self.dsn_alias)
