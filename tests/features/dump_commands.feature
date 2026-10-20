@@ -36,7 +36,7 @@ Feature: pgcli_dump and pgcli_dumpall commands
     Then pgcli_dumpall attempts database connection
 
   Scenario: pgcli_dump verbose mode shows debug info
-    When we run pgcli_dump with -v --help
+    When we run pgcli_dump with --tunnel-verbose --help
     Then we see pgcli_dump help output
     And pgcli_dump exits successfully
 

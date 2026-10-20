@@ -579,6 +579,23 @@ class TestTunneledRunEndToEnd:
 
         return run
 
+    @pytest.mark.parametrize("flag", ["-v", "--verbose"])
+    def test_verbose_reaches_pg_dump(self, mod, run_wrapper, flag):
+        # pg_dump and pg_dumpall have their own -v/--verbose; the wrapper used to
+        # take it for its tunnel debug output, so it never got through.
+        result, _, srun = run_wrapper(mod, [flag, "-h", "db.internal", "mydb"])
+        assert result.exit_code == 0
+        assert flag in srun.call_args[0][0]
+
+    def test_tunnel_verbose_is_the_wrappers_own_flag(self, mod, run_wrapper):
+        from unittest.mock import patch
+
+        with patch.object(mod, "setup_logging", wraps=mod.setup_logging) as setup:
+            result, _, srun = run_wrapper(mod, ["--tunnel-verbose", "-h", "db.internal", "mydb"])
+        assert result.exit_code == 0
+        setup.assert_called_once_with(True)
+        assert "--tunnel-verbose" not in srun.call_args[0][0]
+
     def test_uri_target_reaches_the_tunnel_and_the_command(self, mod, run_wrapper):
         result, manager, srun = run_wrapper(mod, ["-d", "postgresql://reader@db.internal:6432/ventas"])
         assert result.exit_code == 0

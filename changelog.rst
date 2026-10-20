@@ -33,6 +33,11 @@ Bug fixes:
   called ``public.orders``, and ``pgcli_dump ventas -f out.sql`` did not see
   ``ventas`` at all.
 
+* ``-v``/``--verbose`` reach pg_dump and pg_dumpall again, as their own verbose
+  mode. The wrappers had taken them for the SSH tunnel debug output, which is
+  now ``--tunnel-verbose``. ``pgcli_isready`` keeps ``-v``, since
+  ``pg_isready`` has none.
+
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================
 

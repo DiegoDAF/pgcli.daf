@@ -179,8 +179,10 @@ Three additional commands are installed alongside ``pgcli``:
 * ``pgcli_dumpall`` — ``pg_dumpall`` wrapper with SSH tunnel support
 * ``pgcli_isready`` — ``pg_isready`` wrapper with SSH tunnel support
 
-All three support ``--ssh-tunnel``, ``--dsn``, and ``-v/--verbose`` options,
-and pass all other options through to the underlying PostgreSQL command.
+All three support ``--ssh-tunnel`` and ``--dsn``, and pass all other options
+through to the underlying PostgreSQL command. The tunnel debug output is
+``--tunnel-verbose`` on ``pgcli_dump`` and ``pgcli_dumpall``, since ``-v`` is
+their dump tool's own verbose mode, and ``-v/--verbose`` on ``pgcli_isready``.
 
 ::
 

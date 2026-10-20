@@ -227,10 +227,10 @@ def find_pg_dump() -> str:
     help="DSN alias from pgcli config (for SSH tunnel lookup).",
 )
 @click.option(
-    "-v",
-    "--verbose",
+    "--tunnel-verbose",
+    "verbose",
     is_flag=True,
-    help="Verbose mode (show SSH tunnel debug info).",
+    help="Show SSH tunnel debug info. -v and --verbose go to the dump tool, as its own verbose mode.",
 )
 @click.pass_context
 def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool):
