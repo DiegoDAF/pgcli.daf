@@ -1372,3 +1372,16 @@ def test_forward_handler_falls_back_to_the_exception_text(capsys):
     _run_forward_handler(_RefusingTransport(None), "pgcli.ssh_tunnel.paramiko.t2")
     err = capsys.readouterr().err
     assert "bastion could not open a connection to db.internal:5432: Connect failed" in err
+
+
+def test_an_invalid_regex_in_the_tunnel_config_is_skipped_with_a_warning(caplog):
+    # The keys of [ssh tunnels] are hand-written regular expressions; one
+    # unbalanced bracket was an uncaught re.error at every connection.
+    manager = SSHTunnelManager(
+        ssh_tunnel_config={"[oops": "ssh://bad", r"db\.internal": "ssh://bastion"},
+        dsn_ssh_tunnel_config={"(prod": "ssh://bad"},
+        logger=logging.getLogger("test_tunnel_regex"),
+    )
+    with caplog.at_level(logging.WARNING, logger="test_tunnel_regex"):
+        assert manager.find_tunnel_url(host="db.internal", dsn_alias="prod") == "ssh://bastion"
+    assert caplog.text.count("not a valid regular expression") == 2

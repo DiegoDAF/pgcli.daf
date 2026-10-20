@@ -607,7 +607,7 @@ class SSHTunnelManager:
         # Check DSN-based tunnel config
         if dsn_alias and self.dsn_ssh_tunnel_config:
             for dsn_regex, tunnel_url in self.dsn_ssh_tunnel_config.items():
-                if re.fullmatch(dsn_regex, dsn_alias):
+                if self._matches(dsn_regex, dsn_alias, "[dsn ssh tunnels]"):
                     self.logger.debug(
                         "Found SSH tunnel for DSN '%s' matching '%s': %s",
                         dsn_alias,
@@ -619,7 +619,7 @@ class SSHTunnelManager:
         # Check host-based tunnel config
         if host and self.ssh_tunnel_config:
             for host_regex, tunnel_url in self.ssh_tunnel_config.items():
-                if re.fullmatch(host_regex, host):
+                if self._matches(host_regex, host, "[ssh tunnels]"):
                     self.logger.debug(
                         "Found SSH tunnel for host '%s' matching '%s': %s",
                         host,
@@ -629,6 +629,19 @@ class SSHTunnelManager:
                     return cast(str, tunnel_url)
 
         return None
+
+    def _matches(self, pattern: str, value: str, section: str) -> bool:
+        """re.fullmatch() that reports a bad pattern instead of crashing on it.
+
+        The keys of [ssh tunnels] and [dsn ssh tunnels] are regular
+        expressions written by hand; one unbalanced bracket used to be an
+        uncaught re.error at every connection.
+        """
+        try:
+            return re.fullmatch(pattern, value) is not None
+        except re.error as e:
+            self.logger.warning("Ignoring the %s entry %r: not a valid regular expression (%s)", section, pattern, e)
+            return False
 
     def start_tunnel(
         self,
