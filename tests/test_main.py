@@ -2760,3 +2760,32 @@ def test_a_multi_line_ns_is_saved_whole_in_command_mode(executor, tmpdir):
 
     assert ok is True
     assert NamedQueries.instance.get("two_lines_cmd") == "select 1 as a,\n2 as b"
+
+
+def test_a_custom_log_file_name_is_honoured(tmpdir):
+    # Only the directory of a configured log_file was used: ~/x/mylog.txt
+    # ended up as ~/x/pgcli.log, with the comment in pgclirc describing a
+    # /var/log attempt and a 30-day rotation that never existed.
+    custom = str(tmpdir.join("mylog.txt"))
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.config = {"main": {"log_file": custom, "log_rotation_mode": "none", "log_destination": "default", "log_level": "INFO"}}
+    cli.initialize_logging()
+    assert os.path.exists(custom)
+    assert not os.path.exists(str(tmpdir.join("pgcli.log")))
+
+
+def test_a_directory_as_log_file_gets_pgcli_log_inside(tmpdir):
+    log_dir = tmpdir.mkdir("logs")
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.config = {"main": {"log_file": str(log_dir), "log_rotation_mode": "none", "log_destination": "default", "log_level": "INFO"}}
+    cli.initialize_logging()
+    assert os.path.exists(str(log_dir.join("pgcli.log")))
+
+
+def test_rotation_names_the_file_even_with_a_custom_log_file(tmpdir):
+    custom = str(tmpdir.join("mylog.txt"))
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.config = {"main": {"log_file": custom, "log_rotation_mode": "date", "log_destination": "default", "log_level": "INFO"}}
+    cli.initialize_logging()
+    assert os.path.exists(str(tmpdir.join("pgcli-%s.log" % datetime.datetime.now().strftime("%Y%m%d"))))
+    assert not os.path.exists(custom)

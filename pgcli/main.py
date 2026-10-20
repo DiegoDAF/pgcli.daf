@@ -954,11 +954,18 @@ class PGCli:
         return [(None, None, None, message, "", True, True)]
 
     def initialize_logging(self):
-        log_file = self.config["main"]["log_file"]
-        if log_file == "default":
+        configured = self.config["main"]["log_file"]
+        # The file name the user chose, if any. "default" and a directory
+        # keep pgcli.log, and the rotation modes name the file themselves.
+        custom_name = None
+        if configured == "default":
             # Logs are state, not config: use $XDG_STATE_HOME (~/.local/state),
             # migrating an existing ~/.config/pgcli/log on first run (issue #1497).
             log_file = migrate_state_file("log")
+        else:
+            log_file = os.path.expanduser(configured)
+            if not os.path.isdir(log_file):
+                custom_name = os.path.basename(log_file)
 
         # Get log rotation mode and destination
         log_rotation_mode = self.config["main"].get("log_rotation_mode", "none")
@@ -975,11 +982,8 @@ class PGCli:
 
         # Handle log_destination
         if log_destination == "default":
-            # Use same location as log_file
-            if log_file == "default" or log_file.endswith("log"):
-                log_dir = os.path.dirname(log_file) if os.path.dirname(log_file) else state_location()
-            else:
-                log_dir = log_file if os.path.isdir(log_file) else os.path.dirname(log_file)
+            # Same directory as log_file, or log_file itself when it is one.
+            log_dir = log_file if os.path.isdir(log_file) else (os.path.dirname(log_file) or state_location())
         else:
             log_dir = os.path.expanduser(log_destination)
 
@@ -1000,7 +1004,9 @@ class PGCli:
             date_str = dt.datetime.now().strftime("%Y%m%d")
             log_filename = f"pgcli-{date_str}.log"
         else:  # "none" or any other value - backwards compatible
-            log_filename = "pgcli.log"
+            # The configured name, if the user gave one: it used to be ignored
+            # and ~/x/mylog.txt ended up as ~/x/pgcli.log.
+            log_filename = custom_name or "pgcli.log"
 
         log_file_path = os.path.join(log_dir, log_filename)
 

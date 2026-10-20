@@ -98,14 +98,16 @@ generate_aliases = False
 # }
 alias_map_file =
 
-# log_file location.
-# Default behavior:
-#   - Tries /var/log/pgcli/pgcli.log first (if running with permissions)
-#   - Falls back to ~/.local/state/pgcli/log ($XDG_STATE_HOME, Unix/Linux) or %USERPROFILE%\AppData\Local\dbcli\pgcli\log (Windows)
-#   - An existing ~/.config/pgcli/log is migrated to the new location on first run
-# Log rotation: Daily at midnight, keeps 30 days of logs
-# Format: pgcli.YYYY-MM-DD.log
-# You can specify a custom path here if needed
+# log_file: where pgcli writes its own log (connection and query diagnostics
+# at the level set by log_level below; the query log of --log-file is separate).
+#   default      - pgcli.log in $XDG_STATE_HOME/pgcli (~/.local/state/pgcli on
+#                  Unix, %USERPROFILE%\AppData\Local\dbcli\pgcli on Windows).
+#                  An existing ~/.config/pgcli/log is moved there on first run.
+#   a file path  - that file, as long as log_rotation_mode is "none".
+#   a directory  - pgcli.log inside it.
+# With a rotation mode the directory is kept and the file takes its name from
+# the rotation slot: pgcli-Mon.log, pgcli-07.log or pgcli-20260127.log.
+# Nothing is ever deleted; see log_rotation_mode and log_truncate_on_rotation.
 log_file = default
 
 # Log rotation mode. Determines how log files are rotated.
@@ -118,7 +120,7 @@ log_file = default
 log_rotation_mode = none
 
 # log_destination - Directory where log files are stored.
-# By default uses the same location as log_file (typically ~/.config/pgcli/log)
+# By default uses the directory of log_file (typically ~/.local/state/pgcli)
 # You can specify a different directory if desired
 # Example: log_destination = /var/log/pgcli
 # Leave as "default" to use the standard config location
