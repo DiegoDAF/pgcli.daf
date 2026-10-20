@@ -568,8 +568,8 @@ class TestSSHTunnelBehavior:
     @patch("pgcli.dump.get_config")
     @patch("pgcli.dump.get_tunnel_manager_from_config")
     def test_tunnel_with_dsn_option(self, mock_tunnel_manager, mock_config, mock_run):
-        """Test --dsn option for tunnel lookup."""
-        mock_config.return_value = {}
+        """--dsn names the connection and still selects the tunnel by alias."""
+        mock_config.return_value = {"alias_dsn": {"production": "postgresql://db.internal.com/mydb"}}
         mock_run.return_value = MagicMock(returncode=0)
         mock_manager = MagicMock()
         mock_manager.start_tunnel.return_value = ("127.0.0.1", 54321)
@@ -578,13 +578,14 @@ class TestSSHTunnelBehavior:
         runner = CliRunner()
         runner.invoke(
             dump_cli,
-            ["--dsn", "production", "-h", "db.internal.com", "-d", "mydb"],
+            ["--dsn", "production"],
         )
 
         # Verify tunnel was started with dsn_alias
         mock_manager.start_tunnel.assert_called_once()
         call_kwargs = mock_manager.start_tunnel.call_args[1]
         assert call_kwargs["dsn_alias"] == "production"
+        assert call_kwargs["host"] == "db.internal.com"
 
     @patch("pgcli.dump.subprocess.run")
     @patch("pgcli.dump.get_config")

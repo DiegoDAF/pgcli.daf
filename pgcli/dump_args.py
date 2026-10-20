@@ -18,6 +18,8 @@ import os
 from typing import List, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, unquote
 
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
+
 URI_PREFIXES = ("postgresql://", "postgres://")
 
 # Keywords that decide which server libpq actually dials.
@@ -324,3 +326,133 @@ def dbname_identity(value: str) -> Tuple[Optional[str], Optional[str]]:
         return connstring_user_dbname(value)
     # A bare database name.
     return None, value or None
+
+
+# Options of pg_dump and pg_dumpall that take a value, from their PostgreSQL 18
+# --help. The value is either attached (-tfoo, -Fc, --table=foo) or the next
+# argument (-t foo, --table foo); an argument that is no option's value is an
+# operand (the database name), wherever it sits, since both tools use getopt.
+SHORT_OPTIONS_WITH_VALUE = frozenset("dfFjZeEnNStThpUl")
+LONG_OPTIONS_WITH_VALUE = frozenset({
+    "--compress",
+    "--database",
+    "--dbname",
+    "--encoding",
+    "--exclude-database",
+    "--exclude-extension",
+    "--exclude-schema",
+    "--exclude-table",
+    "--exclude-table-and-children",
+    "--exclude-table-data",
+    "--exclude-table-data-and-children",
+    "--extension",
+    "--extra-float-digits",
+    "--file",
+    "--filter",
+    "--format",
+    "--host",
+    "--include-foreign-data",
+    "--jobs",
+    "--lock-wait-timeout",
+    "--port",
+    "--restrict-key",
+    "--role",
+    "--rows-per-insert",
+    "--schema",
+    "--section",
+    "--snapshot",
+    "--superuser",
+    "--sync-method",
+    "--table",
+    "--table-and-children",
+    "--username",
+})
+
+
+def getopt_items(args: List[str]) -> List[Tuple[Optional[str], Optional[str]]]:
+    """Read pg_dump-style arguments the way getopt does, keeping their order.
+
+    Options come out as (name, value), with value None for a flag; operands as
+    (None, argument). A flag cluster (-Ot x) yields one item per letter.
+    """
+    items: List[Tuple[Optional[str], Optional[str]]] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--":
+            items.extend((None, rest) for rest in args[i + 1 :])
+            break
+        if arg.startswith("--"):
+            name, eq, value = arg.partition("=")
+            if eq:
+                items.append((name, value))
+            elif name in LONG_OPTIONS_WITH_VALUE and i + 1 < len(args):
+                i += 1
+                items.append((name, args[i]))
+            else:
+                items.append((name, None))
+        elif arg.startswith("-") and len(arg) > 1:
+            # Flags up to the first letter that takes a value, whose value is
+            # the rest of the argument or the next one.
+            for j, letter in enumerate(arg[1:], 1):
+                if letter in SHORT_OPTIONS_WITH_VALUE:
+                    value = arg[j + 1 :]
+                    if not value and i + 1 < len(args):
+                        i += 1
+                        value = args[i]
+                    items.append(("-" + letter, value))
+                    break
+                items.append(("-" + letter, None))
+        else:
+            items.append((None, arg))
+        i += 1
+    return items
+
+
+def _argv_from_items(items: List[Tuple[Optional[str], Optional[str]]]) -> List[str]:
+    """Write getopt_items() back as arguments, operands last (after -- if needed)."""
+    argv: List[str] = []
+    operands: List[str] = []
+    for name, value in items:
+        if name is None:
+            operands.append(value or "")
+        elif value is None:
+            argv.append(name)
+        elif name.startswith("--"):
+            argv.append(f"{name}={value}")
+        else:
+            argv.extend([name, value])
+    if any(operand.startswith("-") for operand in operands):
+        argv.append("--")
+    return argv + operands
+
+
+def apply_dsn_alias(args: List[str], conninfo: str) -> Tuple[List[str], Optional[str]]:
+    """Turn a resolved ``--dsn`` alias into the dump tool's own arguments.
+
+    The alias is the connection, as with ``pgcli --dsn``: its connection string,
+    SSL settings included, goes to the dump tool as ``-d``. ``-h``, ``-p`` and
+    ``-U`` on the command line override its host, port and user, and a
+    database operand replaces its database. ``-d`` as well would name the
+    connection twice and is refused.
+
+    Returns the new arguments and the alias's password, if it has one, which
+    the caller passes in PGPASSWORD: arguments show up in ps.
+    """
+    items = getopt_items(args)
+    if any(name in ("-d", "--dbname") for name, _ in items):
+        raise ValueError("--dsn already names the connection: use either --dsn or -d/--dbname, not both.")
+    params = conninfo_to_dict(conninfo)
+    overrides = {"-h": "host", "--host": "host", "-p": "port", "--port": "port", "-U": "user", "--username": "user"}
+    kept = []
+    database_seen = False
+    for name, value in items:
+        if name in overrides and value:
+            params[overrides[name]] = value
+        elif name is None and not database_seen:
+            params["dbname"] = value
+            database_seen = True
+        else:
+            kept.append((name, value))
+    password = params.pop("password", None)
+    return ["-d", make_conninfo(**params)] + _argv_from_items(kept), password

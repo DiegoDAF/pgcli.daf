@@ -14,9 +14,11 @@ from typing import Optional
 import click
 
 from .config import get_config
+from .dsnaliases import DsnAliases
 from .ssh_tunnel import get_tunnel_manager_from_config
 from .dump import get_password_from_pgpass, parse_user_and_database
 from .dump_args import (  # re-exported: both wrappers and their tests import these
+    apply_dsn_alias,
     build_tunneled_args,
     parse_connection_args,
 )
@@ -82,7 +84,7 @@ def find_pg_dumpall() -> str:
     "--dsn",
     "dsn_alias",
     default=None,
-    help="DSN alias from pgcli config (for SSH tunnel lookup).",
+    help="DSN alias from pgcli config: the connection to dump, as with pgcli --dsn (it also picks the SSH tunnel).",
 )
 @click.option(
     "--tunnel-verbose",
@@ -106,7 +108,7 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         # Explicit SSH tunnel
         pgcli_dumpall --ssh-tunnel user@bastion.example.com -h mydb > backup.sql
 
-        # Use DSN alias for tunnel lookup, dump only globals
+        # The DSN alias is the connection, as with pgcli --dsn, dump only globals
         pgcli_dumpall --dsn production -g -f globals.sql
     """
     logger = setup_logging(verbose)
@@ -122,7 +124,21 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         config = {}
 
     # Parse connection arguments
-    host, port, remaining_args, has_host, has_port = parse_connection_args(pg_dumpall_args)
+    # --dsn names the connection itself, like pgcli --dsn; bad arguments are
+    # reported in one line instead of a traceback.
+    alias_password = None
+    try:
+        if dsn_alias:
+            conninfo = DsnAliases.from_config(config).get(dsn_alias)
+            if conninfo is None:
+                raise ValueError(
+                    f"Could not find a DSN with alias {dsn_alias}. Please check the \"[alias_dsn]\" section in pgclirc or dsn.d/ directory."
+                )
+            pg_dumpall_args, alias_password = apply_dsn_alias(pg_dumpall_args, conninfo)
+        host, port, remaining_args, has_host, has_port = parse_connection_args(pg_dumpall_args)
+    except ValueError as e:
+        click.secho(f"Error: {e}", err=True, fg="red")
+        sys.exit(1)
     logger.debug("Parsed connection: host=%s, port=%d", host, port)
 
     # Setup SSH tunnel manager
@@ -145,6 +161,8 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
 
     # Prepare environment (may need to set PGPASSWORD for tunneled connections)
     env = os.environ.copy()
+    if alias_password and "PGPASSWORD" not in env:
+        env["PGPASSWORD"] = alias_password
 
     if tunnel_host != host or tunnel_port != port:
         # Tunnel is active, modify connection args

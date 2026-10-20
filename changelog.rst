@@ -38,6 +38,20 @@ Bug fixes:
   now ``--tunnel-verbose``. ``pgcli_isready`` keeps ``-v``, since
   ``pg_isready`` has none.
 
+* ``pgcli_dump --dsn ALIAS`` and ``pgcli_dumpall --dsn ALIAS`` use the alias as
+  the connection, as ``pgcli --dsn`` does. The alias only picked the SSH tunnel:
+  host, port, user, database and SSL settings were ignored, so the tunnel
+  forwarded to ``localhost:5432`` on the far side and a DSN with
+  ``sslmode=verify-ca`` and its CA bundle connected without them. The alias's
+  connection string now reaches pg_dump as ``-d``; ``-h``, ``-p`` and ``-U``
+  override it, a database name replaces its database, ``-d`` together with
+  ``--dsn`` is refused, and a password in the alias travels in ``PGPASSWORD``,
+  not on the command line. An unknown alias is an error, as in pgcli.
+
+* A connection string the dump wrappers refuse (several hosts, ``host=`` or
+  ``port=`` in a URI's query) or a non-numeric ``-p`` is reported in one red
+  line instead of a Python traceback.
+
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================
 

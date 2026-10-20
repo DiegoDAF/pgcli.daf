@@ -399,6 +399,68 @@ class TestUserAndDatabase:
         assert dumpall.parse_user_and_database is dump.parse_user_and_database
 
 
+class TestDsnAliasArguments:
+    """--dsn ALIAS turns into the dump tool's own arguments."""
+
+    ALIAS = "postgresql://reader@db.internal:6432/ventas?sslmode=verify-ca"
+
+    def _conn(self, args):
+        from psycopg.conninfo import conninfo_to_dict
+
+        return conninfo_to_dict(args[args.index("-d") + 1])
+
+    def test_the_alias_becomes_a_connection_string(self):
+        from pgcli.dump_args import apply_dsn_alias
+
+        args, password = apply_dsn_alias(["-F", "c", "-f", "out.dump"], self.ALIAS)
+        assert self._conn(args) == {
+            "host": "db.internal",
+            "port": "6432",
+            "dbname": "ventas",
+            "user": "reader",
+            "sslmode": "verify-ca",
+        }
+        assert args[2:] == ["-F", "c", "-f", "out.dump"]
+        assert password is None
+
+    def test_a_database_operand_replaces_the_aliases_database(self):
+        from pgcli.dump_args import apply_dsn_alias
+
+        args, _ = apply_dsn_alias(["otherdb", "-F", "c"], self.ALIAS)
+        assert self._conn(args)["dbname"] == "otherdb"
+        assert "otherdb" not in args[2:]
+
+    @pytest.mark.parametrize(
+        "flags",
+        [["-h", "db2", "-p", "7000", "-U", "writer"], ["-hdb2", "--port=7000", "--username", "writer"]],
+        ids=["separate", "attached"],
+    )
+    def test_host_port_and_user_on_the_command_line_win(self, flags):
+        from pgcli.dump_args import apply_dsn_alias
+
+        args, _ = apply_dsn_alias(flags + ["-t", "public.orders"], self.ALIAS)
+        conn = self._conn(args)
+        assert (conn["host"], conn["port"], conn["user"]) == ("db2", "7000", "writer")
+        assert args[2:] == ["-t", "public.orders"]
+
+    def test_a_password_in_the_alias_stays_out_of_the_command_line(self):
+        # Arguments show up in ps; the wrapper hands the password over in
+        # PGPASSWORD instead.
+        from pgcli.dump_args import apply_dsn_alias
+
+        args, password = apply_dsn_alias([], "postgresql://reader:s3cr3t@db.internal/ventas")
+        assert password == "s3cr3t"
+        assert "s3cr3t" not in " ".join(args)
+
+    @pytest.mark.parametrize("flags", [["-d", "other"], ["--dbname=other"]])
+    def test_dsn_and_dbname_together_are_refused(self, flags):
+        from pgcli.dump_args import apply_dsn_alias
+
+        with pytest.raises(ValueError) as excinfo:
+            apply_dsn_alias(flags, self.ALIAS)
+        assert "--dsn" in str(excinfo.value)
+
+
 class TestPgpassLookup:
     """Reading the password for the ORIGINAL host, before the tunnel renames it."""
 
@@ -561,7 +623,7 @@ class TestTunneledRunEndToEnd:
         from unittest.mock import MagicMock, patch
         from click.testing import CliRunner
 
-        def run(mod, argv, pgpass_lines=(), tunnel=("127.0.0.1", 54321)):
+        def run(mod, argv, pgpass_lines=(), tunnel=("127.0.0.1", 54321), config=None):
             if pgpass_lines:
                 (tmp_path / ".pgpass").write_text("".join(line + "\n" for line in pgpass_lines))
                 (tmp_path / ".pgpass").chmod(0o600)
@@ -570,7 +632,7 @@ class TestTunneledRunEndToEnd:
             manager = MagicMock()
             manager.start_tunnel.return_value = tunnel
             with (
-                patch.object(mod, "get_config", return_value={}),
+                patch.object(mod, "get_config", return_value=config or {}),
                 patch.object(mod, "get_tunnel_manager_from_config", return_value=manager),
                 patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=0)) as srun,
             ):
@@ -578,6 +640,51 @@ class TestTunneledRunEndToEnd:
             return result, manager, srun
 
         return run
+
+    ALIAS_CONFIG = {
+        "alias_dsn": {
+            "prod": "postgresql://reader@db.internal:6432/ventas?sslmode=verify-ca&sslrootcert=/certs/rds.pem",
+        }
+    }
+
+    def test_dsn_alias_is_the_connection(self, mod, run_wrapper):
+        # Like pgcli --dsn: the alias names the host, port, user, database and
+        # SSL settings, not only which tunnel to use.
+        from psycopg.conninfo import conninfo_to_dict
+
+        result, manager, srun = run_wrapper(
+            mod,
+            ["--dsn", "prod", "-f", "/dev/null"],
+            # "*" for the database: pgcli_dumpall asks .pgpass with "*" by design.
+            pgpass_lines=["db.internal:6432:*:reader:s3cr3t"],
+            config=self.ALIAS_CONFIG,
+        )
+        assert result.exit_code == 0, result.output
+        manager.start_tunnel.assert_called_once_with(host="db.internal", port=6432, dsn_alias="prod")
+        cmd = srun.call_args[0][0]
+        conn = conninfo_to_dict(cmd[cmd.index("-d") + 1])
+        assert (conn["port"], conn["dbname"], conn["user"]) == ("54321", "ventas", "reader")
+        assert (conn["sslmode"], conn["sslrootcert"]) == ("verify-ca", "/certs/rds.pem")
+        assert srun.call_args[1]["env"]["PGPASSWORD"] == "s3cr3t"
+
+    def test_unknown_dsn_alias_is_an_error(self, mod, run_wrapper):
+        result, _, srun = run_wrapper(mod, ["--dsn", "nope"], config=self.ALIAS_CONFIG)
+        assert result.exit_code == 1
+        assert "Could not find a DSN with alias nope" in result.output
+        srun.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "argv",
+        [["-d", "postgresql://h1,h2/db"], ["-h", "db.internal", "-p", "abc"], ["--dsn", "prod", "-d", "other"]],
+        ids=["multi-host-uri", "non-numeric-port", "dsn-and-d"],
+    )
+    def test_bad_arguments_are_a_message_not_a_traceback(self, mod, run_wrapper, argv):
+        result, _, srun = run_wrapper(mod, argv, config=self.ALIAS_CONFIG)
+        assert result.exit_code == 1
+        assert isinstance(result.exception, SystemExit)
+        assert "Traceback" not in result.output
+        assert result.output.strip()
+        srun.assert_not_called()
 
     @pytest.mark.parametrize("flag", ["-v", "--verbose"])
     def test_verbose_reaches_pg_dump(self, mod, run_wrapper, flag):

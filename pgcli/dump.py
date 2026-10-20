@@ -9,16 +9,19 @@ import logging
 import os
 import subprocess
 import sys
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import click
 
 from .config import get_config
+from .dsnaliases import DsnAliases
 from .pgpass import has_safe_permissions, lookup_password, pgpass_path
 from .ssh_tunnel import get_tunnel_manager_from_config
 from .dump_args import (  # re-exported: both wrappers and their tests import these
+    apply_dsn_alias,
     build_tunneled_args,
     dbname_identity,
+    getopt_items,
     parse_connection_args,
 )
 
@@ -52,81 +55,6 @@ def get_password_from_pgpass(host: str, port: int, database: str, user: str) -> 
     return password
 
 
-# Options of pg_dump and pg_dumpall that take a value, from their PostgreSQL 18
-# --help. The value is either attached (-tfoo, -Fc, --table=foo) or the next
-# argument (-t foo, --table foo); an argument that is no option's value is the
-# database name, wherever it sits, since both tools parse with getopt.
-_SHORT_OPTIONS_WITH_VALUE = frozenset("dfFjZeEnNStThpUl")
-_LONG_OPTIONS_WITH_VALUE = frozenset({
-    "--compress",
-    "--database",
-    "--dbname",
-    "--encoding",
-    "--exclude-database",
-    "--exclude-extension",
-    "--exclude-schema",
-    "--exclude-table",
-    "--exclude-table-and-children",
-    "--exclude-table-data",
-    "--exclude-table-data-and-children",
-    "--extension",
-    "--extra-float-digits",
-    "--file",
-    "--filter",
-    "--format",
-    "--host",
-    "--include-foreign-data",
-    "--jobs",
-    "--lock-wait-timeout",
-    "--port",
-    "--restrict-key",
-    "--role",
-    "--rows-per-insert",
-    "--schema",
-    "--section",
-    "--snapshot",
-    "--superuser",
-    "--sync-method",
-    "--table",
-    "--table-and-children",
-    "--username",
-})
-
-
-def _options_and_operands(args: List[str]) -> Tuple[List[Tuple[str, str]], List[str]]:
-    """Split pg_dump-style arguments into (option, value) pairs and operands."""
-    options: List[Tuple[str, str]] = []
-    operands: List[str] = []
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg == "--":
-            operands.extend(args[i + 1 :])
-            break
-        if arg.startswith("--"):
-            name, eq, value = arg.partition("=")
-            if not eq and name in _LONG_OPTIONS_WITH_VALUE and i + 1 < len(args):
-                i += 1
-                value = args[i]
-            options.append((name, value))
-        elif arg.startswith("-") and len(arg) > 1:
-            # A getopt cluster: flags up to the first letter that takes a value,
-            # whose value is the rest of the argument or the next one.
-            for j, letter in enumerate(arg[1:], 1):
-                if letter in _SHORT_OPTIONS_WITH_VALUE:
-                    value = arg[j + 1 :]
-                    if not value and i + 1 < len(args):
-                        i += 1
-                        value = args[i]
-                    options.append(("-" + letter, value))
-                    break
-                options.append(("-" + letter, ""))
-        else:
-            operands.append(arg)
-        i += 1
-    return options, operands
-
-
 def parse_user_and_database(args: List[str]) -> tuple:
     """
     Parse user and database from command line arguments.
@@ -137,8 +65,9 @@ def parse_user_and_database(args: List[str]) -> tuple:
     user = os.environ.get("PGUSER", "postgres")
     database = os.environ.get("PGDATABASE", "*")
 
-    options, operands = _options_and_operands(args)
-    for name, value in options:
+    items = getopt_items(args)
+    operands = [value for name, value in items if name is None and value is not None]
+    for name, value in items:
         if name in ("-U", "--username") and value:
             user = value
         # -d/--dbname in all three forms: bare name, keyword/value connection
@@ -224,7 +153,7 @@ def find_pg_dump() -> str:
     "--dsn",
     "dsn_alias",
     default=None,
-    help="DSN alias from pgcli config (for SSH tunnel lookup).",
+    help="DSN alias from pgcli config: the connection to dump, as with pgcli --dsn (it also picks the SSH tunnel).",
 )
 @click.option(
     "--tunnel-verbose",
@@ -248,7 +177,7 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         # Explicit SSH tunnel
         pgcli_dump --ssh-tunnel user@bastion.example.com -h mydb mydb > backup.sql
 
-        # Use DSN alias for tunnel lookup
+        # The DSN alias is the connection, as with pgcli --dsn
         pgcli_dump --dsn production mydb -F c -f backup.dump
     """
     logger = setup_logging(verbose)
@@ -264,7 +193,21 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         config = {}
 
     # Parse connection arguments
-    host, port, remaining_args, has_host, has_port = parse_connection_args(pg_dump_args)
+    # --dsn names the connection itself, like pgcli --dsn; bad arguments are
+    # reported in one line instead of a traceback.
+    alias_password = None
+    try:
+        if dsn_alias:
+            conninfo = DsnAliases.from_config(config).get(dsn_alias)
+            if conninfo is None:
+                raise ValueError(
+                    f"Could not find a DSN with alias {dsn_alias}. Please check the \"[alias_dsn]\" section in pgclirc or dsn.d/ directory."
+                )
+            pg_dump_args, alias_password = apply_dsn_alias(pg_dump_args, conninfo)
+        host, port, remaining_args, has_host, has_port = parse_connection_args(pg_dump_args)
+    except ValueError as e:
+        click.secho(f"Error: {e}", err=True, fg="red")
+        sys.exit(1)
     logger.debug("Parsed connection: host=%s, port=%d", host, port)
 
     # Setup SSH tunnel manager
@@ -287,6 +230,8 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
 
     # Prepare environment (may need to set PGPASSWORD for tunneled connections)
     env = os.environ.copy()
+    if alias_password and "PGPASSWORD" not in env:
+        env["PGPASSWORD"] = alias_password
 
     if tunnel_host != host or tunnel_port != port:
         # Tunnel is active, modify connection args
