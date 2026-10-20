@@ -1065,6 +1065,16 @@ class PGCli:
         handler.setFormatter(formatter)
 
         root_logger = logging.getLogger("pgcli")
+        pgspecial_logger = logging.getLogger("pgspecial")
+        # One handler per process, not one per PGCli(): the handler a previous
+        # call installed is replaced, or every record is written once per
+        # handler and their file descriptors pile up (the test suite builds
+        # hundreds of PGCli objects and died under a 300-descriptor limit).
+        handler.set_name("pgcli")
+        for logger in (root_logger, pgspecial_logger):
+            for stale in [h for h in logger.handlers if h.get_name() == "pgcli"]:
+                logger.removeHandler(stale)
+                stale.close()
         root_logger.addHandler(handler)
         root_logger.setLevel(log_level)
 
@@ -1072,7 +1082,6 @@ class PGCli:
         root_logger.debug("Log file %r.", log_file_path)
         root_logger.debug("Log rotation mode: %r.", log_rotation_mode)
 
-        pgspecial_logger = logging.getLogger("pgspecial")
         pgspecial_logger.addHandler(handler)
         pgspecial_logger.setLevel(log_level)
 

@@ -2890,3 +2890,19 @@ def test_a_failed_role_password_statement_leaves_no_secret_in_the_log(executor, 
     assert not query.successful
     assert "error:" in caplog.text and "traceback:" in caplog.text
     assert "s3cretXYZ" not in caplog.text
+
+
+def test_the_debug_log_has_one_handler_per_process(tmpdir):
+    # Every PGCli() added a FileHandler to the "pgcli" logger and never
+    # removed the previous one: records written once per handler, one open
+    # descriptor per instance (349 after a run of this suite).
+    logger = logging.getLogger("pgcli")
+    before = len(logger.handlers)
+    PGCli(pgclirc_file=str(tmpdir.join("rc1")))
+    PGCli(pgclirc_file=str(tmpdir.join("rc2")))
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rc3")))
+    cli.initialize_logging()
+    assert len(logger.handlers) <= before + 1
+    assert len([h for h in logger.handlers if h.get_name() == "pgcli"]) == 1
+    assert len([h for h in logging.getLogger("pgspecial").handlers if h.get_name() == "pgcli"]) == 1
+

@@ -108,6 +108,11 @@ Bug fixes:
   with a message about tunnels, while the key=value form was quietly rewritten
   to one host with the tunnel pointed at ``a,b``.
 
+* The debug log keeps one handler per process. Every ``PGCli()`` added a
+  handler to the ``pgcli`` logger and never removed the previous one, so a
+  reconfiguration wrote each record twice, and the test suite, which builds
+  hundreds of them, ran out of file descriptors under a 300-descriptor limit.
+
 * The log no longer gets a role password back through the server's error
   message. The ``sql:`` part of an ERROR line was masked, but the ``error:``
   part of the same line quoted the server's ``LINE 1: alter role x password
