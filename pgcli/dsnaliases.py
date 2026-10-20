@@ -7,7 +7,10 @@ This module provides support for loading DSN aliases from files in a
 
 import os
 import logging
+from typing import Optional
 from configobj import ConfigObj
+
+from .config import literal_values
 
 logger = logging.getLogger(__name__)
 
@@ -134,11 +137,16 @@ class DsnAliases:
 
             # First try to get from [alias_dsn] section
             aliases = file_config.get(self.SECTION_NAME, {})
+            section: Optional[str] = self.SECTION_NAME
 
             # If no section found, treat entire file as aliases
             # (excluding any sections that might exist)
             if not aliases:
                 aliases = {k: v for k, v in file_config.items() if not isinstance(v, dict)}
+                section = None
+
+            # "host=a,b" (libpq's multi-host form) came back as a list: take the line as written.
+            aliases = literal_values(filepath, section, dict(aliases))
 
             if aliases:
                 logger.debug(f"Loaded {len(aliases)} DSN aliases from {os.path.basename(filepath)}")
@@ -150,6 +158,12 @@ class DsnAliases:
         except Exception as e:
             logger.warning(f"Error loading DSN aliases from {filepath}: {e}")
 
+    def _main_aliases(self):
+        """The [alias_dsn] section of the main config, with unquoted
+        comma-separated values taken literally (see config.literal_values)."""
+        aliases = dict(self.config.get(self.SECTION_NAME, {}))
+        return literal_values(getattr(self.config, "filename", None), self.SECTION_NAME, aliases)
+
     def list(self):
         """List all DSN aliases from config and include directory.
 
@@ -157,7 +171,7 @@ class DsnAliases:
             List of alias names (combined from main config and includes), sorted
         """
         # Get aliases from main config (excluding directives)
-        main_aliases = {k: v for k, v in self.config.get(self.SECTION_NAME, {}).items() if k not in self.DIRECTIVES}
+        main_aliases = {k: v for k, v in self._main_aliases().items() if k not in self.DIRECTIVES}
 
         # Combine with included aliases (main config takes precedence)
         all_aliases = dict(self._included_aliases)
@@ -181,7 +195,7 @@ class DsnAliases:
             return None
 
         # First check main config (takes precedence)
-        main_aliases = self.config.get(self.SECTION_NAME, {})
+        main_aliases = self._main_aliases()
         if name in main_aliases:
             return main_aliases[name]
 
@@ -197,7 +211,7 @@ class DsnAliases:
         # Combine included aliases with main config (main takes precedence)
         # Exclude directives
         all_aliases = dict(self._included_aliases)
-        main_aliases = {k: v for k, v in self.config.get(self.SECTION_NAME, {}).items() if k not in self.DIRECTIVES}
+        main_aliases = {k: v for k, v in self._main_aliases().items() if k not in self.DIRECTIVES}
         all_aliases.update(main_aliases)
         return all_aliases
 

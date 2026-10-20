@@ -75,6 +75,27 @@ def ensure_dir_exists(path):
     os.makedirs(parent_dir, exist_ok=True)
 
 
+def literal_values(filename, section, values, encoding="utf-8"):
+    """Return ``values`` with every list replaced by its line read literally.
+
+    ConfigObj splits an unquoted value on commas. For a DSN (``host=a,b`` is
+    libpq's multi-host form) or a SQL query (``select pid, query ...``) the
+    commas are part of the value, so a key that came back as a list is read
+    again from ``filename`` with ``list_values=False``, which takes the line
+    as it is. Quoted values and values without commas are returned unchanged.
+    ``section`` is the section the values were read from, None for the top
+    level of the file.
+    """
+    if not filename or not any(isinstance(value, list) for value in values.values()):
+        return values
+    try:
+        literal = ConfigObj(expanduser(filename), interpolation=False, encoding=encoding, list_values=False)
+    except Exception:
+        return values
+    source = literal.get(section, {}) if section else literal
+    return {key: (source.get(key, value) if isinstance(value, list) else value) for key, value in values.items()}
+
+
 def ensure_private_file(path):
     """Create ``path`` if missing and keep it readable by its owner only.
 

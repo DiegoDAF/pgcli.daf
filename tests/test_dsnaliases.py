@@ -325,3 +325,37 @@ class TestDsnAliases:
         dsn = DsnAliases.from_config(config)
 
         assert dsn.list() == ["alpha-db", "mike-db", "zebra-db"]
+
+
+def test_a_multi_host_alias_is_not_split_on_its_commas(tmp_path):
+    # "host=a,b" is libpq's multi-host form. ConfigObj read the unquoted
+    # value as a list, and pgcli --dsn died with "'list' object has no
+    # attribute 'startswith'" while --list-dsn gave up on every alias.
+    from pgcli.config import load_config
+
+    (tmp_path / "config").write_text("[alias_dsn]\nmain_multi = host=a,b port=5432 dbname=x\n", encoding="utf-8")
+    include = tmp_path / "dsn.d"
+    include.mkdir()
+    (include / "m.conf").write_text(
+        "multi = host=a,b port=5432 dbname=x user=u\nurl = postgresql://u@h/db?options=-c%20search_path%3Da,b\n",
+        encoding="utf-8",
+    )
+
+    aliases = DsnAliases.from_config(load_config(str(tmp_path / "config")))
+    assert aliases["multi"] == "host=a,b port=5432 dbname=x user=u"
+    assert aliases["url"] == "postgresql://u@h/db?options=-c%20search_path%3Da,b"
+    assert aliases["main_multi"] == "host=a,b port=5432 dbname=x"
+    assert aliases.get_all()["multi"] == "host=a,b port=5432 dbname=x user=u"
+
+
+def test_list_dsn_survives_a_multi_host_alias(tmp_path, monkeypatch):
+    from click.testing import CliRunner
+    from pgcli.main import cli
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    rc = tmp_path / "pgclirc"
+    rc.write_text("[alias_dsn]\nmulti = host=a,b port=5432 dbname=x\n", encoding="utf-8")
+    result = CliRunner().invoke(cli, ["--list-dsn", "--pgclirc", str(rc)])
+    assert result.exit_code == 0, result.output
+    assert "multi : host=a,b port=5432 dbname=x" in result.output

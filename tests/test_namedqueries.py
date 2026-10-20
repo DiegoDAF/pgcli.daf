@@ -470,3 +470,24 @@ class TestMultilineAndCommentSafety:
         nq = ExtendedNamedQueries.from_config(self._config())
         nq.save("q", "select 1; -- first\nselect 2;")
         assert nq.get("q") == "select 1; /* first */\nselect 2;"
+
+
+def test_an_unquoted_comma_keeps_the_whole_query(tmp_path):
+    # ConfigObj splits an unquoted value on commas, so "select pid, query"
+    # came back as a list and \n failed with "Bad arguments". The line is
+    # taken as written; quoted values are untouched.
+    from pgcli.config import load_config
+
+    (tmp_path / "config").write_text('[named queries]\nmain_act = select 1, 2\nquoted = "select 3, 4"\n', encoding="utf-8")
+    include = tmp_path / "namedqueries.d"
+    include.mkdir()
+    (include / "act.conf").write_text("act = select pid, query from pg_stat_activity\n", encoding="utf-8")
+    (include / "sec.conf").write_text("[named queries]\nsec = select a, b from t\n", encoding="utf-8")
+
+    queries = ExtendedNamedQueries.from_config(load_config(str(tmp_path / "config")))
+    assert queries.get("act") == "select pid, query from pg_stat_activity"
+    assert queries.get("sec") == "select a, b from t"
+    assert queries.get("main_act") == "select 1, 2"
+    assert queries.get("quoted") == "select 3, 4"
+    assert queries.get_all()["act"] == "select pid, query from pg_stat_activity"
+    assert sorted(queries.list()) == ["act", "main_act", "quoted", "sec"]

@@ -13,6 +13,8 @@ from sqlparse import tokens as sqlparse_tokens
 from configobj import ConfigObj
 from pgspecial.namedqueries import NamedQueries
 
+from .config import literal_values
+
 logger = logging.getLogger(__name__)
 
 
@@ -212,11 +214,16 @@ class ExtendedNamedQueries(NamedQueries):
 
             # First try to get from [named queries] section
             queries = file_config.get(self.section_name, {})
+            section = self.section_name
 
             # If no section found, treat entire file as queries
             # (excluding any sections that might exist)
             if not queries:
                 queries = {k: v for k, v in file_config.items() if not isinstance(v, dict)}
+                section = None
+
+            # An unquoted "select a, b" came back as a list: take the line as written.
+            queries = literal_values(filepath, section, dict(queries))
 
             if queries:
                 version = self._version_from_filename(os.path.basename(filepath))
@@ -268,6 +275,12 @@ class ExtendedNamedQueries(NamedQueries):
     # Directives that are not queries
     DIRECTIVES = {"includedir"}
 
+    def _main_queries(self):
+        """The [named queries] section of the main config, with unquoted
+        comma-separated values taken literally (see config.literal_values)."""
+        queries = dict(self.config.get(self.section_name, {}))
+        return literal_values(getattr(self.config, "filename", None), self.section_name, queries)
+
     def list(self):
         """List all named queries from config and include directory.
 
@@ -275,7 +288,7 @@ class ExtendedNamedQueries(NamedQueries):
             List of query names (combined from main config and includes)
         """
         # Get queries from main config (excluding directives)
-        main_queries = {k: v for k, v in self.config.get(self.section_name, {}).items() if k not in self.DIRECTIVES}
+        main_queries = {k: v for k, v in self._main_queries().items() if k not in self.DIRECTIVES}
 
         # Combine with included queries (main config takes precedence)
         all_queries = dict(self._included_queries)
@@ -299,7 +312,7 @@ class ExtendedNamedQueries(NamedQueries):
             return None
 
         # First check main config (takes precedence)
-        main_queries = self.config.get(self.section_name, {})
+        main_queries = self._main_queries()
         if name in main_queries:
             return main_queries[name]
 
@@ -315,7 +328,7 @@ class ExtendedNamedQueries(NamedQueries):
         # Combine included queries with main config (main takes precedence)
         # Exclude directives
         all_queries = dict(self._included_queries)
-        main_queries = {k: v for k, v in self.config.get(self.section_name, {}).items() if k not in self.DIRECTIVES}
+        main_queries = {k: v for k, v in self._main_queries().items() if k not in self.DIRECTIVES}
         all_queries.update(main_queries)
         return all_queries
 
