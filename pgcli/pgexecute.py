@@ -443,7 +443,19 @@ class PGExecute:
             sqlarr = removed_comments + sqlarr
 
         # run each sql query
-        for sql in sqlarr:
+        sqlarr = list(sqlarr)
+        while sqlarr:
+            sql = sqlarr.pop(0)
+            first_line, newline, rest = sql.strip().partition("\n")
+            if newline and first_line.startswith("\\") and first_line.split(maxsplit=1)[0] != "\\ns":
+                # psql's rule: a backslash command ends at its newline, and
+                # what follows is more statements. Otherwise a pasted dump's
+                # "\restrict KEY" swallowed the next line into its token (so
+                # the closing "\unrestrict KEY" never matched), and any
+                # meta-command took the SQL after it as arguments. \ns is the
+                # exception: it saves a query, which may span several lines.
+                sql = first_line
+                sqlarr[:0] = sqlparse.split(rest)
             # Remove spaces, eol and semi-colons.
             # Strip trailing comments first so rstrip(";") works when there are
             # comments after the semicolon, e.g.:
@@ -468,8 +480,12 @@ class PGExecute:
                             self.reset_expanded = True
                         sql = sql[:-2].strip()
 
-                    # Block meta-commands during restricted mode (CVE-2025-8714)
-                    if restrict_token and sql.startswith("\\"):
+                    # Block meta-commands during restricted mode (CVE-2025-8714).
+                    # The token may be a callable, read per statement: a
+                    # \restrict earlier in the same submission must already
+                    # count, as it does in psql.
+                    token = restrict_token() if callable(restrict_token) else restrict_token
+                    if token and sql.startswith("\\"):
                         cmd_name = sql.split()[0] if sql.split() else sql
                         if cmd_name != "\\unrestrict":
                             yield (None, None, None, "Restricted mode active: only \\unrestrict is allowed", sql, False, True)

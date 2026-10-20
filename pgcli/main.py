@@ -905,7 +905,7 @@ class PGCli:
             self.pgspecial,
             on_error_resume=on_error_resume,
             explain_mode=self.explain_mode,
-            restrict_token=self.restrict_token,
+            restrict_token=lambda: self.restrict_token,
             notice_callback=lambda msg: click.echo(msg),
         )
 
@@ -1875,7 +1875,7 @@ class PGCli:
             lambda x: exception_formatter(x, self.verbose_errors),
             on_error_resume,
             explain_mode=self.explain_mode,
-            restrict_token=self.restrict_token,
+            restrict_token=lambda: self.restrict_token,
             notice_callback=_stream_notice,
         )
 

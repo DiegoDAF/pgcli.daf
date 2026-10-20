@@ -71,6 +71,17 @@ Bug fixes:
   connection died instead of dialing the dead local port. A tunnel now counts
   as active only while its SSH transport is.
 
+* ``\restrict`` (CVE-2025-8714) blocks meta-commands from the next statement
+  on, also within the same pasted batch, as psql does line by line. The token
+  was read once per submission, so pasting a dump that sets ``\restrict`` let
+  the meta-commands after it in the paste run anyway.
+
+* A backslash command ends at its line, as in psql, so the SQL on the next
+  line runs as a statement instead of becoming its arguments. A pasted dump's
+  ``\restrict KEY`` took the following line into its key, so the closing
+  ``\unrestrict KEY`` never matched and the session stayed restricted. ``\ns``
+  still saves a query that spans several lines.
+
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================
 

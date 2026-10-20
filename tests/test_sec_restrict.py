@@ -193,6 +193,34 @@ def test_dangerous_specials_blocked_while_restricted():
     pgspecial.execute.assert_not_called()
 
 
+def test_restrict_entered_mid_batch_blocks_the_rest_of_the_batch():
+    """The token is read per statement, not once per batch.
+
+    A pasted dump sets \\restrict and then runs everything else in the same
+    submission; with the token read once at the start of run(), the
+    meta-commands after it in that paste were not blocked.
+    """
+    state = {"token": None}
+    pgspecial = mock.MagicMock()
+
+    def execute(cur, sql):
+        if sql.startswith("\\restrict"):
+            state["token"] = "tok"
+        return [(None, None, None, "ok")]
+
+    pgspecial.execute.side_effect = execute
+    executor = _make_executor()
+    results = list(
+        executor.run(
+            "\\restrict tok;\n\\i /tmp/evil.sql",
+            pgspecial=pgspecial,
+            restrict_token=lambda: state["token"],
+        )
+    )
+    assert any("Restricted mode active" in s for s in _statuses(results))
+    assert [c.args[1] for c in pgspecial.execute.call_args_list] == ["\\restrict tok"]
+
+
 def test_blocked_command_result_is_marked_unsuccessful():
     """A blocked meta-command must report success=False, not a fake success."""
     pgspecial = mock.MagicMock()

@@ -374,6 +374,47 @@ def test_streamed_results_reach_the_log_file(executor, tmpdir, capsys):
     mock_pager.assert_not_called()
 
 
+@dbtest
+def test_restrict_in_a_pasted_batch_blocks_the_meta_commands_after_it(executor, tmpdir):
+    # psql applies \\restrict line by line; pgcli read the token once per
+    # submission, so a pasted dump's later meta-commands still ran.
+    cli = PGCli(pgexecute=executor, pgclirc_file=str(tmpdir.join("rcfile")))
+    output, _ = cli._evaluate_command("\\restrict k2\nselect 1;\n\\echo SHOULD_NOT_RUN\n")
+    assert cli.restrict_token == "k2"
+    assert not any(line == "SHOULD_NOT_RUN" for line in output)
+    assert any("Restricted mode active" in line for line in output)
+
+
+@dbtest
+def test_a_pasted_dump_with_restrict_and_unrestrict_round_trips(executor, tmpdir):
+    # pg_dump wraps its output in \\restrict KEY ... \\unrestrict KEY. The key
+    # used to swallow the next line, so the closing \\unrestrict never matched
+    # and the session stayed restricted.
+    cli = PGCli(pgexecute=executor, pgclirc_file=str(tmpdir.join("rcfile")))
+    output, _ = cli._evaluate_command("\\restrict K9\nselect 1;\n\\echo SHOULD_NOT_RUN\n\\unrestrict K9\n")
+    assert not any(line == "SHOULD_NOT_RUN" for line in output)
+    assert cli.restrict_token is None
+
+
+@dbtest
+def test_a_meta_command_ends_at_its_line(executor, tmpdir):
+    # psql's rule: the SQL on the next line is a statement of its own, not
+    # more arguments for the backslash command.
+    cli = PGCli(pgexecute=executor, pgclirc_file=str(tmpdir.join("rcfile")))
+    output, _ = cli._evaluate_command("\\echo marker\nselect 40 + 2 as answer;\n")
+    assert "marker" in output
+    assert any("42" in line for line in output)
+
+
+@dbtest
+def test_ns_still_saves_a_multi_line_query(executor, tmpdir):
+    cli = PGCli(pgexecute=executor, pgclirc_file=str(tmpdir.join("rcfile")))
+    cli._evaluate_command("\\ns two_lines select 1\n+ 1\n")
+    from pgspecial.namedqueries import NamedQueries
+
+    assert NamedQueries.instance.get("two_lines") == "select 1\n+ 1"
+
+
 def test_no_stream_buffers_results_to_pager(tmpdir):
     """Default behavior (stream_results=False): nothing is echoed live, all
     output is dumped once through the pager."""
