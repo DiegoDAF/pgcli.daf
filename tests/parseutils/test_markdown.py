@@ -7,6 +7,8 @@ prose case is deliberately more careful, and leaves the text alone whenever it
 cannot find a line that starts a statement.
 """
 
+import pytest
+
 from pgcli.packages.parseutils import strip_markdown
 
 
@@ -109,3 +111,36 @@ def test_leading_blank_lines_are_not_reported():
 
 def test_blank_lines_do_not_count_as_dropped_prose():
     assert strip_markdown("\nSome prose.\n\nselect 1;") == ("select 1;", "1 line(s) of text before the statement")
+
+
+# Every keyword that can start a statement in PostgreSQL's grammar. LOAD,
+# REASSIGN and the British ANALYSE were missing from the detector, so a script
+# that opened with one of them lost its first statement as "prose".
+STATEMENT_STARTS = [
+    "abort", "alter", "analyze", "analyse", "begin", "call", "checkpoint", "close", "cluster", "comment", "commit",
+    "copy", "create", "deallocate", "declare", "delete", "discard", "do", "drop", "end", "execute", "explain",
+    "fetch", "grant", "import", "insert", "listen", "load", "lock", "merge", "move", "notify", "prepare",
+    "reassign", "refresh", "reindex", "release", "reset", "revoke", "rollback", "savepoint", "security",
+    "select", "set", "show", "start", "table", "truncate", "unlisten", "update", "vacuum", "values", "with",
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("keyword", STATEMENT_STARTS)
+def test_every_statement_keyword_is_recognised(keyword):
+    text = "%s something;\nselect 1;" % keyword
+    assert strip_markdown(text) == (text, "")
+
+
+def test_every_fenced_block_is_kept():
+    # An answer with two code blocks ran only the first one, and the report
+    # said just "surrounding text" about the second.
+    text = "Run this first:\n```sql\nselect 1;\n```\nthen this:\n```sql\nselect 2;\n```\n"
+    assert strip_markdown(text) == ("select 1;\nselect 2;", "2 markdown fences and surrounding text")
+
+
+def test_several_fences_without_prose():
+    assert strip_markdown("```\nselect 1;\n```\n```\nselect 2;\n```") == ("select 1;\nselect 2;", "2 markdown fences")
+
+
+def test_text_after_the_closing_fence_counts_as_surrounding():
+    assert strip_markdown("```sql\nselect 1;\n```\nThat is all.") == ("select 1;", "markdown fence and surrounding text")

@@ -88,12 +88,12 @@ _SQL_LINE_START = re.compile(
     r"""^\s*(?:
         --|/\*|\(|\\          # comment, parenthesised query, backslash command
         |(?:select|insert|update|delete|merge|with|values|table
-          |create|alter|drop|truncate|comment|refresh|reindex|cluster|vacuum|analyze
-          |grant|revoke|security
+          |create|alter|drop|truncate|comment|refresh|reindex|cluster|vacuum|analyze|analyse
+          |grant|revoke|security|reassign
           |begin|start|commit|rollback|savepoint|release|end|abort
           |explain|copy|call|do|prepare|execute|deallocate
           |declare|fetch|move|close|listen|unlisten|notify
-          |set|reset|show|discard|lock|checkpoint|import
+          |set|reset|show|discard|lock|checkpoint|import|load
           )\b
     )""",
     re.IGNORECASE | re.VERBOSE,
@@ -109,7 +109,8 @@ def strip_markdown(text):
     pulls the SQL back out:
 
     * text inside a fence wins, because a fence states exactly where the code
-      is and there is nothing to guess;
+      is and there is nothing to guess; every fenced block is kept, in order,
+      since an answer often holds several ("first run this, then this");
     * without a fence, leading lines are dropped up to the first one that
       starts a statement, and if no such line exists nothing is touched;
     * a lone fence becomes empty text, so it is not sent to the server.
@@ -123,13 +124,20 @@ def strip_markdown(text):
 
     fences = [i for i, line in enumerate(lines) if _MARKDOWN_FENCE.match(line)]
     if fences:
-        opening = fences[0]
-        closing = fences[1] if len(fences) > 1 else len(lines)
-        inner = lines[opening + 1 : closing]
+        inner = []
+        fenced = set()  # line numbers of the fences and of what they enclose
+        for i in range(0, len(fences), 2):
+            opening = fences[i]
+            closing = fences[i + 1] if i + 1 < len(fences) else len(lines)
+            inner.extend(lines[opening + 1 : closing])
+            fenced.update(range(opening, closing + 1))
         if not [line for line in inner if line.strip()]:
             # Just a fence, or an empty block: nothing to run.
             return "", "markdown fence"
-        what = "markdown fence" + (" and surrounding text" if opening > 0 else "")
+        blocks = (len(fences) + 1) // 2
+        what = "markdown fence" if blocks == 1 else "%d markdown fences" % blocks
+        if any(line.strip() for i, line in enumerate(lines) if i not in fenced):
+            what += " and surrounding text"
         return "\n".join(inner), what
 
     for index, line in enumerate(lines):
