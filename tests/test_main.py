@@ -2859,3 +2859,15 @@ def test_the_launch_params_log_hides_the_connection_string_password(tmpdir, monk
     assert "Launch Params" in caplog.text
     assert "s3cret" not in caplog.text
     assert "u:***@db.internal" in caplog.text
+
+
+def test_auto_expand_never_widens_rows_written_to_an_output_file(tmpdir):
+    # psql's \x auto does not expand into \o files: the terminal's width says
+    # nothing about the file.
+    out = tmpdir.join("out.txt")
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")), auto_vertical_output=True, output_file=str(out))
+    with mock.patch("pgcli.main.sys.stdout.isatty", return_value=True):
+        assert cli._output_width() is None
+    cli.output_file = None
+    with mock.patch("pgcli.main.sys.stdout.isatty", return_value=False):
+        assert cli._output_width() is None

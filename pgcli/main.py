@@ -1861,8 +1861,11 @@ class PGCli:
 
         In -c/-f mode no prompt is ever built, so the terminal is asked
         directly. psql's \\x auto only expands when the output is a terminal:
-        a pipe or a file gets the plain table whatever its width.
+        a pipe, or a file set with -o or \\o, gets the plain table whatever
+        its width.
         """
+        if self.output_file:
+            return None
         if self.prompt_app:
             return self.prompt_app.output.get_size().columns
         if sys.stdout.isatty():
