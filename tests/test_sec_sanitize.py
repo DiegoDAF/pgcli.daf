@@ -351,3 +351,21 @@ def test_list_dsn_masks_key_value_and_query_string_passwords(tmp_path, monkeypat
     assert result.exit_code == 0, result.output
     assert "s3cret" not in result.output
     assert result.output.count("***") == 2
+
+
+@pytest.mark.parametrize(
+    "title, shown",
+    [
+        ("pgcli postgresql://u@h/db?password=s3cret&sslmode=require", "pgcli postgresql://u@h/db?password=xxxx&sslmode=require"),
+        ("pgcli -d postgresql://u@h/db?sslmode=require&password=s3cret", "pgcli -d postgresql://u@h/db?sslmode=require&password=xxxx"),
+        ("pgcli postgresql://u:s3cret@h/db", "pgcli postgresql://u:xxxx@h/db"),
+        ("pgcli host=h password=s3cret dbname=x", "pgcli host=h password=xxxx dbname=x"),
+        ("pgcli postgresql://u:a@h/db postgresql://v:b@h/db", "pgcli postgresql://u:xxxx@h/db postgresql://v:xxxx@h/db"),
+    ],
+)
+def test_redact_process_title(title, shown):
+    # ps shows the command line to everyone on the machine. A password given
+    # as ?password= in a URL's query string used to stay there.
+    from pgcli.redact import redact_process_title
+
+    assert redact_process_title(title) == shown

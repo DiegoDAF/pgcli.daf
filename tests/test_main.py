@@ -1,3 +1,4 @@
+import logging
 import os
 import stat
 import platform
@@ -2796,3 +2797,31 @@ def test_rotation_names_the_file_even_with_a_custom_log_file(tmpdir):
     cli.initialize_logging()
     assert os.path.exists(str(tmpdir.join("pgcli-%s.log" % datetime.datetime.now().strftime("%Y%m%d"))))
     assert not os.path.exists(custom)
+
+
+def test_the_debug_log_hides_role_passwords(tmpdir, caplog):
+    # PGExecute masked PASSWORD '...' in its own log line, but PGCli logged the
+    # raw statement first, so "alter role x password '...'" reached the log.
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.pgexecute = mock.Mock()
+    cli.pgexecute.run.return_value = []
+    with caplog.at_level(logging.DEBUG, logger="pgcli.main"):
+        cli._evaluate_command("alter role bob password 's3cret'")
+    assert "s3cret" not in caplog.text
+    assert "password '***'" in caplog.text
+
+
+def test_the_launch_params_log_hides_the_connection_string_password(tmpdir, monkeypatch, caplog):
+    from pgcli.main import cli as pgcli_cli
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmpdir.join("xdg-config")))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmpdir.join("xdg-state")))
+    with (
+        mock.patch.object(PGCli, "connect_uri"),
+        mock.patch.object(PGCli, "run_cli"),
+        caplog.at_level(logging.DEBUG, logger="pgcli.main"),
+    ):
+        CliRunner().invoke(pgcli_cli, ["postgresql://u:s3cret@db.internal/appdb", "-c", "select 1", "--pgclirc", str(tmpdir.join("rc"))])
+    assert "Launch Params" in caplog.text
+    assert "s3cret" not in caplog.text
+    assert "u:***@db.internal" in caplog.text

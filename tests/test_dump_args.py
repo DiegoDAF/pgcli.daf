@@ -747,6 +747,20 @@ class TestTunneledRunEndToEnd:
         cmd = srun.call_args[0][0]
         assert cmd[1:] == ["-h", "db.internal", "-p", "5432", "mydb"]
 
+    def test_tunnel_verbose_does_not_log_the_password(self, mod, run_wrapper, caplog):
+        # --tunnel-verbose logged the child command line with the -d connection
+        # string intact, password included.
+        import logging
+
+        with caplog.at_level(logging.DEBUG):
+            result, _, _ = run_wrapper(
+                mod, ["--tunnel-verbose", "-d", "postgresql://reader:s3cr3t@db.internal:6432/ventas", "-f", "/dev/null"]
+            )
+        assert result.exit_code == 0, result.output
+        assert "Executing:" in caplog.text
+        assert "s3cr3t" not in caplog.text
+        assert "reader:***@127.0.0.1:54321" in caplog.text
+
 
 class TestWrapperPlumbing:
     """The bits around the dump: logging, finding the binary, surviving a bad config.

@@ -15,6 +15,7 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 import sqlparse
 
 from .packages.parseutils import strip_trailing_comments
+from .redact import redact_sql
 
 sqlparse.engine.grouping.MAX_GROUPING_DEPTH = None
 sqlparse.engine.grouping.MAX_GROUPING_TOKENS = None
@@ -505,7 +506,7 @@ class PGExecute:
                             continue
 
                     # First try to run each query as special
-                    _logger.debug("Trying a pgspecial command. sql: %r", sql)
+                    _logger.debug("Trying a pgspecial command. sql: %r", redact_sql(sql))
                     try:
                         cur = self.conn.cursor()  # type: ignore[union-attr]
                     except psycopg.InterfaceError:
@@ -561,7 +562,7 @@ class PGExecute:
 
                 yield self.execute_normal_sql(sql, notice_callback=notice_callback) + (sql, True, False)
             except psycopg.DatabaseError as e:
-                _logger.error("sql: %r, error: %r", sql, e)
+                _logger.error("sql: %r, error: %r", redact_sql(sql), e)
                 _logger.error("traceback: %r", traceback.format_exc())
 
                 if self._must_raise(e) or not exception_formatter:
@@ -701,13 +702,7 @@ class PGExecute:
                accumulated in the title field. Useful for long-running
                commands like VACUUM VERBOSE, ANALYZE VERBOSE, REINDEX, etc.
         """
-        log_sql = re.sub(
-            r"(PASSWORD\s+)'[^']*'",
-            r"\1'***'",
-            split_sql,
-            flags=re.IGNORECASE,
-        )
-        _logger.debug("Regular sql statement. sql: %r", log_sql)
+        _logger.debug("Regular sql statement. sql: %r", redact_sql(split_sql))
 
         title = ""
 

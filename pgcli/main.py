@@ -64,7 +64,7 @@ from .pgcompleter import PGCompleter
 from .pgtoolbar import create_toolbar_tokens_func
 from .pgstyle import style_factory, style_factory_output
 from .pgexecute import PGExecute, split_meta_command
-from .redact import redact_dsn
+from .redact import redact_dsn, redact_process_title, redact_sql
 from .completion_refresher import CompletionRefresher
 from .config import (
     get_casing_file,
@@ -1436,16 +1436,16 @@ class PGCli:
             if self.destructive_warning_restarts_connection:
                 # Restart connection to the database
                 self.pgexecute.connect()
-                logger.debug("cancelled query and restarted connection, sql: %r", text)
+                logger.debug("cancelled query and restarted connection, sql: %r", redact_sql(text))
                 click.secho("cancelled query and restarted connection", err=True, fg="red")
             else:
-                logger.debug("cancelled query, sql: %r", text)
+                logger.debug("cancelled query, sql: %r", redact_sql(text))
                 click.secho("cancelled query", err=True, fg="red")
                 self._recover_from_interrupt()
         except NotImplementedError:
             click.secho("Not Yet Implemented.", fg="yellow")
         except OperationalError as e:
-            logger.error("sql: %r, error: %r", text, e)
+            logger.error("sql: %r, error: %r", redact_sql(text), e)
             logger.error("traceback: %r", traceback.format_exc())
             click.secho(str(e), err=True, fg="red")
             if handle_closed_connection:
@@ -1453,7 +1453,7 @@ class PGCli:
         except (PgCliQuitError, EOFError):
             raise
         except Exception as e:
-            logger.error("sql: %r, error: %r", text, e)
+            logger.error("sql: %r, error: %r", redact_sql(text), e)
             logger.error("traceback: %r", traceback.format_exc())
             click.secho(str(e), err=True, fg="red")
         else:
@@ -1579,7 +1579,7 @@ class PGCli:
         if hasattr(self, 'commands') and self.commands:
             try:
                 for command in self.commands:
-                    logger.debug("Running command: %s", command)
+                    logger.debug("Running command: %s", redact_sql(command))
                     # Same path as typing it at the prompt, one statement at
                     # a time so \watch only repeats its own statement.
                     if self._execute_statements(command):
@@ -1872,7 +1872,7 @@ class PGCli:
         returns (results, MetaQuery)
         """
         logger = self.logger
-        logger.debug("sql: %r", text)
+        logger.debug("sql: %r", redact_sql(text))
 
         # set query to formatter in order to parse table name
         self.formatter.query = text
@@ -2689,7 +2689,7 @@ def cli(
 
     pgcli.logger.debug(
         "Launch Params: \n\tdatabase: %r\tuser: %r\thost: %r\tport: %r",
-        database,
+        redact_dsn(database),  # a connection string carries the password
         user,
         host,
         port,
@@ -2702,16 +2702,7 @@ def cli(
 
 
 def obfuscate_process_password():
-    process_title = setproctitle.getproctitle()
-    if "://" in process_title:
-        # Per-URL, non-greedy character classes so EVERY password is masked.
-        # A greedy ":(.*):(.*)@" would span across multiple connection URLs and
-        # leak all but the last password in the process title (visible via `ps`).
-        process_title = re.sub(r"://([^:/@]+):([^@]+)@", r"://\1:xxxx@", process_title)
-    elif "=" in process_title:
-        process_title = re.sub(r"password=(.+?)((\s[a-zA-Z]+=)|$)", r"password=xxxx\2", process_title)
-
-    setproctitle.setproctitle(process_title)
+    setproctitle.setproctitle(redact_process_title(setproctitle.getproctitle()))
 
 
 def has_meta_cmd(query):

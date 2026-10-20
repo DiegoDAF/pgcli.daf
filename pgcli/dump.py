@@ -16,6 +16,7 @@ import click
 from .config import get_config
 from .dsnaliases import DsnAliases
 from .pgpass import has_safe_permissions, lookup_password, pgpass_path
+from .redact import redact_dsn
 from .ssh_tunnel import SSHTunnelError, get_tunnel_manager_from_config
 from .dump_args import (  # re-exported: both wrappers and their tests import these
     apply_dsn_alias,
@@ -265,7 +266,8 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
 
     # Execute pg_dump
     cmd = [pg_dump_path] + final_args
-    logger.debug("Executing: %s", " ".join(cmd))
+    # -d may carry the password; --tunnel-verbose must not print it.
+    logger.debug("Executing: %s", redact_dsn(" ".join(cmd)))
 
     try:
         result = subprocess.run(cmd, env=env)
