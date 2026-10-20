@@ -1,3 +1,4 @@
+import logging
 import time
 import pytest
 from unittest.mock import Mock, patch
@@ -316,3 +317,17 @@ class TestBackgroundRefresh:
         # First pass stops right after "first"; the second pass completes.
         assert calls == ["first", "first", "second"]
         assert not refresher._restart_refresh.is_set()
+
+    def test_a_failing_refresher_is_logged_and_the_copy_is_closed(self, refresher, caplog):
+        # The thread used to die silently: no completer swap, the previous
+        # completions kept, and the connection made by copy() left open.
+        from collections import OrderedDict
+
+        callback = Mock()
+        boom = Mock(side_effect=RuntimeError("relation vanished during the refresh"))
+        with caplog.at_level(logging.ERROR, logger="pgcli.completion_refresher"):
+            executor, _ = self._run(refresher, refreshers=OrderedDict(boom=boom), callbacks=[callback])
+        callback.assert_not_called()
+        executor.copy.return_value.conn.close.assert_called_once()
+        assert "Completion refresh failed" in caplog.text
+        assert "relation vanished" in caplog.text

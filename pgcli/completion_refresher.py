@@ -1,9 +1,12 @@
+import logging
 import threading
 import os
 from collections import OrderedDict
 from typing import Any, Callable, OrderedDict as OrderedDictType
 
 from .pgcompleter import PGCompleter
+
+_logger = logging.getLogger(__name__)
 
 
 class CompletionRefresher:
@@ -49,43 +52,51 @@ class CompletionRefresher:
     def _bg_refresh(self, pgexecute, special, callbacks, history=None, settings=None):
         settings = settings or {}
         completer = PGCompleter(smart_completion=True, pgspecial=special, settings=settings)
+        single_connection = settings.get("single_connection")
+        executor = None
 
-        if settings.get("single_connection"):
-            executor = pgexecute
-        else:
-            # Create a new pgexecute method to populate the completions.
-            executor = pgexecute.copy()
         # If callbacks is a single function then push it into a list.
         if callable(callbacks):
             callbacks = [callbacks]
 
-        while 1:
-            for refresher in self.refreshers.values():
-                refresher(completer, executor)
-                if self._restart_refresh.is_set():
-                    self._restart_refresh.clear()
-                    break
+        try:
+            if single_connection:
+                executor = pgexecute
             else:
-                # Break out of while loop if the for loop finishes natually
-                # without hitting the break statement.
-                break
+                # Create a new pgexecute method to populate the completions.
+                executor = pgexecute.copy()
 
-            # Start over the refresh from the beginning if the for loop hit the
-            # break statement.
-            continue
+            while 1:
+                for refresher in self.refreshers.values():
+                    refresher(completer, executor)
+                    if self._restart_refresh.is_set():
+                        self._restart_refresh.clear()
+                        break
+                else:
+                    # Break out of while loop if the for loop finishes natually
+                    # without hitting the break statement.
+                    break
 
-        # Load history into pgcompleter so it can learn user preferences
-        n_recent = 100
-        if history:
-            for recent in history.get_strings()[-n_recent:]:
-                completer.extend_query_history(recent, is_init=True)
+                # Start over the refresh from the beginning if the for loop hit the
+                # break statement.
+                continue
 
-        for callback in callbacks:
-            callback(completer)
+            # Load history into pgcompleter so it can learn user preferences
+            n_recent = 100
+            if history:
+                for recent in history.get_strings()[-n_recent:]:
+                    completer.extend_query_history(recent, is_init=True)
 
-        if not settings.get("single_connection") and executor.conn:
-            # close connection established with pgexecute.copy()
-            executor.conn.close()
+            for callback in callbacks:
+                callback(completer)
+        except Exception:
+            # A thread dies silently. Say what happened; the completer in use
+            # stays as it is, and the connection below is closed either way.
+            _logger.exception("Completion refresh failed, keeping the previous completions")
+        finally:
+            if executor is not None and not single_connection and executor.conn:
+                # close connection established with pgexecute.copy()
+                executor.conn.close()
 
 
 def refresher(name, refreshers=CompletionRefresher.refreshers):
