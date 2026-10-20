@@ -192,7 +192,9 @@ def skip_initial_comment(f_stream: TextIO) -> int:
         if re.match(section_regex, line) is not None:
             f_stream.seek(pos)
             break
-        else:
-            pos += len(line)
-            lines_skipped += 1
+        # tell() rather than pos += len(line): a text stream's position is
+        # not a character count once a line holds multibyte characters, and
+        # "# Configuración" put the parser down in the middle of the comment.
+        pos = f_stream.tell()
+        lines_skipped += 1
     return lines_skipped

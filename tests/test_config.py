@@ -156,3 +156,13 @@ def test_ensure_private_file_does_not_block_on_a_fifo(tmp_path):
 def test_ensure_private_file_ignores_a_directory(tmp_path):
     ensure_private_file(str(tmp_path))
     assert tmp_path.is_dir()
+
+
+def test_skip_initial_comment_with_multibyte_characters(tmp_path):
+    # The position was advanced by character count; with accented letters in
+    # the comment the seek landed inside it and the service file would not parse.
+    path = tmp_path / "pg_service.conf"
+    path.write_text("# Configuración: más tildes áéíóú y ñ\n# segunda línea con ü\n[svc]\nhost=example.invalid\n", encoding="utf-8")
+    with open(path, encoding="utf-8", newline="") as f:
+        assert skip_initial_comment(f) == 2
+        assert f.readline() == "[svc]\n"
