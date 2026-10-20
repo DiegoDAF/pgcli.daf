@@ -976,6 +976,14 @@ def test_the_query_log_file_is_private(tmpdir):
         later = tmpdir.join("later.log")
         cli.write_to_logfile(str(later))
         assert stat.S_IMODE(os.stat(str(later)).st_mode) == 0o600
+
+        # An existing, wider file the user owns is tightened too, as the
+        # history and the debug log are; documented, not accidental.
+        shared = tmpdir.join("shared.log")
+        shared.write("")
+        os.chmod(str(shared), 0o644)
+        cli.write_to_logfile(str(shared))
+        assert stat.S_IMODE(os.stat(str(shared)).st_mode) == 0o600
     finally:
         os.umask(old_umask)
 

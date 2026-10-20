@@ -78,7 +78,8 @@ Bug fixes:
   ``KeyError: 'Rows Removed by Filter'``.
 
 * ``--log-file`` and ``\log-file`` create their file readable by its owner
-  only, like the history, the debug log and the config.
+  only, like the history, the debug log and the config; an existing file the
+  user owns is tightened the same way.
 
 * An invalid regular expression in ``[ssh tunnels]`` or ``[dsn ssh tunnels]``
   is reported and skipped instead of being an uncaught ``re.error`` at every
