@@ -21,10 +21,12 @@ from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER
 @pytest.fixture
 def cli(tmpdir):
     cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
-    cli.pgexecute = MagicMock(dbname="workforce", user="postgres", extra_args={"hostaddr": "127.0.0.1", "connect_timeout": 15})
+    cli.pgexecute = MagicMock(
+        dbname="workforce", user="postgres", port="40001", extra_args={"hostaddr": "127.0.0.1", "connect_timeout": 15}
+    )
     cli._target = ("workforce.internal", 5432)
     cli._tunnel_manager = MagicMock()
-    cli._tunnel_manager.tunnel = MagicMock(name="old tunnel")
+    cli._tunnel_manager.tunnel = MagicMock(name="old tunnel", local_bind_port=40001)
     return cli
 
 
@@ -32,7 +34,7 @@ def _tunnel_to(manager, local_port):
     """start_tunnel() that opens a new tunnel the way SSHTunnelManager does."""
 
     def start_tunnel(host, port=5432, dsn_alias=None):
-        manager.tunnel = MagicMock(name="new tunnel")
+        manager.tunnel = MagicMock(name="new tunnel", is_active=True, local_bind_port=local_port)
         return "127.0.0.1", local_port
 
     return start_tunnel
@@ -252,3 +254,22 @@ def test_c_strips_the_quotes_of_a_quoted_name(cli):
     list(cli.change_db('"my db" "some user"'))
     kwargs = cli.pgexecute.connect.call_args.kwargs
     assert (kwargs["database"], kwargs["user"]) == ("my db", "some user")
+
+
+def test_a_revived_tunnel_is_adopted_even_when_the_first_connect_through_it_failed(cli, capsys):
+    # The new tunnel came up on 50002 but the server did not answer through it
+    # yet, so connect() failed and the connection parameters kept the dead
+    # port. Every later reconnect then saw a live tunnel, returned nothing and
+    # replayed 40001 for good; start_tunnel() was never called again.
+    old = cli._tunnel_manager.tunnel
+    old.is_active = False
+    cli._tunnel_manager.start_tunnel.side_effect = _tunnel_to(cli._tunnel_manager, 50002)
+    cli.auto_retry_closed_connection = False
+    cli.pgexecute.connect.side_effect = [OperationalError("Connection refused"), None]
+    cli._handle_server_closed_connection("select 1")
+    assert "Reconnect Failed" in capsys.readouterr().out
+
+    with patch("pgcli.main.confirm", return_value=False):
+        cli._handle_server_closed_connection("select 1")
+    assert [c.kwargs for c in cli.pgexecute.connect.call_args_list] == [{"port": 50002}, {"port": 50002}]
+    assert cli._tunnel_manager.start_tunnel.call_count == 1

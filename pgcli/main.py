@@ -2045,7 +2045,15 @@ class PGCli:
         tries again instead of dialing the dead port for good.
         """
         manager = getattr(self, "_tunnel_manager", None)
-        if manager is None or manager.tunnel is None or manager.tunnel.is_active:
+        if manager is None or manager.tunnel is None:
+            return {}
+        if manager.tunnel.is_active:
+            # Alive, but is the connection using it? When the first connect
+            # through a revived tunnel failed, the connection parameters kept
+            # the dead port and every later reconnect replayed it, for good.
+            port = manager.tunnel.local_bind_port
+            if port is not None and str(port) != str(self.pgexecute.port):
+                return {"port": port}
             return {}
         dead = manager.tunnel
         self.logger.debug("SSH tunnel is down, reopening it")
