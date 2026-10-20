@@ -108,6 +108,27 @@ Bug fixes:
   with a message about tunnels, while the key=value form was quietly rewritten
   to one host with the tunnel pointed at ``a,b``.
 
+* The log no longer gets a role password back through the server's error
+  message. The ``sql:`` part of an ERROR line was masked, but the ``error:``
+  part of the same line quoted the server's ``LINE 1: alter role x password
+  '...'`` echo, and so did the traceback and the ``status:`` debug line, at
+  the default log level. Error messages, tracebacks and statuses go through
+  the same redaction now.
+
+* The redaction knows every keyword libpq marks as a secret (read from libpq
+  itself: ``password``, ``sslpassword`` and, with PostgreSQL 18,
+  ``oauth_client_secret``), a URI with an empty user
+  (``postgresql://:pass@host/db``), getopt's attached ``-dpassword=...``,
+  connection strings inside SQL (``create subscription ... connection '...'``,
+  ``dblink('...')``) and every spelling of a role password literal
+  (``password'x'`` with no blank, a comment before it, ``U&'...'``, adjacent
+  literals, a non-ASCII dollar tag). The process title also hides
+  ``sslpassword=`` and ``password = x``, and keeps the arguments that follow a
+  masked password instead of cutting the title there. A tunnel URL written as
+  ``ssh://user:password@bastion`` is masked in the log and in error messages,
+  and ``pgcli_dump``, ``pgcli_dumpall`` and ``pgcli_isready`` rewrite their
+  own process title the way pgcli does.
+
 * A reconnect through a revived SSH tunnel whose first connection attempt
   failed (bastion back before the network, database restarting) is retried
   through that tunnel. The connection parameters kept the dead local port, and
