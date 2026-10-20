@@ -417,7 +417,13 @@ class _NativeSSHTunnel:
 
     @property
     def is_active(self) -> bool:
-        return self._is_active
+        # Started and not stopped is not enough: the SSH connection under the
+        # tunnel can drop (bastion restart, laptop asleep), and then every
+        # forwarded connection fails.
+        if not self._is_active or self._ssh_client is None:
+            return False
+        transport = self._ssh_client.get_transport()
+        return bool(transport is not None and transport.is_active())
 
     @property
     def local_bind_port(self) -> Optional[int]:
@@ -755,8 +761,9 @@ class SSHTunnelManager:
         return "127.0.0.1", local_port
 
     def stop_tunnel(self):
-        """Stop the SSH tunnel if running."""
-        if self.tunnel and self.tunnel.is_active:
+        """Stop the SSH tunnel, also when its SSH connection already dropped,
+        so its local forwarding server does not linger."""
+        if self.tunnel:
             self.logger.debug("Stopping SSH tunnel")
             self.tunnel.stop()
             self.tunnel = None

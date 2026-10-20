@@ -11,7 +11,7 @@ from typing import Any, Optional
 import pgspecial as special
 import psycopg
 import psycopg.sql
-from psycopg.conninfo import make_conninfo
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 import sqlparse
 
 from .packages.parseutils import strip_trailing_comments
@@ -238,8 +238,22 @@ class PGExecute:
         return self._is_virtual_database
 
     def copy(self):
-        """Returns a clone of the current executor."""
-        return self.__class__(**self._conn_params)
+        """Returns a clone of the current executor, on the same server and database.
+
+        It is built from the exact connection string in use. Rebuilt from the
+        separate parameters, a DSN connection lost whatever \\c had changed
+        (database, or the server and an SSH tunnel's endpoint): connect() keeps
+        only the DSN when given one.
+        """
+        return self.__class__(dsn=self._conninfo(self._conn_params))
+
+    @staticmethod
+    def _conninfo(conn_params):
+        """The connection string for these parameters; loose ones override the DSN's."""
+        if "dsn" in conn_params:
+            other_params = {k: v for k, v in conn_params.items() if k != "dsn"}
+            return make_conninfo(conn_params["dsn"], **other_params)
+        return make_conninfo(**conn_params)
 
     def connect(
         self,
@@ -249,9 +263,20 @@ class PGExecute:
         host=None,
         port=None,
         dsn=None,
+        reset_endpoint=False,
         **kwargs,
     ):
         conn_params = self._conn_params.copy()
+        if reset_endpoint:
+            # Connecting to a different server: the previous one's host, port,
+            # hostaddr (an SSH tunnel's 127.0.0.1) and password must not carry
+            # over, or the new connection dials the old endpoint.
+            endpoint = ("host", "hostaddr", "port", "password")
+            for key in endpoint:
+                conn_params.pop(key, None)
+            if conn_params.get("dsn"):
+                parsed = {k: v for k, v in conninfo_to_dict(conn_params["dsn"]).items() if k not in endpoint}
+                conn_params["dsn"] = make_conninfo(**parsed)
 
         new_params = {
             "dbname": database,
@@ -279,12 +304,7 @@ class PGExecute:
 
         conn_params.update({k: v for k, v in new_params.items() if v})
 
-        if "dsn" in conn_params:
-            other_params = {k: v for k, v in conn_params.items() if k != "dsn"}
-            conn_info = make_conninfo(conn_params["dsn"], **other_params)
-        else:
-            conn_info = make_conninfo(**conn_params)
-        conn = psycopg.connect(conn_info)
+        conn = psycopg.connect(self._conninfo(conn_params))
         conn.cursor_factory = ProtocolSafeCursor
 
         self._conn_params = conn_params

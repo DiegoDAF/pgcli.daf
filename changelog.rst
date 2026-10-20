@@ -52,6 +52,25 @@ Bug fixes:
   ``port=`` in a URI's query) or a non-numeric ``-p`` is reported in one red
   line instead of a Python traceback.
 
+* ``\c db user otherhost port`` over an SSH tunnel connects to the other
+  server. It kept the tunnel's ``hostaddr=127.0.0.1`` and dialed
+  ``127.0.0.1:<port>``, a local server if one listens there, while the prompt
+  showed the new host. Measured from a tunnelled DEV session: ``\c`` to
+  another DEV cluster on 5432 reached this machine's own Postgres and failed
+  only because its certificate did not match. ``\c`` to another server now
+  gets its own tunnel when one is configured for it (or a direct connection
+  when not), with ``.pgpass`` asked about the real server, and the previous
+  tunnel is closed once the switch works or kept if it fails. ``\c`` to the
+  same server, even naming its host and port, keeps the current endpoint.
+
+* After ``\c`` to another database, the completion refresher reads that
+  database. On a connection opened with a DSN it copied the original DSN and
+  dropped what ``\c`` had changed, so completions came from the old database.
+
+* Reconnecting after a dropped connection reopens the SSH tunnel when its SSH
+  connection died instead of dialing the dead local port. A tunnel now counts
+  as active only while its SSH transport is.
+
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================
 

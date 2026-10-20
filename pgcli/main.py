@@ -782,6 +782,48 @@ class PGCli:
             '"%s" on %s at port "%s".' % (self.pgexecute.dbname, self.pgexecute.user, host, self.pgexecute.port),
         )
 
+    def _change_db_target(self, host, port):
+        """The (host, port) \\c switches to, or None when it is the current server."""
+        current = getattr(self, "_target", None) or (self.pgexecute.host, int(self.pgexecute.port or 5432))
+        try:
+            target = (host or current[0], int(port) if port else current[1])
+        except ValueError:
+            raise ValueError(f"invalid port number: {port!r}") from None
+        return None if target == current else target
+
+    def _connect_elsewhere(self, database, user, host, port):
+        """\\c to another server, through its own SSH tunnel if one is configured.
+
+        The current connection's endpoint (a tunnel's hostaddr and local port,
+        its password) must not carry over: kept, it dialed 127.0.0.1:<port>, a
+        local server if one listened there, while the prompt named the new host.
+        The previous tunnel survives a failed attempt and is closed after a
+        successful one.
+        """
+        manager = self._tunnel_manager
+        previous = manager.tunnel
+        tunnel_host, tunnel_port = manager.start_tunnel(host=host, port=port)
+        opened = manager.tunnel if manager.tunnel is not previous else None
+        params = {"host": host, "port": tunnel_port}
+        password = None
+        if (tunnel_host, tunnel_port) != (host, port):
+            params["hostaddr"] = "127.0.0.1"
+            # libpq would look .pgpass up for the tunnel's local port.
+            password = pgpass.lookup_password(host, port, database or self.pgexecute.dbname, user or self.pgexecute.user)
+        extra = {k: v for k, v in (self.pgexecute.extra_args or {}).items() if k != "hostaddr"}
+        try:
+            self.pgexecute.connect(database=database, user=user, password=password, reset_endpoint=True, **params, **extra)
+        except Exception:
+            if opened is not None:
+                opened.stop()
+                manager.tunnel = previous
+            raise
+        if previous is not None and previous is not opened:
+            previous.stop()
+        manager.tunnel = opened
+        self.ssh_tunnel = opened
+        self._target = (host, port)
+
     def change_db(self, pattern, **_):
         if pattern:
             # Get all the parameters in pattern, handling double quotes if any.
@@ -792,14 +834,13 @@ class PGCli:
             infos.extend([None] * (4 - len(infos)))
             db, user, host, port = infos
             try:
-                self.pgexecute.connect(
-                    database=db,
-                    user=user,
-                    host=host,
-                    port=port,
-                    **self.pgexecute.extra_args,
-                )
-            except OperationalError as e:
+                target = self._change_db_target(host, port)
+                if target is None:
+                    # Same server: keep its endpoint (an SSH tunnel's included).
+                    self.pgexecute.connect(database=db, user=user, **self.pgexecute.extra_args)
+                else:
+                    self._connect_elsewhere(db, user, *target)
+            except (OperationalError, ValueError) as e:
                 click.secho(str(e), err=True, fg="red")
                 click.echo("Previous connection kept")
         else:
@@ -1201,6 +1242,9 @@ class PGCli:
             if "port" in parsed_dsn:
                 port = parsed_dsn["port"]
 
+        # The server actually asked for, before a tunnel turns it into
+        # 127.0.0.1:<local port>: \c and reconnects compare against it.
+        self._target = (host or "localhost", int(port or 5432))
         tunnel_host, tunnel_port = self._tunnel_manager.start_tunnel(
             host=host or "localhost",
             port=int(port or 5432),
@@ -1961,11 +2005,30 @@ class PGCli:
                 fg="red",
             )
 
+    def _revive_tunnel(self):
+        """Reopen the SSH tunnel if its SSH connection died; returns connect() kwargs.
+
+        A dropped tunnel takes its local port with it, so replaying the old
+        connection parameters would dial a dead port. The new tunnel goes to
+        the same server; only the local port changes.
+        """
+        manager = getattr(self, "_tunnel_manager", None)
+        if manager is None or manager.tunnel is None or manager.tunnel.is_active:
+            return {}
+        tunnel = manager.tunnel
+        self.logger.debug("SSH tunnel is down, reopening it")
+        tunnel.stop()
+        manager.tunnel = None
+        host, port = self._target
+        _, tunnel_port = manager.start_tunnel(host=host, port=port, dsn_alias=self.dsn_alias)
+        self.ssh_tunnel = manager.tunnel
+        return {"port": tunnel_port}
+
     def _handle_server_closed_connection(self, text):
         """Used during CLI execution."""
         try:
             click.secho("Reconnecting...", fg="green")
-            self.pgexecute.connect()
+            self.pgexecute.connect(**self._revive_tunnel())
             click.secho("Reconnected!", fg="green")
         except OperationalError as e:
             click.secho("Reconnect Failed", fg="red")
