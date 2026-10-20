@@ -1434,3 +1434,44 @@ def test_stop_shuts_a_running_forwarding_thread_down():
     tunnel.stop()
     server.shutdown.assert_called_once()
     server.server_close.assert_called_once()
+
+
+@pytest.mark.parametrize("url", ["bastion:2222x", "ssh://bastion:99999", "user@bastion:22:extra"])
+def test_a_bad_port_in_the_tunnel_url_is_a_tunnel_error(url):
+    # urlparse(...).port raised ValueError, a traceback for the wrappers and
+    # at startup, and a handler mismatch on the reconnect path.
+    manager = SSHTunnelManager(ssh_tunnel_url=url, logger=logging.getLogger("test"))
+    with pytest.raises(SSHTunnelError, match="invalid port in tunnel URL"):
+        manager.start_tunnel(host="db.internal", port=5432)
+
+
+def test_the_regex_warning_is_not_printed_twice_when_the_logger_already_prints(capsys):
+    import sys
+
+    logger = logging.getLogger("test_tunnel_regex_stream")
+    logger.handlers.clear()
+    logger.propagate = False
+    logger.setLevel(logging.WARNING)
+    logger.addHandler(logging.StreamHandler(sys.stderr))
+    try:
+        manager = SSHTunnelManager(ssh_tunnel_config={"[oops": "ssh://bad"}, logger=logger)
+        assert manager.find_tunnel_url(host="db.internal") is None
+        assert capsys.readouterr().err.count("not a valid regular expression") == 1
+    finally:
+        logger.handlers.clear()
+
+
+def test_ctrl_c_while_the_tunnel_starts_closes_the_half_open_session():
+    manager = SSHTunnelManager(ssh_tunnel_url="ssh://me@bastion", logger=logging.getLogger("test"))
+    previous = MagicMock(name="previous")
+    manager.tunnel = previous
+    half_open = MagicMock(name="half-open")
+    half_open.start.side_effect = KeyboardInterrupt
+    with (
+        patch("pgcli.ssh_tunnel._NativeSSHTunnel", return_value=half_open),
+        patch("pgcli.ssh_tunnel.os.path.isfile", return_value=False),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        manager.start_tunnel(host="db.internal", port=5432)
+    half_open.stop.assert_called_once()
+    assert manager.tunnel is previous

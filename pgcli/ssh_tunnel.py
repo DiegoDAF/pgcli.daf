@@ -649,7 +649,10 @@ class SSHTunnelManager:
             self.logger.warning(message)
             # pgcli's logger goes to a file; without this line the user only
             # sees the direct connection fail with an unrelated libpq error.
-            sys.stderr.write(f"Warning: {message}\n")
+            # The wrappers' loggers already print to stderr: no second line.
+            prints = any(isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler) for h in self.logger.handlers)
+            if not prints:
+                sys.stderr.write(f"Warning: {message}\n")
             return False
 
     def start_tunnel(
@@ -685,7 +688,13 @@ class SSHTunnelManager:
 
         tunnel_info = urlparse(tunnel_url)
         ssh_hostname = tunnel_info.hostname
-        ssh_port = tunnel_info.port or 22
+        try:
+            url_port = tunnel_info.port
+        except ValueError as e:
+            # "bastion:2222x" or a port out of range: urlparse raises here,
+            # which was a traceback for the wrappers and at startup.
+            raise SSHTunnelError(f"invalid port in tunnel URL {tunnel_url!r}: {e}") from e
+        ssh_port = url_port or 22
         ssh_username = tunnel_info.username
         proxycommand = None
 
@@ -704,7 +713,7 @@ class SSHTunnelManager:
                 ssh_hostname = host_config.get("hostname", ssh_hostname)
                 if not ssh_username:
                     ssh_username = host_config.get("user")
-                if not tunnel_info.port and "port" in host_config:
+                if not url_port and "port" in host_config:
                     ssh_port = int(host_config["port"])
                 identity_files = host_config.get("identityfile", [])
                 key_filenames = [os.path.expanduser(f) for f in identity_files if os.path.isfile(os.path.expanduser(f))]
@@ -780,6 +789,12 @@ class SSHTunnelManager:
             msg = f"could not resolve SSH host '{ssh_hostname}' from this machine{hint}: {e}"
             self.logger.error("SSH tunnel failed: %s", msg)
             raise SSHTunnelError(msg) from e
+        except KeyboardInterrupt:
+            # Ctrl-C at the passphrase prompt of a second auth attempt: the
+            # first attempt's SSH transport is still open to the bastion.
+            if tunnel is not None:
+                tunnel.stop()
+            raise
         except Exception as e:
             self.logger.error("SSH tunnel failed: %s", str(e))
             if tunnel is not None:
