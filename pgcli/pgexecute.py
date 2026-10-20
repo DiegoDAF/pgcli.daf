@@ -15,7 +15,7 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 import sqlparse
 
 from .packages.parseutils import strip_trailing_comments
-from .redact import redact_sql
+from .redact import redact_sql, redact_text
 
 sqlparse.engine.grouping.MAX_GROUPING_DEPTH = None
 sqlparse.engine.grouping.MAX_GROUPING_TOKENS = None
@@ -562,8 +562,10 @@ class PGExecute:
 
                 yield self.execute_normal_sql(sql, notice_callback=notice_callback) + (sql, True, False)
             except psycopg.DatabaseError as e:
-                _logger.error("sql: %r, error: %r", redact_sql(sql), e)
-                _logger.error("traceback: %r", traceback.format_exc())
+                # The server's message echoes the statement (LINE 1: ...), the
+                # traceback carries the message: both are redacted too.
+                _logger.error("sql: %r, error: %r", redact_sql(sql), redact_text(e))
+                _logger.error("traceback: %r", redact_text(traceback.format_exc()))
 
                 if self._must_raise(e) or not exception_formatter:
                     raise

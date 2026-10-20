@@ -2059,14 +2059,11 @@ def test_application_name_default_when_not_in_config(executor):
     ],
 )
 def test_sql_password_redaction_in_logs(sql, expected):
-    """Test that PASSWORD clauses are redacted before debug logging."""
-    redacted = re.sub(
-        r"(PASSWORD\s+)'[^']*'",
-        r"\1'***'",
-        sql,
-        flags=re.IGNORECASE,
-    )
-    assert redacted == expected
+    """PASSWORD clauses are redacted before logging (the real function, not a
+    copy of its regex: this test used to pass with redact_sql deleted)."""
+    from pgcli.redact import redact_sql
+
+    assert redact_sql(sql) == expected
 
 
 class TestSanitizePath:
@@ -2879,3 +2876,17 @@ def test_auto_expand_never_widens_rows_written_to_an_output_file(tmpdir):
     cli.output_file = None
     with mock.patch("pgcli.main.sys.stdout.isatty", return_value=False):
         assert cli._output_width() is None
+
+
+@dbtest
+def test_a_failed_role_password_statement_leaves_no_secret_in_the_log(executor, caplog):
+    # The "sql:" part of the ERROR line was masked; the "error:" part quoted
+    # the server's "LINE 1: alter role ... password 's3cret'" echo, the
+    # traceback carried the message and the "status:" debug line the same, at
+    # the default log level.
+    cli = PGCli(pgexecute=executor)
+    with caplog.at_level(logging.DEBUG, logger="pgcli"):
+        output, query = cli._evaluate_command("alter role no_such_role_zz password 's3cretXYZ' loginn")
+    assert not query.successful
+    assert "error:" in caplog.text and "traceback:" in caplog.text
+    assert "s3cretXYZ" not in caplog.text

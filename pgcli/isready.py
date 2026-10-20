@@ -13,11 +13,16 @@ from typing import List, Optional
 
 import click
 
+try:
+    import setproctitle
+except ImportError:  # Windows, or an install without it
+    setproctitle = None
+
 from .config import get_config
 from .dsnaliases import DsnAliases
 from .dump_args import apply_dsn_alias, parse_connection_args  # noqa: F401  re-exported, the tests import it from here
 from .dump_args import build_tunneled_args as _build_tunneled_args
-from .redact import redact_dsn
+from .redact import redact_dsn, redact_process_title
 from .ssh_tunnel import SSHTunnelError, get_tunnel_manager_from_config
 
 
@@ -127,6 +132,9 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         pgcli_isready -h mydb.example.com -t 5
     """
     logger = setup_logging(verbose)
+    if setproctitle:
+        # ps shows the command line, connection string included, to everyone.
+        setproctitle.setproctitle(redact_process_title(setproctitle.getproctitle()))
 
     pg_isready_args = ctx.args
 

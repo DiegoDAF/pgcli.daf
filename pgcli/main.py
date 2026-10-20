@@ -64,7 +64,7 @@ from .pgcompleter import PGCompleter
 from .pgtoolbar import create_toolbar_tokens_func
 from .pgstyle import style_factory, style_factory_output
 from .pgexecute import PGExecute, split_meta_command
-from .redact import redact_dsn, redact_process_title, redact_sql
+from .redact import redact_dsn, redact_process_title, redact_sql, redact_text
 from .completion_refresher import CompletionRefresher
 from .config import (
     get_casing_file,
@@ -1354,7 +1354,7 @@ class PGCli:
 
         except Exception as e:  # Connecting to a database could fail.
             self.logger.debug("Database connection failed: %r.", e)
-            self.logger.error("traceback: %r", traceback.format_exc())
+            self.logger.error("traceback: %r", redact_text(traceback.format_exc()))
             click.secho(str(e), err=True, fg="red")
             sys.exit(1)
 
@@ -1469,16 +1469,16 @@ class PGCli:
         except NotImplementedError:
             click.secho("Not Yet Implemented.", fg="yellow")
         except OperationalError as e:
-            logger.error("sql: %r, error: %r", redact_sql(text), e)
-            logger.error("traceback: %r", traceback.format_exc())
+            logger.error("sql: %r, error: %r", redact_sql(text), redact_text(e))
+            logger.error("traceback: %r", redact_text(traceback.format_exc()))
             click.secho(str(e), err=True, fg="red")
             if handle_closed_connection:
                 self._handle_server_closed_connection(text)
         except (PgCliQuitError, EOFError):
             raise
         except Exception as e:
-            logger.error("sql: %r, error: %r", redact_sql(text), e)
-            logger.error("traceback: %r", traceback.format_exc())
+            logger.error("sql: %r, error: %r", redact_sql(text), redact_text(e))
+            logger.error("traceback: %r", redact_text(traceback.format_exc()))
             click.secho(str(e), err=True, fg="red")
         else:
             try:
@@ -1616,8 +1616,8 @@ class PGCli:
                 # Normal exit from quit command
                 sys.exit(0)
             except Exception as e:
-                logger.error("Error executing command: %s", e)
-                logger.error("traceback: %r", traceback.format_exc())
+                logger.error("Error executing command: %s", redact_text(e))
+                logger.error("traceback: %r", redact_text(traceback.format_exc()))
                 click.secho(str(e), err=True, fg="red")
                 sys.exit(1)
             # psql runs both -c and -f when they are given together, so only
@@ -1644,8 +1644,8 @@ class PGCli:
                 # Normal exit from quit command
                 sys.exit(0)
             except Exception as e:
-                logger.error("Error executing commands from file: %s", e)
-                logger.error("traceback: %r", traceback.format_exc())
+                logger.error("Error executing commands from file: %s", redact_text(e))
+                logger.error("traceback: %r", redact_text(traceback.format_exc()))
                 click.secho(str(e), err=True, fg="red")
                 sys.exit(1)
             sys.exit(exit_code)
@@ -1685,8 +1685,8 @@ class PGCli:
                 try:
                     text = self.handle_editor_command(text)
                 except RuntimeError as e:
-                    logger.error("sql: %r, error: %r", text, e)
-                    logger.error("traceback: %r", traceback.format_exc())
+                    logger.error("sql: %r, error: %r", redact_sql(text), redact_text(e))
+                    logger.error("traceback: %r", redact_text(traceback.format_exc()))
                     click.secho(str(e), err=True, fg="red")
                     continue
 
@@ -1948,7 +1948,9 @@ class PGCli:
         for title, cur, headers, status, sql, success, is_special in res:
             logger.debug("headers: %r", headers)
             logger.debug("rows: %r", cur)
-            logger.debug("status: %r", status)
+            # The status of a failed statement is the server's message, with
+            # the statement echoed in it.
+            logger.debug("status: %r", redact_text(status) if isinstance(status, str) else status)
 
             if self._should_limit_output(sql, cur):
                 cur, status = self._limit_output(cur)

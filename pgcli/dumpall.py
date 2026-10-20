@@ -13,9 +13,14 @@ from typing import Optional
 
 import click
 
+try:
+    import setproctitle
+except ImportError:  # Windows, or an install without it
+    setproctitle = None
+
 from .config import get_config
 from .dsnaliases import DsnAliases
-from .redact import redact_dsn
+from .redact import redact_dsn, redact_process_title
 from .ssh_tunnel import SSHTunnelError, get_tunnel_manager_from_config
 from .dump import get_password_from_pgpass, parse_user_and_database
 from .dump_args import (  # re-exported: both wrappers and their tests import these
@@ -113,6 +118,9 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         pgcli_dumpall --dsn production -g -f globals.sql
     """
     logger = setup_logging(verbose)
+    if setproctitle:
+        # ps shows the command line, connection string included, to everyone.
+        setproctitle.setproctitle(redact_process_title(setproctitle.getproctitle()))
 
     # Get all extra arguments (pg_dumpall options)
     pg_dumpall_args = ctx.args

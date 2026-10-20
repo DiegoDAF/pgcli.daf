@@ -1128,3 +1128,17 @@ def test_split_meta_command(sql, expected):
     from pgcli.pgexecute import split_meta_command
 
     assert split_meta_command(sql) == expected
+
+
+@dbtest
+def test_run_logs_no_secret_for_a_failed_role_password_statement(executor, caplog):
+    # Pins the three log lines of run()/execute_normal_sql(): the pgspecial
+    # attempt, the regular statement and the error with its traceback.
+    import logging
+
+    from pgspecial.main import PGSpecial
+
+    with caplog.at_level(logging.DEBUG, logger="pgcli.pgexecute"):
+        list(executor.run("alter role no_such_role_zz password 's3cretXYZ' loginn", PGSpecial(), exception_formatter=str))
+    assert "Regular sql statement" in caplog.text and "error:" in caplog.text
+    assert "s3cretXYZ" not in caplog.text

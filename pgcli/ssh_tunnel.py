@@ -25,6 +25,8 @@ from urllib.parse import urlparse
 
 import paramiko
 
+from .redact import redact_dsn
+
 SSH_TUNNEL_SUPPORT = True
 
 
@@ -617,7 +619,7 @@ class SSHTunnelManager:
                         "Found SSH tunnel for DSN '%s' matching '%s': %s",
                         dsn_alias,
                         dsn_regex,
-                        tunnel_url,
+                        redact_dsn(tunnel_url),  # ssh://user:password@bastion is allowed here
                     )
                     return cast(str, tunnel_url)
 
@@ -629,7 +631,7 @@ class SSHTunnelManager:
                         "Found SSH tunnel for host '%s' matching '%s': %s",
                         host,
                         host_regex,
-                        tunnel_url,
+                        redact_dsn(tunnel_url),
                     )
                     return cast(str, tunnel_url)
 
@@ -693,7 +695,7 @@ class SSHTunnelManager:
         except ValueError as e:
             # "bastion:2222x" or a port out of range: urlparse raises here,
             # which was a traceback for the wrappers and at startup.
-            raise SSHTunnelError(f"invalid port in tunnel URL {tunnel_url!r}: {e}") from e
+            raise SSHTunnelError(f"invalid port in tunnel URL {redact_dsn(tunnel_url)!r}: {e}") from e
         ssh_port = url_port or 22
         ssh_username = tunnel_info.username
         proxycommand = None
@@ -733,8 +735,8 @@ class SSHTunnelManager:
             self.logger.debug("SSH proxy command from config: %s", proxycommand)
 
         if not ssh_hostname:
-            self.logger.error("SSH tunnel URL has no hostname: %s", tunnel_url)
-            raise SSHTunnelError(f"no hostname in URL '{tunnel_url}'")
+            self.logger.error("SSH tunnel URL has no hostname: %s", redact_dsn(tunnel_url))
+            raise SSHTunnelError(f"no hostname in URL '{redact_dsn(tunnel_url)}'")
 
         self.logger.debug(
             "Creating SSH tunnel: %s@%s:%d -> %s:%d (allow_agent=%s, key_files=%d)",

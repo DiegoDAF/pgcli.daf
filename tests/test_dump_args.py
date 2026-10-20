@@ -1042,3 +1042,47 @@ class TestSmallGetoptGaps:
         from pgcli.dump_args import build_tunneled_args
 
         assert build_tunneled_args([option], "127.0.0.1", 40000, None, None, False, False) == [option, "-h", "127.0.0.1", "-p", "40000"]
+
+
+class TestTheWrappersAndPs:
+    def test_the_attached_dbname_is_redacted_without_a_tunnel(self, caplog):
+        # getopt's -dpassword=... kept the "d" glued to the keyword, and the
+        # no-tunnel path logs the arguments as given.
+        import logging
+        from unittest.mock import MagicMock, patch
+        from click.testing import CliRunner
+        import pgcli.dump as mod
+
+        manager = MagicMock()
+        manager.start_tunnel.side_effect = lambda host, port, dsn_alias=None: (host, port)
+        with (
+            patch.object(mod, "get_config", return_value={}),
+            patch.object(mod, "get_tunnel_manager_from_config", return_value=manager),
+            patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=0)),
+            caplog.at_level(logging.DEBUG),
+        ):
+            result = CliRunner().invoke(mod.cli, ["--tunnel-verbose", "-dpassword=s3cret host=db.internal dbname=x", "-f", "/dev/null"])
+        assert result.exit_code == 0, result.output
+        assert "Executing:" in caplog.text and "s3cret" not in caplog.text
+
+    @pytest.mark.parametrize("modname", ["pgcli.dump", "pgcli.dumpall", "pgcli.isready"])
+    def test_the_wrappers_hide_the_password_from_ps(self, modname):
+        # Only pgcli rewrote its process title; a wrapper given
+        # postgresql://u:pass@h/db showed it in ps for the whole dump.
+        import importlib
+        from unittest.mock import MagicMock, patch
+        from click.testing import CliRunner
+
+        mod = importlib.import_module(modname)
+        fake = MagicMock()
+        fake.getproctitle.return_value = f"{modname} postgresql://u:s3cret@h/db -f /dev/null"
+        manager = MagicMock()
+        manager.start_tunnel.side_effect = lambda host, port, dsn_alias=None: (host, port)
+        with (
+            patch.object(mod, "setproctitle", fake),
+            patch.object(mod, "get_config", return_value={}),
+            patch.object(mod, "get_tunnel_manager_from_config", return_value=manager),
+            patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=0)),
+        ):
+            CliRunner().invoke(mod.cli, ["postgresql://u:s3cret@h/db", "-f", "/dev/null"])
+        fake.setproctitle.assert_called_once_with(f"{modname} postgresql://u:xxxx@h/db -f /dev/null")

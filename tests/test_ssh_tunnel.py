@@ -1475,3 +1475,20 @@ def test_ctrl_c_while_the_tunnel_starts_closes_the_half_open_session():
         manager.start_tunnel(host="db.internal", port=5432)
     half_open.stop.assert_called_once()
     assert manager.tunnel is previous
+
+
+def test_a_tunnel_url_with_a_password_is_not_logged_or_echoed_verbatim(caplog):
+    # [ssh tunnels] accepts ssh://user:password@bastion; the match was logged
+    # with it, and so were the "invalid port" and "no hostname" errors.
+    logger = logging.getLogger("test_tunnel_url_secret")
+    manager = SSHTunnelManager(ssh_tunnel_config={r"db\.internal": "ssh://me:s3cret@bastion:22"}, logger=logger)
+    with caplog.at_level(logging.DEBUG, logger="test_tunnel_url_secret"):
+        assert manager.find_tunnel_url(host="db.internal") == "ssh://me:s3cret@bastion:22"
+    assert "s3cret" not in caplog.text and "me:***@bastion" in caplog.text
+
+    with pytest.raises(SSHTunnelError) as bad_port:
+        SSHTunnelManager(ssh_tunnel_url="ssh://me:s3cret@bastion:notaport", logger=logger).start_tunnel(host="db", port=5432)
+    assert "s3cret" not in str(bad_port.value)
+    with pytest.raises(SSHTunnelError) as no_host:
+        SSHTunnelManager(ssh_tunnel_url="ssh://me:s3cret@:22", logger=logger).start_tunnel(host="db", port=5432)
+    assert "s3cret" not in str(no_host.value) and "s3cret" not in caplog.text
