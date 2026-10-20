@@ -536,18 +536,13 @@ class Visualizer:
             )
 
         if plan.get("Filter"):
-            self.string_lines.append(
-                self.output_fn(
-                    current_prefix,
-                    "%s %s %s"
-                    % (
-                        self.muted_format("filter"),
-                        plan["Filter"],
-                        # Absent without ANALYZE (EXPLAIN (ANALYZE false, FORMAT JSON) with F5 on).
-                        self.muted_format("[-%s rows]" % self.intcomma(plan.get("Rows Removed by Filter", 0))),
-                    ),
-                )
-            )
+            line = "%s %s" % (self.muted_format("filter"), plan["Filter"])
+            if "Rows Removed by Filter" in plan:
+                # Absent without ANALYZE (EXPLAIN (ANALYZE false, FORMAT JSON)
+                # with F5 on): then there is no count to show, "[-0 rows]"
+                # would claim one.
+                line += " %s" % self.muted_format("[-%s rows]" % self.intcomma(plan["Rows Removed by Filter"]))
+            self.string_lines.append(self.output_fn(current_prefix, line))
 
         if plan.get("Hash Condition"):
             self.string_lines.append(

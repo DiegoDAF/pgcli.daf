@@ -461,7 +461,9 @@ def test_a_filter_without_actual_rows_does_not_crash():
         "Plan": {"Node Type": "Seq Scan", "Relation Name": "t", "Filter": "(k = 3)", "Plan Rows": 10, "Total Cost": 5, "Plans": []},
         "Planning Time": 0.1,
     }
-    assert "filter (k = 3)" in _render(plan)
+    out = _render(plan)
+    assert "filter (k = 3)" in out
+    assert "rows]" not in out  # no count to show: "[-0 rows]" would claim one
 
 
 @pytest.mark.parametrize(
