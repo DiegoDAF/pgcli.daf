@@ -41,8 +41,9 @@ Bug fixes:
   ``\n act`` with "Bad arguments".
 
 * ``--list-dsn`` hides the password of an alias in every spelling libpq
-  accepts. It masked ``://user:pass@`` only; a key=value alias with
-  ``password=`` or a URL with ``?password=`` was printed with the secret.
+  accepts, ``sslpassword`` included. It masked ``://user:pass@`` only; a
+  key=value alias with ``password=`` or a URL with ``?password=`` was printed
+  with the secret.
 
 * A custom ``log_file`` name is honoured with ``log_rotation_mode = none``.
   Only its directory was used, so ``log_file = ~/x/mylog.txt`` wrote

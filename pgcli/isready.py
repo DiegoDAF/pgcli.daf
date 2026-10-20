@@ -17,6 +17,7 @@ from .config import get_config
 from .dsnaliases import DsnAliases
 from .dump_args import apply_dsn_alias, parse_connection_args  # noqa: F401  re-exported, the tests import it from here
 from .dump_args import build_tunneled_args as _build_tunneled_args
+from .redact import redact_dsn
 from .ssh_tunnel import SSHTunnelError, get_tunnel_manager_from_config
 
 
@@ -184,7 +185,8 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         final_args = pg_isready_args
 
     cmd = [pg_isready_path] + final_args
-    logger.debug("Executing: %s", " ".join(cmd))
+    # -d may carry a password; -v must not print it.
+    logger.debug("Executing: %s", redact_dsn(" ".join(cmd)))
 
     try:
         result = subprocess.run(cmd)

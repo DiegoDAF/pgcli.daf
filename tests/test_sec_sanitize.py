@@ -325,6 +325,19 @@ class TestSanitizePathSecurity:
             "postgresql://appuser@db.internal/appdb?sslmode=require&password=***",
         ),
         ("postgresql://appuser@db.internal/appdb", "postgresql://appuser@db.internal/appdb"),
+        # sslpassword is the client key's passphrase: a secret too.
+        ("host=db.internal sslkey=/k sslpassword=keypass dbname=appdb", "host=db.internal sslkey=/k sslpassword=*** dbname=appdb"),
+        ("postgresql://u@db.internal/x?sslpassword=keypass", "postgresql://u@db.internal/x?sslpassword=***"),
+        # An unquoted key=value password ends at a blank, not at "&".
+        ("host=db.internal password=ab&cd dbname=appdb", "host=db.internal password=*** dbname=appdb"),
+        # libpq's \' escape inside a quoted value.
+        ("host=x password='it\\'s' dbname=y", "host=x password=*** dbname=y"),
+        # "@" in the query string is not a userinfo separator: libpq ends the
+        # userinfo at the first "/" or "@".
+        (
+            "postgresql://db.internal:5432/appdb?application_name=diego@laptop",
+            "postgresql://db.internal:5432/appdb?application_name=diego@laptop",
+        ),
     ],
 )
 def test_redact_dsn_knows_every_spelling(dsn, shown):
@@ -361,6 +374,13 @@ def test_list_dsn_masks_key_value_and_query_string_passwords(tmp_path, monkeypat
         ("pgcli postgresql://u:s3cret@h/db", "pgcli postgresql://u:xxxx@h/db"),
         ("pgcli host=h password=s3cret dbname=x", "pgcli host=h password=xxxx dbname=x"),
         ("pgcli postgresql://u:a@h/db postgresql://v:b@h/db", "pgcli postgresql://u:xxxx@h/db postgresql://v:xxxx@h/db"),
+        # A key=value DSN next to this fork's own --ssh-tunnel URL: both forms
+        # on one command line, so neither may be skipped.
+        (
+            "pgcli host=h password=s3cret dbname=x --ssh-tunnel ssh://me@bastion",
+            "pgcli host=h password=xxxx dbname=x --ssh-tunnel ssh://me@bastion",
+        ),
+        ("pgcli user=root password=top secret host=localhost", "pgcli user=root password=xxxx host=localhost"),
     ],
 )
 def test_redact_process_title(title, shown):
@@ -369,3 +389,21 @@ def test_redact_process_title(title, shown):
     from pgcli.redact import redact_process_title
 
     assert redact_process_title(title) == shown
+
+
+@pytest.mark.parametrize(
+    "sql, shown",
+    [
+        ("alter role bob password 's3cret'", "alter role bob password '***'"),
+        ("ALTER ROLE bob PASSWORD E'a\\'b'", "ALTER ROLE bob PASSWORD '***'"),
+        ("alter role bob password $$s3cret$$", "alter role bob password '***'"),
+        ("alter role bob password $q$s3c$ret$q$", "alter role bob password '***'"),
+        ("alter role bob password 'it''s'", "alter role bob password '***'"),
+        ("create user mapping for u server s options (password 'pw')", "create user mapping for u server s options (password '***')"),
+        ("alter role bob password null", "alter role bob password null"),
+    ],
+)
+def test_redact_sql_hides_every_quoting_of_the_literal(sql, shown):
+    from pgcli.redact import redact_sql
+
+    assert redact_sql(sql) == shown

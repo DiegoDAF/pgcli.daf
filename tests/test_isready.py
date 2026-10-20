@@ -352,3 +352,23 @@ class TestErrorHandling:
         runner = CliRunner()
         result = runner.invoke(cli, ["-h", "localhost"])
         assert result.exit_code == 0
+
+
+@patch("pgcli.isready.subprocess.run")
+@patch("pgcli.isready.get_config")
+@patch("pgcli.isready.get_tunnel_manager_from_config")
+def test_verbose_does_not_log_the_password(mock_tunnel_mgr, mock_config, mock_run, caplog):
+    import logging
+
+    mock_config.return_value = {}
+    mock_run.return_value = MagicMock(returncode=0)
+    mock_manager = MagicMock()
+    mock_manager.start_tunnel.return_value = ("127.0.0.1", 54321)
+    mock_tunnel_mgr.return_value = mock_manager
+    with caplog.at_level(logging.DEBUG):
+        result = CliRunner().invoke(cli, ["-v", "-d", "postgresql://reader:s3cr3t@db.internal:6432/ventas"])
+    assert result.exit_code == 0, result.output
+    assert "Executing:" in caplog.text
+    assert "s3cr3t" not in caplog.text
+    assert "reader:***@127.0.0.1:54321" in caplog.text
+
