@@ -232,8 +232,13 @@ class TestUrisWeRefuseToGuessAt:
             "postgresql://a.example.com:5432,b.example.com:5432/mydb",
             "postgresql:///mydb?host=db.example.com",
             "postgresql://db.example.com/mydb?hostaddr=10.0.0.9",
+            # libpq takes the query's port over the authority's (measured), so
+            # the rewritten URI would send pg_dump to 127.0.0.1:<that port>,
+            # a local server, instead of through the tunnel.
+            "postgresql://db.example.com/mydb?port=5432",
+            "postgresql://db.example.com:6543/mydb?port=5432",
         ],
-        ids=["multihost", "host-in-query", "hostaddr-in-query"],
+        ids=["multihost", "host-in-query", "hostaddr-in-query", "port-in-query", "two-ports"],
     )
     def test_ambiguous_uri_is_reported_not_guessed(self, mod, clean_pg_env, uri):
         with pytest.raises(ValueError) as excinfo:

@@ -14,6 +14,13 @@ Bug fixes:
   NOTICE output every one of them echoed it: after ten statements a
   ``VACUUM VERBOSE`` printed each line eleven times.
 
+* ``pgcli_dump`` and ``pgcli_dumpall`` refuse a URI with ``port=`` in its query
+  string when tunnelling, as they already did for ``host=`` and ``hostaddr=``.
+  libpq lets the query's port win over the URI's, so the rewritten
+  ``postgresql://127.0.0.1:<tunnel>/db?port=5432`` sent pg_dump to port 5432 on
+  this machine: with a local server there, the backup came from the wrong
+  database, using the remote one's password.
+
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================
 

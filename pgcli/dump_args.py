@@ -83,10 +83,12 @@ def _reject_ambiguous_uri(uri: str) -> None:
             "Name a single host, or pass the tunnel target with -h and -p."
         )
     for key, _value in parse_qsl(parts.query, keep_blank_values=True):
-        if key in ("host", "hostaddr"):
+        # libpq lets these query parameters override the URI's own host and
+        # port, so after the rewrite pg_dump would dial them and not the tunnel.
+        if key in ("host", "hostaddr", "port"):
             raise ValueError(
                 f"cannot route a connection string that sets {key!r} in its query string "
-                f"through an SSH tunnel: {uri!r}. Put the host in the URI itself, "
+                f"through an SSH tunnel: {uri!r}. Put the host and port in the URI itself, "
                 "or pass the tunnel target with -h and -p."
             )
 
