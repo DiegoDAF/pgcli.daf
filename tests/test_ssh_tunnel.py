@@ -1374,7 +1374,7 @@ def test_forward_handler_falls_back_to_the_exception_text(capsys):
     assert "bastion could not open a connection to db.internal:5432: Connect failed" in err
 
 
-def test_an_invalid_regex_in_the_tunnel_config_is_skipped_with_a_warning(caplog):
+def test_an_invalid_regex_in_the_tunnel_config_is_skipped_with_a_warning(caplog, capsys):
     # The keys of [ssh tunnels] are hand-written regular expressions; one
     # unbalanced bracket was an uncaught re.error at every connection.
     manager = SSHTunnelManager(
@@ -1385,3 +1385,52 @@ def test_an_invalid_regex_in_the_tunnel_config_is_skipped_with_a_warning(caplog)
     with caplog.at_level(logging.WARNING, logger="test_tunnel_regex"):
         assert manager.find_tunnel_url(host="db.internal", dsn_alias="prod") == "ssh://bastion"
     assert caplog.text.count("not a valid regular expression") == 2
+    # pgcli's logger goes to a file: the user must see it at the terminal too.
+    assert capsys.readouterr().err.count("not a valid regular expression") == 2
+
+
+def test_a_tunnel_that_comes_up_inactive_does_not_replace_the_previous_one():
+    # self.tunnel was assigned before the is_active check: a failed \c then
+    # left the manager pointing at the stopped new tunnel, "Previous
+    # connection kept" notwithstanding, and the old SSH session leaked.
+    manager = SSHTunnelManager(ssh_tunnel_url="ssh://me@bastion", logger=logging.getLogger("test"))
+    previous = MagicMock(name="previous")
+    manager.tunnel = previous
+    inactive = MagicMock(name="inactive")
+    inactive.is_active = False
+    with (
+        patch("pgcli.ssh_tunnel._NativeSSHTunnel", return_value=inactive),
+        patch("pgcli.ssh_tunnel.os.path.isfile", return_value=False),
+        pytest.raises(SSHTunnelError),
+    ):
+        manager.start_tunnel(host="db.internal", port=5432)
+    assert manager.tunnel is previous
+    inactive.stop.assert_called_once()
+
+
+def test_stop_does_not_wait_for_a_forwarding_thread_that_never_ran():
+    # shutdown() waits for serve_forever() to return; with a thread that could
+    # not be started, stop() blocked forever.
+    tunnel = _NativeSSHTunnel.__new__(_NativeSSHTunnel)
+    tunnel._is_active = True
+    tunnel._ssh_client = client = MagicMock()
+    tunnel._server = server = MagicMock()
+    tunnel._server_thread = MagicMock()
+    tunnel._server_thread.is_alive.return_value = False
+    tunnel.stop()
+    server.shutdown.assert_not_called()
+    server.server_close.assert_called_once()
+    client.close.assert_called_once()
+    assert tunnel._server is None and tunnel._ssh_client is None
+
+
+def test_stop_shuts_a_running_forwarding_thread_down():
+    tunnel = _NativeSSHTunnel.__new__(_NativeSSHTunnel)
+    tunnel._is_active = True
+    tunnel._ssh_client = MagicMock()
+    tunnel._server = server = MagicMock()
+    tunnel._server_thread = MagicMock()
+    tunnel._server_thread.is_alive.return_value = True
+    tunnel.stop()
+    server.shutdown.assert_called_once()
+    server.server_close.assert_called_once()

@@ -537,7 +537,12 @@ class _NativeSSHTunnel:
         """Stop the forwarding server and SSH connection."""
         self._is_active = False
         if self._server:
-            self._server.shutdown()
+            # shutdown() waits for serve_forever() to return: only when the
+            # forwarding thread runs, or it never comes back (a thread that
+            # could not be started, for example).
+            if self._server_thread is not None and self._server_thread.is_alive():
+                self._server.shutdown()
+            self._server.server_close()
             self._server = None
         if self._ssh_client:
             self._ssh_client.close()
@@ -640,7 +645,11 @@ class SSHTunnelManager:
         try:
             return re.fullmatch(pattern, value) is not None
         except re.error as e:
-            self.logger.warning("Ignoring the %s entry %r: not a valid regular expression (%s)", section, pattern, e)
+            message = f"Ignoring the {section} entry {pattern!r}: not a valid regular expression ({e})"
+            self.logger.warning(message)
+            # pgcli's logger goes to a file; without this line the user only
+            # sees the direct connection fail with an unrelated libpq error.
+            sys.stderr.write(f"Warning: {message}\n")
             return False
 
     def start_tunnel(
@@ -747,10 +756,11 @@ class SSHTunnelManager:
                 secret_saver=self.secret_saver,
             )
             tunnel.start()
-            self.tunnel = tunnel
-
             if not tunnel.is_active:
                 raise Exception(f"SSH tunnel failed to start (is_active={tunnel.is_active})")
+            # Only now: a tunnel that failed to come up must not replace the
+            # one \c or the reconnect still rely on.
+            self.tunnel = tunnel
 
             self.logger.debug("SSH tunnel verified active")
         except socket.gaierror as e:
