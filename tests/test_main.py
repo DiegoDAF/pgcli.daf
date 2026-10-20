@@ -2719,3 +2719,29 @@ def test_format_output_keeps_the_error_of_a_failed_statement():
     settings = OutputSettings(table_format="psql", show_status=False)
     assert list(format_output(None, None, None, "boom", settings, failed=True)) == ["boom"]
     assert list(format_output(None, None, None, "SELECT 1", settings)) == []
+
+
+@dbtest
+def test_auto_expand_works_without_a_prompt(executor):
+    # -c/-f mode never builds the prompt, and --auto-vertical-output (or
+    # \x auto, or auto_expand in the config) then failed every statement
+    # with "'NoneType' object has no attribute 'output'". Output that is not
+    # a terminal gets the plain table, as psql's \x auto does.
+    cli = PGCli(pgexecute=executor, auto_vertical_output=True)
+    assert cli.prompt_app is None
+    with mock.patch("pgcli.main.sys.stdout.isatty", return_value=False):
+        output, query = cli._evaluate_command("select 1 as a, 2 as b")
+    assert query.successful
+    assert not any("RECORD 1" in line for line in output)
+
+
+@dbtest
+def test_auto_expand_without_a_prompt_asks_the_terminal(executor):
+    cli = PGCli(pgexecute=executor, auto_vertical_output=True)
+    with (
+        mock.patch("pgcli.main.sys.stdout.isatty", return_value=True),
+        mock.patch("pgcli.main.shutil.get_terminal_size", return_value=os.terminal_size((5, 24))),
+    ):
+        output, query = cli._evaluate_command("select 1 as a, 2 as b")
+    assert query.successful
+    assert any("RECORD 1" in line for line in output)
