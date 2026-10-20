@@ -308,3 +308,46 @@ class TestSanitizePathSecurity:
         message = result[0][3]
         assert "restricted" in message.lower()
         assert "disabled" in message.lower()
+
+
+@pytest.mark.parametrize(
+    "dsn, shown",
+    [
+        ("postgresql://appuser:s3cret@db.internal/appdb", "postgresql://appuser:***@db.internal/appdb"),
+        ("host=db.internal dbname=appdb user=appuser password=s3cret", "host=db.internal dbname=appdb user=appuser password=***"),
+        ("host=db.internal password='s3 cret' dbname=appdb", "host=db.internal password=*** dbname=appdb"),
+        (
+            "postgresql://appuser@db.internal/appdb?password=s3cret&sslmode=require",
+            "postgresql://appuser@db.internal/appdb?password=***&sslmode=require",
+        ),
+        (
+            "postgresql://appuser@db.internal/appdb?sslmode=require&password=s3cret",
+            "postgresql://appuser@db.internal/appdb?sslmode=require&password=***",
+        ),
+        ("postgresql://appuser@db.internal/appdb", "postgresql://appuser@db.internal/appdb"),
+    ],
+)
+def test_redact_dsn_knows_every_spelling(dsn, shown):
+    # --list-dsn only masked ://user:pass@; a key=value alias or a URL with
+    # ?password= printed the secret.
+    from pgcli.redact import redact_dsn
+
+    assert redact_dsn(dsn) == shown
+
+
+def test_list_dsn_masks_key_value_and_query_string_passwords(tmp_path, monkeypatch):
+    from click.testing import CliRunner
+    from pgcli.main import cli
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    rc = tmp_path / "pgclirc"
+    rc.write_text(
+        "[alias_dsn]\nkv = host=db.internal dbname=appdb user=appuser password=s3cret\n"
+        "urlq = postgresql://appuser@db.internal/appdb?password=s3cret\n",
+        encoding="utf-8",
+    )
+    result = CliRunner().invoke(cli, ["--list-dsn", "--pgclirc", str(rc)])
+    assert result.exit_code == 0, result.output
+    assert "s3cret" not in result.output
+    assert result.output.count("***") == 2

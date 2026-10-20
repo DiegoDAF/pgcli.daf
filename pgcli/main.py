@@ -64,6 +64,7 @@ from .pgcompleter import PGCompleter
 from .pgtoolbar import create_toolbar_tokens_func
 from .pgstyle import style_factory, style_factory_output
 from .pgexecute import PGExecute, split_meta_command
+from .redact import redact_dsn
 from .completion_refresher import CompletionRefresher
 from .config import (
     get_casing_file,
@@ -2440,8 +2441,7 @@ def cli(
             cfg = load_config(pgclirc, config_full_path)
             dsn_aliases = DsnAliases.from_config(cfg)
             for alias in dsn_aliases:
-                dsn_value = re.sub(r"://([^:]+):([^@]+)@", r"://\1:***@", dsn_aliases[alias])
-                click.secho(alias + " : " + dsn_value)
+                click.secho(alias + " : " + redact_dsn(dsn_aliases[alias]))
             sys.exit(0)
         except Exception:
             click.secho(
