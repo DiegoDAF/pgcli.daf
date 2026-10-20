@@ -63,3 +63,7 @@ def temp_config(tmpdir_factory):
     # debug log there, and without this they appended to the developer's real
     # ~/.local/state/pgcli log and history.
     os.environ["XDG_STATE_HOME"] = str(tmpdir_factory.mktemp("state"))
+    # ... and no OS keyring: the shipped config enables it, so a test that
+    # connected with PGPASSWORD set stored that password in the developer's
+    # real keyring under keys like "bar@baz.com@", and later runs read it back.
+    os.environ["PYTHON_KEYRING_BACKEND"] = "keyring.backends.null.Keyring"
