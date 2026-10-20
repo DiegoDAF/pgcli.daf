@@ -386,3 +386,19 @@ def test_a_multi_host_string_through_a_tunnel_is_one_line(mock_tunnel_mgr, mock_
     assert "cannot route a multi-host connection string through an SSH tunnel" in result.output
     mock_run.assert_not_called()
     mock_manager.stop_tunnel.assert_called()
+
+
+@patch("pgcli.isready.subprocess.run")
+@patch("pgcli.isready.get_config")
+@patch("pgcli.isready.get_tunnel_manager_from_config")
+def test_timeout_keeps_its_value_under_a_dsn_alias(mock_tunnel_mgr, mock_config, mock_run):
+    mock_config.return_value = {"alias_dsn": {"production": "postgresql://app@db.internal:5433/appdb"}}
+    mock_run.return_value = MagicMock(returncode=0)
+    mock_manager = MagicMock()
+    mock_manager.start_tunnel.return_value = ("db.internal", 5433)
+    mock_tunnel_mgr.return_value = mock_manager
+    result = CliRunner().invoke(cli, ["--dsn", "production", "--timeout", "5"])
+    assert result.exit_code == 0, result.output
+    cmd = mock_run.call_args[0][0]
+    assert "dbname=appdb" in cmd[2]
+    assert "--timeout=5" in cmd

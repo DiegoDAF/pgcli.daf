@@ -32,8 +32,14 @@ def is_uri(value: str) -> bool:
 
 
 def is_connstring(value: str) -> bool:
-    """True for either connection-string form, URI or keyword/value."""
-    return is_uri(value) or any(kw in value for kw in HOST_KEYWORDS) or "port=" in value
+    """True for either connection-string form, URI or keyword/value.
+
+    libpq takes any value with an "=" in it as a keyword/value string, so
+    ``dbname=mydb user=bob`` is one too, host or no host: read as a bare
+    database name it sent the .pgpass lookup after a database called
+    "dbname=mydb user=bob".
+    """
+    return is_uri(value) or "=" in value
 
 
 def _coerce_port(value: str, source: str) -> int:
@@ -269,7 +275,41 @@ def parse_connection_args(args: List[str]) -> tuple:
         remaining_args.append(arg)
         i += 1
 
+    # The database operand is "equivalent to specifying dbname as the first
+    # non-option argument" (pg_dump(1)), connection strings included: with
+    # `pgcli_dump postgresql://db.internal/mydb` the tunnel decision was taken
+    # for localhost and pg_dump dialed db.internal directly.
+    for index in _operand_indexes(args)[:1]:
+        read_dbname(args[index])
+
     return host, port, remaining_args, has_host, has_port
+
+
+def _operand_indexes(args: List[str]) -> List[int]:
+    """Positions of the operands in ``args``, found the way getopt does.
+
+    An argument is an operand unless it is an option or the value of one;
+    everything after ``--`` is an operand. The same rules as getopt_items().
+    """
+    indexes: List[int] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--":
+            indexes.extend(range(i + 1, len(args)))
+            break
+        if arg.startswith("--"):
+            name, eq, _value = arg.partition("=")
+            if not eq and name in LONG_OPTIONS_WITH_VALUE and i + 1 < len(args):
+                i += 1
+        elif arg.startswith("-") and len(arg) > 1:
+            letter, attached, _flags = _short_option_value(arg)
+            if letter is not None and not attached and i + 1 < len(args):
+                i += 1
+        else:
+            indexes.append(i)
+        i += 1
+    return indexes
 
 
 def _short_option_value(arg: str) -> Tuple[Optional[str], str, str]:
@@ -328,10 +368,18 @@ def build_tunneled_args(
             return rewrite_connstring(value, tunnel_host, tunnel_port)
         return value
 
+    operand = set(_operand_indexes(original_args)[:1])
+
     while i < len(original_args):
         arg = original_args[i]
 
-        if arg == "--host":
+        if i in operand:
+            # The database operand may be a connection string naming the server.
+            new_args.append(rewrite_dbname(arg))
+            i += 1
+            continue
+
+        if arg == "--host" and i + 1 < len(original_args):
             new_args.extend([arg, tunnel_host])
             i += 2
             continue
@@ -340,7 +388,7 @@ def build_tunneled_args(
             i += 1
             continue
 
-        if arg == "--port":
+        if arg == "--port" and i + 1 < len(original_args):
             new_args.extend([arg, str(tunnel_port)])
             i += 2
             continue
@@ -457,6 +505,7 @@ LONG_OPTIONS_WITH_VALUE = frozenset({
     "--sync-method",
     "--table",
     "--table-and-children",
+    "--timeout",  # pg_isready
     "--username",
 })
 

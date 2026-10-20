@@ -961,3 +961,84 @@ class TestMultiHostConnectionStrings:
         assert "cannot route a multi-host connection string through an SSH tunnel" in result.output
         srun.assert_not_called()
         manager.stop_tunnel.assert_called()
+
+
+class TestTheDatabaseOperand:
+    """pg_dump(1): the first non-option argument is the dbname, "equivalent to
+    specifying" -d, connection strings included. It was never read, so
+    `pgcli_dump postgresql://db.internal/mydb` took its tunnel decision for
+    localhost and pg_dump dialed db.internal directly."""
+
+    def test_an_operand_uri_names_the_server(self, clean_pg_env):
+        from pgcli.dump_args import parse_connection_args
+
+        host, port, _, has_host, has_port = parse_connection_args(["postgresql://db.example.com:5433/mydb", "-Fc"])
+        assert (host, port, has_host, has_port) == ("db.example.com", 5433, True, True)
+
+    def test_the_operand_is_found_past_options_with_values(self, clean_pg_env):
+        from pgcli.dump_args import parse_connection_args
+
+        host, *_ = parse_connection_args(["-t", "public.orders", "-f", "out.sql", "host=db.example.com dbname=mydb"])
+        assert host == "db.example.com"
+        # The value of -t is not the operand, whatever it looks like.
+        host, *_ = parse_connection_args(["-t", "postgresql://not.a.host/x", "mydb"])
+        assert host == "localhost"
+
+    def test_a_bare_name_operand_changes_nothing(self, clean_pg_env):
+        from pgcli.dump_args import parse_connection_args
+
+        host, port, remaining, has_host, has_port = parse_connection_args(["mydb", "-Fc"])
+        assert (host, port, has_host, has_port) == ("localhost", 5432, False, False)
+        assert remaining == ["mydb", "-Fc"]
+
+    def test_the_operand_is_rewritten_for_the_tunnel(self):
+        from pgcli.dump_args import build_tunneled_args
+
+        assert build_tunneled_args(["postgresql://db.example.com:5433/mydb", "-Fc"], "127.0.0.1", 40000, None, None, True, True) == [
+            "postgresql://127.0.0.1:40000/mydb", "-Fc",
+        ]  # fmt: skip
+        assert build_tunneled_args(["-Fc", "host=db.example.com dbname=mydb"], "127.0.0.1", 40000, None, None, True, False) == [
+            "-Fc", "host=127.0.0.1 dbname=mydb", "-p", "40000",
+        ]  # fmt: skip
+
+    def test_the_wrapper_tunnels_an_operand_uri(self, clean_pg_env):
+        from unittest.mock import MagicMock, patch
+        from click.testing import CliRunner
+        import pgcli.dump as mod
+
+        manager = MagicMock()
+        manager.start_tunnel.return_value = ("127.0.0.1", 54321)
+        with (
+            patch.object(mod, "get_config", return_value={}),
+            patch.object(mod, "get_tunnel_manager_from_config", return_value=manager),
+            patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=0)) as srun,
+        ):
+            result = CliRunner().invoke(mod.cli, ["postgresql://db.internal/mydb", "-f", "/dev/null"])
+        assert result.exit_code == 0, result.output
+        manager.start_tunnel.assert_called_once_with(host="db.internal", port=5432, dsn_alias=None)
+        assert srun.call_args[0][0][1] == "postgresql://127.0.0.1:54321/mydb"
+
+
+class TestSmallGetoptGaps:
+    def test_timeout_takes_a_value(self):
+        # pg_isready's --timeout SECS: without it, under --dsn the seconds became the database.
+        from pgcli.dump_args import getopt_items
+
+        assert getopt_items(["--timeout", "5"]) == [("--timeout", "5")]
+
+    def test_a_keyword_string_without_host_is_a_connection_string(self):
+        # libpq: any value with "=" is a connection string; read as a bare
+        # name it sent .pgpass after a database called "dbname=mydb user=bob".
+        from pgcli.dump_args import dbname_identity, is_connstring
+
+        assert dbname_identity("dbname=mydb user=bob") == ("bob", "mydb")
+        assert is_connstring("dbname=mydb") is True
+        assert is_connstring("mydb") is False
+
+    @pytest.mark.parametrize("option", ["--host", "--port"])
+    def test_a_dangling_long_option_is_not_rewritten(self, option):
+        # It got the tunnel's value and then the tunnel again: pg_dump should
+        # see the option it was given and refuse it.
+        from pgcli.dump_args import build_tunneled_args
+
+        assert build_tunneled_args([option], "127.0.0.1", 40000, None, None, False, False) == [option, "-h", "127.0.0.1", "-p", "40000"]
