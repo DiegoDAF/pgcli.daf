@@ -273,6 +273,16 @@ Upcoming
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
 
+2026-10-20
+===================
+
+### PENDIENTES DE DIEGO (respuesta: "1. pasalo, 2. yo me encargo, 3 y 4 lo vemos en un rato")
+- [x] #1637: pusheados 1f03e94e (errores visibles con --no-status), 56b053a3 (merge de original/main)
+      y 5b6b7171 (changelog fuera de la 4.7.0). PR en 5b6b7171, cuerpo con el parrafo "Errors stay
+      visible". Su build puede caer en el test de cli-helpers hasta que entre #1653
+- [x] Rotar las passwords de workforce que se filtraron el 15/10: lo hace Diego
+- [ ] `aws login` (que cuenta va como default) y syncthing para ~/.config/pgcli: "lo vemos en un rato"
+
 2026-10-19
 ===================
 
