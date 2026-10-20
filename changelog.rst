@@ -4,6 +4,99 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``--auto-vertical-output``, ``\x auto`` and ``auto_expand`` in the config work
+  in ``-c``/``-f`` mode. The terminal width was read from the prompt, which
+  those modes never build, so every statement failed with ``'NoneType' object
+  has no attribute 'output'``. Without a prompt the terminal is asked directly,
+  and only when the output is one: a pipe or a file gets the plain table, as
+  with psql's ``\x auto``.
+
+* ``\c db user otherhost`` to a server whose SSH tunnel cannot be opened keeps
+  the current session, and so does the automatic reconnect when the bastion is
+  down. The tunnel code exited the process on any failure, which was fine at
+  startup and fatal once ``\c`` and the reconnect opened tunnels too. The dead
+  tunnel stays registered after a failed reconnect, so the next one tries the
+  bastion again.
+
+* ``-f`` and ``-c`` no longer drop a leading ``LOAD``, ``REASSIGN OWNED`` or
+  ``ANALYSE`` statement as "text before the statement". The detector that
+  strips prose pasted from a chat missed those three keywords of the grammar,
+  so a script that opened with ``load 'auto_explain';`` lost that statement and
+  exited 0.
+
+* Every fenced code block of a pasted markdown answer runs, not only the first
+  one, and the report counts the blocks and mentions text outside them.
+
+* A multi-line ``\ns`` in a ``-c`` string or an ``-f`` script saves the whole
+  query. The rule that ends a backslash command at its newline exempts ``\ns``
+  at the prompt, but the ``-c``/``-f`` path kept its own copy of the rule
+  without the exemption, so ``\ns q select 1,\n2;`` saved ``select 1,`` and ran
+  ``2`` as SQL. One shared function serves both paths now.
+
+* An unquoted value with commas in ``dsn.d``, ``namedqueries.d``,
+  ``[alias_dsn]`` or ``[named queries]`` is taken as written. ConfigObj split
+  it into a list, so a multi-host DSN (``host=a,b port=5432 ...``) crashed
+  ``pgcli --dsn`` with a traceback and made ``--list-dsn`` give up on every
+  alias, and ``act = select pid, query from pg_stat_activity`` failed on
+  ``\n act`` with "Bad arguments".
+
+* ``--list-dsn`` hides the password of an alias in every spelling libpq
+  accepts. It masked ``://user:pass@`` only; a key=value alias with
+  ``password=`` or a URL with ``?password=`` was printed with the secret.
+
+* A custom ``log_file`` name is honoured with ``log_rotation_mode = none``.
+  Only its directory was used, so ``log_file = ~/x/mylog.txt`` wrote
+  ``~/x/pgcli.log``. The ``pgclirc`` comment, which described a
+  ``/var/log/pgcli/pgcli.log`` attempt, a daily rotation keeping 30 days and
+  ``pgcli.YYYY-MM-DD.log`` names that never existed, now describes the real
+  behaviour.
+
+* ``\v off`` prints "Verbose errors off." instead of "off.", and
+  ``\c "my db"`` strips the quotes before asking for the database.
+
+* The debug log no longer records passwords: the "Launch Params" line masked
+  nothing of a connection string, the raw statement was logged before the
+  ``PASSWORD '...'`` masking ran, and ``pgcli_dump --tunnel-verbose`` logged
+  the child command line with ``-d postgresql://user:pass@...`` intact. The
+  process title shown by ``ps`` also hides a password passed as ``?password=``
+  in a URL's query string.
+
+* A ``.pg_service.conf`` whose leading comment has non-ASCII characters parses
+  again. The comment skipper advanced the text position by character count, so
+  ``# Configuración`` put the parser down in the middle of the comment.
+
+* The auto-vertical fallback gets one column type per column: a numeric column
+  added two, shifting the type of every column after it, so the configured
+  integer format skipped the integers that followed a numeric.
+
+* The EXPLAIN visualizer describes ``CTE Scan`` (the table spelled it
+  ``CTEScan``), ``Gather``, ``Gather Merge``, ``Memoize``, ``Incremental
+  Sort``, ``WindowAgg``, ``Unique``, ``Materialize`` and the other common
+  nodes instead of printing "Not found", and a plan without actual rows
+  (``EXPLAIN (ANALYZE false, FORMAT JSON)`` with F5 on) no longer fails with
+  ``KeyError: 'Rows Removed by Filter'``.
+
+* ``--log-file`` and ``\log-file`` create their file readable by its owner
+  only, like the history, the debug log and the config.
+
+* An invalid regular expression in ``[ssh tunnels]`` or ``[dsn ssh tunnels]``
+  is reported and skipped instead of being an uncaught ``re.error`` at every
+  connection.
+
+* A failure inside the background completion refresh is logged, and the extra
+  connection it opened is closed. The thread used to die silently, leaving the
+  previous completions in place with nothing to say why.
+
+* ``pgcli_isready`` reads the connection the way the dump wrappers do:
+  ``--dsn ALIAS`` is the server to check (it only picked the tunnel and then
+  checked ``localhost:5432``), a ``-d`` connection string counts for the tunnel
+  decision, and ``-p abc`` is one line instead of a traceback.
+
+* ``pgcli_dump`` and ``pgcli_dumpall`` read getopt's attached short options
+  (``-hHOST``, ``-p5433``, ``-dDB``) for the tunnel decision; only the spaced
+  forms were seen, so ``pgcli_dump -hdb.example.com mydb`` dialed the host
+  directly and skipped its tunnel.
+
 * Saving a named query (``\ns``, ``\ne``) no longer drops every statement after
   the first when the text has a ``--`` comment. Line comments are turned into
   ``/* */`` before saving, and that pass rebuilt only the first statement, so
