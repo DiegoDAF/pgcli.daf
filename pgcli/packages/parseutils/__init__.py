@@ -125,7 +125,7 @@ def strip_markdown(text):
     fences = [i for i, line in enumerate(lines) if _MARKDOWN_FENCE.match(line)]
     if fences:
         inner = []
-        fenced = set()  # line numbers of the fences and of what they enclose
+        fenced: set = set()  # line numbers of the fences and of what they enclose
         for i in range(0, len(fences), 2):
             opening = fences[i]
             closing = fences[i + 1] if i + 1 < len(fences) else len(lines)
