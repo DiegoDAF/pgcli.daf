@@ -108,6 +108,29 @@ Bug fixes:
   with a message about tunnels, while the key=value form was quietly rewritten
   to one host with the tunnel pointed at ``a,b``.
 
+* A reconnect through a revived SSH tunnel whose first connection attempt
+  failed (bastion back before the network, database restarting) is retried
+  through that tunnel. The connection parameters kept the dead local port, and
+  every later reconnect replayed it for the rest of the session.
+
+* ``\c`` to another server leaves the DSN alias behind: the prompt and the
+  destructive-statement warning stop naming it, the reconnect no longer
+  reopens the other server's tunnel through the alias's bastion, and ``\c``
+  back to the alias's server gets the alias's tunnel again.
+
+* A tunnel URL with an invalid port (``bastion:2222x``) and a connection
+  string with a non-numeric port (``postgresql://h:abc/db``) are one line
+  each instead of Python tracebacks.
+
+* The dump wrappers read the database operand as a connection string, as
+  pg_dump does: ``pgcli_dump postgresql://db.internal/mydb`` took its tunnel
+  decision for localhost and pg_dump dialed the host directly. A keyword
+  string without ``host=`` (``dbname=mydb user=bob``) counts as a connection
+  string for the ``.pgpass`` lookup, ``pgcli_isready --dsn ALIAS --timeout 5``
+  keeps the alias's database (``5`` used to replace it), and a dangling
+  ``--host`` or ``--port`` is left for the tool to refuse instead of being
+  rewritten twice.
+
 * Saving a named query (``\ns``, ``\ne``) no longer drops every statement after
   the first when the text has a ``--`` comment. Line comments are turned into
   ``/* */`` before saving, and that pass rebuilt only the first statement, so
