@@ -1,3 +1,14 @@
+Upcoming
+========
+
+Bug fixes:
+----------
+
+* Saving a named query (``\ns``, ``\ne``) no longer drops every statement after
+  the first when the text has a ``--`` comment. Line comments are turned into
+  ``/* */`` before saving, and that pass rebuilt only the first statement, so
+  ``select 1; select 2 -- note`` was stored as ``select 1;``.
+
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================
 

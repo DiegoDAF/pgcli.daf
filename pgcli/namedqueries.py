@@ -32,7 +32,9 @@ def line_comments_to_block(sql):
     if not parsed:
         return sql
     out = []
-    for tok in parsed[0].flatten():
+    # sqlparse returns one statement per semicolon: walk them all, or every
+    # statement after the first is silently dropped.
+    for tok in (tok for statement in parsed for tok in statement.flatten()):
         if tok.ttype in sqlparse_tokens.Comment.Single:
             body = tok.value.rstrip("\r\n")
             trailing = tok.value[len(body) :]

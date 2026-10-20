@@ -457,3 +457,18 @@ class TestMultilineAndCommentSafety:
         assert line_comments_to_block("select 1 --") == "select 1 "
         assert line_comments_to_block("select 1 -- a\n+ 2 -- b\n") == "select 1 /* a */\n+ 2 /* b */\n"
         assert line_comments_to_block("select '--no'") == "select '--no'"
+
+    def test_line_comments_to_block_keeps_every_statement(self):
+        # sqlparse splits the text into one statement per semicolon; only the
+        # first one used to be rebuilt, so a comment anywhere dropped the rest.
+        from pgcli.namedqueries import line_comments_to_block
+
+        assert line_comments_to_block("select 1; -- first\nselect 2; select 3") == (
+            "select 1; /* first */\nselect 2; select 3"
+        )
+        assert line_comments_to_block("select 1; select 2 -- c") == "select 1; select 2 /* c */"
+
+    def test_save_keeps_a_multi_statement_query_with_a_comment(self):
+        nq = ExtendedNamedQueries.from_config(self._config())
+        nq.save("q", "select 1; -- first\nselect 2;")
+        assert nq.get("q") == "select 1; /* first */\nselect 2;"
