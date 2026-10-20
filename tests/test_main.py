@@ -961,6 +961,25 @@ def test_log_destination_custom(executor):
         assert os.path.exists(expected_log)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="file modes")
+def test_the_query_log_file_is_private(tmpdir):
+    # --log-file and \log-file hold every statement and every result. They
+    # were created with the umask while history, the debug log and the config
+    # are owner-only.
+    old_umask = os.umask(0o022)
+    try:
+        log = tmpdir.join("queries.log")
+        PGCli(pgclirc_file=str(tmpdir.join("rcfile")), log_file=str(log))
+        assert stat.S_IMODE(os.stat(str(log)).st_mode) == 0o600
+
+        cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+        later = tmpdir.join("later.log")
+        cli.write_to_logfile(str(later))
+        assert stat.S_IMODE(os.stat(str(later)).st_mode) == 0o600
+    finally:
+        os.umask(old_umask)
+
+
 @dbtest
 def test_watch_works(executor):
     cli = PGCli(pgexecute=executor)

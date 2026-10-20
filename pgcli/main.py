@@ -416,6 +416,9 @@ class PGCli:
         self.ssh_tunnel: Optional[Any] = None
 
         if log_file:
+            # Every statement and every result lands here: owner-only, like
+            # the history and the debug log.
+            ensure_private_file(log_file)
             with open(log_file, "a+"):
                 pass  # ensure writeable
         self.log_file = log_file
@@ -922,6 +925,7 @@ class PGCli:
             return [(None, None, None, err + "\nLogfile capture disabled", "", False, True)]
 
         try:
+            ensure_private_file(log_file)
             with open(log_file, "a+"):
                 pass  # ensure writeable
         except OSError as e:
