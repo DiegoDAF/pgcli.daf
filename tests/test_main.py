@@ -39,6 +39,20 @@ from pgcli.main import plaintext_warning, ssl_banner
 from collections import namedtuple
 
 
+@pytest.fixture(autouse=True)
+def _restore_pg_environment():
+    # A few tests here set PGSERVICEFILE or delete PGPASSWORD straight in
+    # os.environ (the service-file tests, test_pg_service_file); the suite
+    # used to hand its caller a changed environment. Put both back.
+    saved = {name: os.environ.get(name) for name in ("PGSERVICEFILE", "PGPASSWORD")}
+    yield
+    for name, value in saved.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+
 @pytest.mark.skipif(platform.system() == "Windows", reason="Not applicable in windows")
 @pytest.mark.skipif(not setproctitle, reason="setproctitle not available")
 def test_obfuscate_process_password():
@@ -1585,7 +1599,10 @@ def test_multihost_db_uri(tmpdir):
     )
 
 
-def test_application_name_db_uri(tmpdir):
+def test_application_name_db_uri(tmpdir, monkeypatch):
+    # The expected empty password assumes no PGPASSWORD in the environment;
+    # this used to hold only because an earlier test deleted the variable.
+    monkeypatch.delenv("PGPASSWORD", raising=False)
     with mock.patch.object(PGExecute, "__init__") as mock_pgexecute:
         mock_pgexecute.return_value = None
         cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
@@ -2906,3 +2923,39 @@ def test_the_debug_log_has_one_handler_per_process(tmpdir):
     assert len([h for h in logger.handlers if h.get_name() == "pgcli"]) == 1
     assert len([h for h in logging.getLogger("pgspecial").handlers if h.get_name() == "pgcli"]) == 1
 
+
+def test_an_error_running_a_command_is_logged_redacted(tmpdir, caplog):
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.commands = ["alter role bob password 's3cret'"]
+    with (
+        mock.patch.object(cli, "_execute_statements", side_effect=RuntimeError("boom: alter role bob password 's3cret'")),
+        caplog.at_level(logging.ERROR, logger="pgcli.main"),
+        pytest.raises(SystemExit) as e,
+    ):
+        cli.run_cli()
+    assert e.value.code == 1
+    assert "Error executing command" in caplog.text and "traceback:" in caplog.text
+    assert "s3cret" not in caplog.text
+
+
+def test_an_error_running_a_file_is_logged_redacted(tmpdir, caplog):
+    script = tmpdir.join("script.sql")
+    script.write("alter role bob password 's3cret';")
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.input_files = [str(script)]
+    with (
+        mock.patch.object(cli, "_execute_statements", side_effect=RuntimeError("boom: alter role bob password 's3cret'")),
+        caplog.at_level(logging.ERROR, logger="pgcli.main"),
+        pytest.raises(SystemExit) as e,
+    ):
+        cli.run_cli()
+    assert e.value.code == 1
+    assert "Error executing commands from file" in caplog.text
+    assert "s3cret" not in caplog.text
+
+
+def test_auto_expand_at_the_prompt_asks_the_prompt_for_its_width(tmpdir):
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.prompt_app = mock.MagicMock()
+    cli.prompt_app.output.get_size.return_value.columns = 123
+    assert cli._output_width() == 123

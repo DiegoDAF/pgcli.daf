@@ -477,3 +477,12 @@ def test_a_filter_without_actual_rows_does_not_crash():
 def test_common_node_types_are_described(node_type):
     plan = {"Plan": _leaf(node_type), "Planning Time": 0.1, "Execution Time": 1.0}
     assert "Not found" not in _render(plan)
+
+
+def test_the_filter_count_is_shown_when_the_plan_has_it():
+    plan = {
+        "Plan": _leaf("Seq Scan", **{"Relation Name": "t", "Filter": "(k = 3)", "Rows Removed by Filter": 1234}),
+        "Planning Time": 0.1,
+        "Execution Time": 1.0,
+    }
+    assert "filter (k = 3) [-1,234 rows]" in _render(plan)

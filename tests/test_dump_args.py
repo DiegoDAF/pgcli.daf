@@ -1086,3 +1086,26 @@ class TestTheWrappersAndPs:
         ):
             CliRunner().invoke(mod.cli, ["postgresql://u:s3cret@h/db", "-f", "/dev/null"])
         fake.setproctitle.assert_called_once_with(f"{modname} postgresql://u:xxxx@h/db -f /dev/null")
+
+
+class TestTunnelFailureInTheWrappers:
+    @pytest.mark.parametrize("modname", ["pgcli.dump", "pgcli.dumpall", "pgcli.isready"])
+    def test_a_tunnel_that_cannot_be_opened_is_one_line(self, modname):
+        import importlib
+        from unittest.mock import MagicMock, patch
+        from click.testing import CliRunner
+        from pgcli.ssh_tunnel import SSHTunnelError
+
+        mod = importlib.import_module(modname)
+        manager = MagicMock()
+        manager.start_tunnel.side_effect = SSHTunnelError("no route to bastion")
+        with (
+            patch.object(mod, "get_config", return_value={}),
+            patch.object(mod, "get_tunnel_manager_from_config", return_value=manager),
+            patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=0)) as srun,
+        ):
+            result = CliRunner().invoke(mod.cli, ["-h", "db.internal"])
+        assert result.exit_code == 1
+        assert "SSH tunnel error: no route to bastion" in result.output
+        assert "Traceback" not in result.output
+        srun.assert_not_called()
