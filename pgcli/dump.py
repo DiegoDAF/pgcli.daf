@@ -9,7 +9,7 @@ import logging
 import os
 import subprocess
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import click
 
@@ -52,6 +52,81 @@ def get_password_from_pgpass(host: str, port: int, database: str, user: str) -> 
     return password
 
 
+# Options of pg_dump and pg_dumpall that take a value, from their PostgreSQL 18
+# --help. The value is either attached (-tfoo, -Fc, --table=foo) or the next
+# argument (-t foo, --table foo); an argument that is no option's value is the
+# database name, wherever it sits, since both tools parse with getopt.
+_SHORT_OPTIONS_WITH_VALUE = frozenset("dfFjZeEnNStThpUl")
+_LONG_OPTIONS_WITH_VALUE = frozenset({
+    "--compress",
+    "--database",
+    "--dbname",
+    "--encoding",
+    "--exclude-database",
+    "--exclude-extension",
+    "--exclude-schema",
+    "--exclude-table",
+    "--exclude-table-and-children",
+    "--exclude-table-data",
+    "--exclude-table-data-and-children",
+    "--extension",
+    "--extra-float-digits",
+    "--file",
+    "--filter",
+    "--format",
+    "--host",
+    "--include-foreign-data",
+    "--jobs",
+    "--lock-wait-timeout",
+    "--port",
+    "--restrict-key",
+    "--role",
+    "--rows-per-insert",
+    "--schema",
+    "--section",
+    "--snapshot",
+    "--superuser",
+    "--sync-method",
+    "--table",
+    "--table-and-children",
+    "--username",
+})
+
+
+def _options_and_operands(args: List[str]) -> Tuple[List[Tuple[str, str]], List[str]]:
+    """Split pg_dump-style arguments into (option, value) pairs and operands."""
+    options: List[Tuple[str, str]] = []
+    operands: List[str] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--":
+            operands.extend(args[i + 1 :])
+            break
+        if arg.startswith("--"):
+            name, eq, value = arg.partition("=")
+            if not eq and name in _LONG_OPTIONS_WITH_VALUE and i + 1 < len(args):
+                i += 1
+                value = args[i]
+            options.append((name, value))
+        elif arg.startswith("-") and len(arg) > 1:
+            # A getopt cluster: flags up to the first letter that takes a value,
+            # whose value is the rest of the argument or the next one.
+            for j, letter in enumerate(arg[1:], 1):
+                if letter in _SHORT_OPTIONS_WITH_VALUE:
+                    value = arg[j + 1 :]
+                    if not value and i + 1 < len(args):
+                        i += 1
+                        value = args[i]
+                    options.append(("-" + letter, value))
+                    break
+                options.append(("-" + letter, ""))
+        else:
+            operands.append(arg)
+        i += 1
+    return options, operands
+
+
 def parse_user_and_database(args: List[str]) -> tuple:
     """
     Parse user and database from command line arguments.
@@ -62,66 +137,29 @@ def parse_user_and_database(args: List[str]) -> tuple:
     user = os.environ.get("PGUSER", "postgres")
     database = os.environ.get("PGDATABASE", "*")
 
-    i = 0
-    while i < len(args):
-        arg = args[i]
-
-        # Handle -U/--username
-        if arg in ("-U", "--username"):
-            if i + 1 < len(args):
-                user = args[i + 1]
-                i += 2
-                continue
-        elif arg.startswith("--username="):
-            user = arg.split("=", 1)[1]
-            i += 1
-            continue
-
-        # Handle -d/--dbname in all three forms: bare name, keyword/value
-        # connection string, or URI. .pgpass is asked about whatever comes out
-        # of here, so reading only the bare form means a tunnelled dump looks
-        # up the wrong user and never finds its password.
-        if arg in ("-d", "--dbname"):
-            if i + 1 < len(args):
-                cs_user, cs_db = dbname_identity(args[i + 1])
-                if cs_user:
-                    user = cs_user
-                if cs_db:
-                    database = cs_db
-                i += 2
-                continue
-        elif arg.startswith("--dbname="):
-            cs_user, cs_db = dbname_identity(arg.split("=", 1)[1])
+    options, operands = _options_and_operands(args)
+    for name, value in options:
+        if name in ("-U", "--username") and value:
+            user = value
+        # -d/--dbname in all three forms: bare name, keyword/value connection
+        # string, or URI. .pgpass is asked about whatever comes out of here, so
+        # reading only the bare form means a tunnelled dump looks up the wrong
+        # user and never finds its password.
+        elif name in ("-d", "--dbname") and value:
+            cs_user, cs_db = dbname_identity(value)
             if cs_user:
                 user = cs_user
             if cs_db:
                 database = cs_db
-            i += 1
-            continue
 
-        # Positional database argument (last non-option arg)
-        if not arg.startswith("-") and i == len(args) - 1:
-            # Check if it's not a value for a previous option
-            option_flags = (
-                "-h",
-                "--host",
-                "-p",
-                "--port",
-                "-U",
-                "--username",
-                "-d",
-                "--dbname",
-                "-f",
-                "--file",
-                "-F",
-                "--format",
-            )
-            if i > 0 and args[i - 1] in option_flags:
-                pass
-            else:
-                database = arg
-
-        i += 1
+    # The database operand, if any. pg_dump refuses one together with -d ("too
+    # many command-line arguments"), so the two never both apply.
+    if operands:
+        cs_user, cs_db = dbname_identity(operands[0])
+        if cs_user:
+            user = cs_user
+        if cs_db:
+            database = cs_db
 
     return user, database
 

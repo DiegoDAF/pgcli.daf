@@ -336,6 +336,39 @@ class TestUserAndDatabase:
         # "custom.sql" is the value of -f, not the database.
         assert dump.parse_user_and_database(["-f", "custom.sql"])[1] == "*"
 
+    @pytest.mark.parametrize(
+        "args",
+        [
+            ["-h", "dbx", "-t", "public.orders"],
+            ["--table", "public.orders"],
+            ["-n", "sales", "-N", "audit", "-T", "tmp_*", "-j", "4", "-Z", "9"],
+            ["--exclude-table-data", "logs", "--section", "data", "--role", "dumper"],
+        ],
+        ids=["short", "long", "several-short", "several-long"],
+    )
+    def test_values_of_any_option_are_not_the_database(self, args):
+        # Every pg_dump option that takes a value (pg_dump 18 --help), not just
+        # -h/-p/-U/-d/-f/-F: their value is not a positional database name.
+        assert dump.parse_user_and_database(args)[1] == "*"
+
+    @pytest.mark.parametrize(
+        "args",
+        [
+            ["-t", "public.orders", "ventas"],
+            ["ventas", "-f", "out.sql"],
+            ["ventas", "-t", "public.orders", "-F", "c"],
+            ["-tpublic.orders", "-Fc", "ventas"],
+            ["-Ot", "public.orders", "ventas"],
+            ["--table=public.orders", "ventas", "--schema", "sales"],
+            ["-f", "out.sql", "--", "ventas"],
+        ],
+        ids=["after-options", "first", "middle", "attached-values", "flag-cluster", "mixed", "after-double-dash"],
+    )
+    def test_the_database_is_found_wherever_it_is(self, args):
+        # pg_dump uses getopt, which reorders arguments: the database name may
+        # come before, between or after the options.
+        assert dump.parse_user_and_database(args)[1] == "ventas"
+
     def test_user_and_database_come_out_of_a_uri(self):
         assert dump.parse_user_and_database(["-d", "postgresql://reader@db.example.com:6432/ventas"]) == ("reader", "ventas")
 

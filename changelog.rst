@@ -26,6 +26,13 @@ Bug fixes:
   consumed the formatter's lazy output, so the log only got the timestamp and
   the query.
 
+* ``pgcli_dump`` finds the database name the way pg_dump does, wherever it is
+  on the command line. It only looked at the last argument, and took the value
+  of any option other than ``-h``, ``-p``, ``-U``, ``-d``, ``-f`` and ``-F`` for
+  the database, so ``-t public.orders`` asked ``.pgpass`` for a database
+  called ``public.orders``, and ``pgcli_dump ventas -f out.sql`` did not see
+  ``ventas`` at all.
+
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================
 
