@@ -21,6 +21,11 @@ Bug fixes:
   this machine: with a local server there, the backup came from the wrong
   database, using the remote one's password.
 
+* With ``stream_results`` on, or when pasted statements are echoed, the
+  ``log_file`` / ``--log-file`` gets the result rows again. The live echo
+  consumed the formatter's lazy output, so the log only got the timestamp and
+  the query.
+
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================
 

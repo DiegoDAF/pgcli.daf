@@ -1906,8 +1906,12 @@ class PGCli:
             if paste_echo and sql:
                 # Echo the statement before its result (psql-paste look).
                 click.echo("> " + sql.strip())
-            if stream and formatted:
-                click.echo("\n".join(formatted))
+            if stream:
+                # format_output() is lazy: echoing it would exhaust it and leave
+                # nothing for the buffered copy the log file is written from.
+                formatted = list(formatted)
+                if formatted:
+                    click.echo("\n".join(formatted))
             output.extend(formatted)
             total = time() - start
 

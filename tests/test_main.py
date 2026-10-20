@@ -356,6 +356,24 @@ def test_stream_results_echoes_each_statement_inline(tmpdir):
     mock_pager.assert_not_called()
 
 
+@dbtest
+def test_streamed_results_reach_the_log_file(executor, tmpdir, capsys):
+    # format_output() is lazy: echoing it live used to exhaust it, so the
+    # buffered copy the log file is written from came out empty.
+    log = tmpdir.join("session.log")
+    cli = PGCli(pgexecute=executor, pgclirc_file=str(tmpdir.join("rcfile")))
+    cli.stream_results = True
+    cli.log_file = str(log)
+    with mock.patch.object(cli, "echo_via_pager") as mock_pager:
+        cli.execute_command("select 424242 as marker")
+
+    logged = log.read().split("select 424242 as marker", 1)[1]
+    assert "424242" in logged
+    # Still shown once on screen, live, and not again through the pager.
+    assert capsys.readouterr().out.count("424242") == 1
+    mock_pager.assert_not_called()
+
+
 def test_no_stream_buffers_results_to_pager(tmpdir):
     """Default behavior (stream_results=False): nothing is echoed live, all
     output is dumped once through the pager."""
