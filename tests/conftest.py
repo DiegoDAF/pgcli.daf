@@ -59,3 +59,7 @@ def temp_config(tmpdir_factory):
     # this function runs on start of test session.
     # use temporary directory for config home so user config will not be used
     os.environ["XDG_CONFIG_HOME"] = str(tmpdir_factory.mktemp("data"))
+    # ... and for the state home: every PGCli() the tests build opens the
+    # debug log there, and without this they appended to the developer's real
+    # ~/.local/state/pgcli log and history.
+    os.environ["XDG_STATE_HOME"] = str(tmpdir_factory.mktemp("state"))
