@@ -407,3 +407,101 @@ def test_redact_sql_hides_every_quoting_of_the_literal(sql, shown):
     from pgcli.redact import redact_sql
 
     assert redact_sql(sql) == shown
+
+
+@pytest.mark.parametrize(
+    "dsn, shown",
+    [
+        # libpq accepts an empty user.
+        ("postgresql://:s3cret@db.internal/appdb", "postgresql://:***@db.internal/appdb"),
+        # The third keyword libpq marks as a secret (PostgreSQL 18).
+        ("host=db.internal oauth_client_secret=s3cret dbname=appdb", "host=db.internal oauth_client_secret=*** dbname=appdb"),
+        ("postgresql://u@db.internal/appdb?oauth_client_secret=s3cret", "postgresql://u@db.internal/appdb?oauth_client_secret=***"),
+        # getopt's attached form keeps the "d" glued to the keyword.
+        ("pg_dump -dpassword=s3cret host=db.internal", "pg_dump -dpassword=*** host=db.internal"),
+        # Two secrets in one string; IPv6 with userinfo; an empty quoted value.
+        ("host=db.internal password=s3cret sslpassword=keypass", "host=db.internal password=*** sslpassword=***"),
+        ("postgresql://u:s3cret@[::1]:5432/db", "postgresql://u:***@[::1]:5432/db"),
+        ("host=db.internal password='' dbname=appdb", "host=db.internal password=*** dbname=appdb"),
+        # An unquoted value inside a SQL literal keeps the literal's closing quote.
+        ("'host=h password=s3cret'", "'host=h password=***'"),
+    ],
+)
+def test_redact_dsn_more_spellings(dsn, shown):
+    from pgcli.redact import redact_dsn
+
+    assert redact_dsn(dsn) == shown
+
+
+@pytest.mark.parametrize(
+    "title, shown",
+    [
+        ("pgcli host=h sslpassword=keypass dbname=x", "pgcli host=h sslpassword=xxxx dbname=x"),
+        ("pgcli host=h password = s3cret dbname=x", "pgcli host=h password = xxxx dbname=x"),
+        ("pgcli host=h oauth_client_secret=s3cret -c select", "pgcli host=h oauth_client_secret=xxxx -c select"),
+        ("pgcli postgresql://:s3cret@h/db", "pgcli postgresql://:xxxx@h/db"),
+        ("pgcli --ssh-tunnel ssh://me:s3cret@bastion host=h dbname=x", "pgcli --ssh-tunnel ssh://me:xxxx@bastion host=h dbname=x"),
+        # The arguments after a masked password stay in the title.
+        (
+            "pgcli host=h password=s3cret --ssh-tunnel ssh://me@bastion -c select",
+            "pgcli host=h password=xxxx --ssh-tunnel ssh://me@bastion -c select",
+        ),
+        ("pgcli 'host=h password=s p' -c x", "pgcli 'host=h password=xxxx -c x"),
+    ],
+)
+def test_redact_process_title_more_spellings(title, shown):
+    from pgcli.redact import redact_process_title
+
+    assert redact_process_title(title) == shown
+
+
+@pytest.mark.parametrize(
+    "sql, shown",
+    [
+        ("alter role bob password's3cret'", "alter role bob password'***'"),
+        ("alter role bob password /* c */ 's3cret'", "alter role bob password /* c */ '***'"),
+        ("alter role bob password -- c\n's3cret'", "alter role bob password -- c\n'***'"),
+        ("alter role bob password U&'s3cret'", "alter role bob password '***'"),
+        ("alter role bob password 's3cret1'\n's3cret2'", "alter role bob password '***'"),
+        ("alter role bob password $é$s3cret$é$", "alter role bob password '***'"),
+        ("alter server s options (set password 's3cret')", "alter server s options (set password '***')"),
+        ("alter server s options (add password 's3cret')", "alter server s options (add password '***')"),
+        # Connection strings inside SQL carry passwords too.
+        (
+            "create subscription s connection 'host=h dbname=d password=s3cret' publication p",
+            "create subscription s connection 'host=h dbname=d password=***' publication p",
+        ),
+        (
+            "select * from dblink('host=h password=s3cret dbname=d', 'select 1') as t(a int)",
+            "select * from dblink('host=h password=*** dbname=d', 'select 1') as t(a int)",
+        ),
+        (
+            "create subscription s connection 'postgresql://u:s3cret@h/d' publication p",
+            "create subscription s connection 'postgresql://u:***@h/d' publication p",
+        ),
+        # Not a password literal.
+        ("set password_encryption = 'scram-sha-256'", "set password_encryption = 'scram-sha-256'"),
+        ("select password_hash from t", "select password_hash from t"),
+    ],
+)
+def test_redact_sql_more_spellings(sql, shown):
+    from pgcli.redact import redact_sql
+
+    assert redact_sql(sql) == shown
+
+
+def test_redact_text_hides_the_statement_echoed_by_a_server_error():
+    # The server's message carries LINE 1: <statement>; an error line that
+    # masked its "sql:" part handed the secret back in its "error:" part.
+    from pgcli.redact import redact_text
+
+    message = 'unrecognized role option "loginn"\nLINE 1: alter role bob password \'s3cret\' loginn\n        ^'
+    assert "s3cret" not in redact_text(message)
+    assert "password '***'" in redact_text(message)
+    assert "s3cret" not in redact_text(Exception(message))
+
+
+def test_the_secret_keywords_come_from_libpq():
+    from pgcli.redact import SECRET_KEYWORDS
+
+    assert {"password", "sslpassword", "oauth_client_secret"} <= set(SECRET_KEYWORDS)
