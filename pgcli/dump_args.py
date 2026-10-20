@@ -188,8 +188,8 @@ def parse_connection_args(args: List[str]) -> tuple:
             remaining_args.extend([arg, args[i + 1]])
             i += 2
             continue
-        if arg.startswith("--host="):
-            host = arg.split("=", 1)[1]
+        if arg.startswith("--host=") or _attached_short(arg, "h"):
+            host = arg.split("=", 1)[1] if arg.startswith("--") else arg[2:]
             has_host = True
             remaining_args.append(arg)
             i += 1
@@ -201,8 +201,8 @@ def parse_connection_args(args: List[str]) -> tuple:
             remaining_args.extend([arg, args[i + 1]])
             i += 2
             continue
-        if arg.startswith("--port="):
-            port = _coerce_port(arg.split("=", 1)[1], "--port")
+        if arg.startswith("--port=") or _attached_short(arg, "p"):
+            port = _coerce_port(arg.split("=", 1)[1] if arg.startswith("--") else arg[2:], arg[:2] if arg[1] != "-" else "--port")
             has_port = True
             remaining_args.append(arg)
             i += 1
@@ -213,8 +213,8 @@ def parse_connection_args(args: List[str]) -> tuple:
             remaining_args.extend([arg, args[i + 1]])
             i += 2
             continue
-        if arg.startswith("--dbname="):
-            read_dbname(arg.split("=", 1)[1])
+        if arg.startswith("--dbname=") or _attached_short(arg, "d"):
+            read_dbname(arg.split("=", 1)[1] if arg.startswith("--") else arg[2:])
             remaining_args.append(arg)
             i += 1
             continue
@@ -223,6 +223,15 @@ def parse_connection_args(args: List[str]) -> tuple:
         i += 1
 
     return host, port, remaining_args, has_host, has_port
+
+
+def _attached_short(arg: str, letter: str) -> bool:
+    """True for getopt's attached form of a short option with a value: -hHOST, -p5433, -dDB.
+
+    The tunnel decision used to read only ``-h HOST``, so ``pgcli_dump
+    -hdb.example.com`` dialed the host directly and skipped the tunnel.
+    """
+    return arg.startswith("-" + letter) and len(arg) > 2 and not arg.startswith("--")
 
 
 def build_tunneled_args(
@@ -268,6 +277,10 @@ def build_tunneled_args(
             new_args.append(f"--host={tunnel_host}")
             i += 1
             continue
+        if _attached_short(arg, "h"):
+            new_args.extend(["-h", tunnel_host])
+            i += 1
+            continue
 
         if arg in ("-p", "--port"):
             new_args.extend([arg, str(tunnel_port)])
@@ -277,6 +290,10 @@ def build_tunneled_args(
             new_args.append(f"--port={tunnel_port}")
             i += 1
             continue
+        if _attached_short(arg, "p"):
+            new_args.extend(["-p", str(tunnel_port)])
+            i += 1
+            continue
 
         if arg in ("-d", "--dbname") and i + 1 < len(original_args):
             new_args.extend([arg, rewrite_dbname(original_args[i + 1])])
@@ -284,6 +301,10 @@ def build_tunneled_args(
             continue
         if arg.startswith("--dbname="):
             new_args.append(f"--dbname={rewrite_dbname(arg.split('=', 1)[1])}")
+            i += 1
+            continue
+        if _attached_short(arg, "d"):
+            new_args.extend(["-d", rewrite_dbname(arg[2:])])
             i += 1
             continue
 

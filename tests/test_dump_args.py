@@ -834,3 +834,35 @@ class TestWrapperPlumbing:
         with patch.object(mod, "cli") as fake_cli:
             mod.main()
         fake_cli.assert_called_once_with()
+
+
+class TestAttachedShortOptions:
+    """getopt's -hHOST / -p5433 / -dDB forms. Only "-h HOST" was read, so
+    "pgcli_dump -hdb.example.com mydb" dialed the host directly, no tunnel."""
+
+    def test_parse_reads_the_attached_forms(self):
+        from pgcli.dump_args import parse_connection_args
+
+        host, port, remaining, has_host, has_port = parse_connection_args(["-hdb.example.com", "-p5433", "-dmydb", "-Fc"])
+        assert (host, port, has_host, has_port) == ("db.example.com", 5433, True, True)
+        assert remaining == ["-hdb.example.com", "-p5433", "-dmydb", "-Fc"]
+
+    def test_parse_reads_a_connection_string_attached_to_d(self):
+        from pgcli.dump_args import parse_connection_args
+
+        host, port, _, has_host, has_port = parse_connection_args(["-dpostgresql://u@db.example.com:5433/mydb"])
+        assert (host, port, has_host, has_port) == ("db.example.com", 5433, True, True)
+
+    def test_build_rewrites_the_attached_forms(self):
+        from pgcli.dump_args import build_tunneled_args
+
+        args = ["-hdb.example.com", "-p5433", "-dpostgresql://u@db.example.com:5433/mydb", "-Fc"]
+        assert build_tunneled_args(args, "127.0.0.1", 40000, "db.example.com", 5433, True, True) == [
+            "-h", "127.0.0.1", "-p", "40000", "-d", "postgresql://u@127.0.0.1:40000/mydb", "-Fc",
+        ]  # fmt: skip
+
+    def test_a_bad_attached_port_is_an_error_not_a_traceback(self):
+        from pgcli.dump_args import parse_connection_args
+
+        with pytest.raises(ValueError, match="not a valid port number"):
+            parse_connection_args(["-pabc"])
