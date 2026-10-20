@@ -463,9 +463,7 @@ class TestMultilineAndCommentSafety:
         # first one used to be rebuilt, so a comment anywhere dropped the rest.
         from pgcli.namedqueries import line_comments_to_block
 
-        assert line_comments_to_block("select 1; -- first\nselect 2; select 3") == (
-            "select 1; /* first */\nselect 2; select 3"
-        )
+        assert line_comments_to_block("select 1; -- first\nselect 2; select 3") == ("select 1; /* first */\nselect 2; select 3")
         assert line_comments_to_block("select 1; select 2 -- c") == "select 1; select 2 /* c */"
 
     def test_save_keeps_a_multi_statement_query_with_a_comment(self):
