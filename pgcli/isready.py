@@ -14,7 +14,7 @@ from typing import List, Optional
 import click
 
 from .config import get_config
-from .ssh_tunnel import get_tunnel_manager_from_config
+from .ssh_tunnel import SSHTunnelError, get_tunnel_manager_from_config
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -219,11 +219,15 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         logger=logger,
     )
 
-    tunnel_host, tunnel_port = tunnel_manager.start_tunnel(
-        host=host,
-        port=port,
-        dsn_alias=dsn_alias,
-    )
+    try:
+        tunnel_host, tunnel_port = tunnel_manager.start_tunnel(
+            host=host,
+            port=port,
+            dsn_alias=dsn_alias,
+        )
+    except SSHTunnelError as e:
+        click.secho(str(e), err=True, fg="red")
+        sys.exit(1)
 
     pg_isready_path = find_pg_isready()
     logger.debug("Using pg_isready: %s", pg_isready_path)

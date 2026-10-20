@@ -16,7 +16,7 @@ import click
 from .config import get_config
 from .dsnaliases import DsnAliases
 from .pgpass import has_safe_permissions, lookup_password, pgpass_path
-from .ssh_tunnel import get_tunnel_manager_from_config
+from .ssh_tunnel import SSHTunnelError, get_tunnel_manager_from_config
 from .dump_args import (  # re-exported: both wrappers and their tests import these
     apply_dsn_alias,
     build_tunneled_args,
@@ -218,11 +218,15 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
     )
 
     # Try to start tunnel
-    tunnel_host, tunnel_port = tunnel_manager.start_tunnel(
-        host=host,
-        port=port,
-        dsn_alias=dsn_alias,
-    )
+    try:
+        tunnel_host, tunnel_port = tunnel_manager.start_tunnel(
+            host=host,
+            port=port,
+            dsn_alias=dsn_alias,
+        )
+    except SSHTunnelError as e:
+        click.secho(str(e), err=True, fg="red")
+        sys.exit(1)
 
     # Build final pg_dump command
     pg_dump_path = find_pg_dump()

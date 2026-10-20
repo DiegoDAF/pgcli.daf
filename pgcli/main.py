@@ -92,7 +92,7 @@ from psycopg.conninfo import make_conninfo, conninfo_to_dict
 from psycopg.errors import Diagnostic
 
 
-from .ssh_tunnel import SSHTunnelManager, SSH_TUNNEL_SUPPORT
+from .ssh_tunnel import SSHTunnelError, SSHTunnelManager, SSH_TUNNEL_SUPPORT
 
 
 # Ref: https://stackoverflow.com/questions/30425105/filter-special-chars-such-as-color-codes-from-shell-output
@@ -840,7 +840,7 @@ class PGCli:
                     self.pgexecute.connect(database=db, user=user, **self.pgexecute.extra_args)
                 else:
                     self._connect_elsewhere(db, user, *target)
-            except (OperationalError, ValueError) as e:
+            except (OperationalError, ValueError, SSHTunnelError) as e:
                 click.secho(str(e), err=True, fg="red")
                 click.echo("Previous connection kept")
         else:
@@ -1245,11 +1245,17 @@ class PGCli:
         # The server actually asked for, before a tunnel turns it into
         # 127.0.0.1:<local port>: \c and reconnects compare against it.
         self._target = (host or "localhost", int(port or 5432))
-        tunnel_host, tunnel_port = self._tunnel_manager.start_tunnel(
-            host=host or "localhost",
-            port=int(port or 5432),
-            dsn_alias=self.dsn_alias,
-        )
+        try:
+            tunnel_host, tunnel_port = self._tunnel_manager.start_tunnel(
+                host=host or "localhost",
+                port=int(port or 5432),
+                dsn_alias=self.dsn_alias,
+            )
+        except SSHTunnelError as e:
+            # At startup there is nothing to fall back to. \c and the
+            # reconnect catch this themselves and keep the session.
+            click.secho(str(e), err=True, fg="red")
+            sys.exit(1)
 
         if tunnel_host != (host or "localhost") or tunnel_port != int(port or 5432):
             self.ssh_tunnel = self._tunnel_manager.tunnel
@@ -2010,17 +2016,23 @@ class PGCli:
 
         A dropped tunnel takes its local port with it, so replaying the old
         connection parameters would dial a dead port. The new tunnel goes to
-        the same server; only the local port changes.
+        the same server; only the local port changes. While the bastion stays
+        unreachable the dead tunnel remains registered, so the next reconnect
+        tries again instead of dialing the dead port for good.
         """
         manager = getattr(self, "_tunnel_manager", None)
         if manager is None or manager.tunnel is None or manager.tunnel.is_active:
             return {}
-        tunnel = manager.tunnel
+        dead = manager.tunnel
         self.logger.debug("SSH tunnel is down, reopening it")
-        tunnel.stop()
+        dead.stop()
         manager.tunnel = None
         host, port = self._target
-        _, tunnel_port = manager.start_tunnel(host=host, port=port, dsn_alias=self.dsn_alias)
+        try:
+            _, tunnel_port = manager.start_tunnel(host=host, port=port, dsn_alias=self.dsn_alias)
+        except SSHTunnelError:
+            manager.tunnel = dead
+            raise
         self.ssh_tunnel = manager.tunnel
         return {"port": tunnel_port}
 
@@ -2030,7 +2042,7 @@ class PGCli:
             click.secho("Reconnecting...", fg="green")
             self.pgexecute.connect(**self._revive_tunnel())
             click.secho("Reconnected!", fg="green")
-        except OperationalError as e:
+        except (OperationalError, SSHTunnelError) as e:
             click.secho("Reconnect Failed", fg="red")
             click.secho(str(e), err=True, fg="red")
         else:

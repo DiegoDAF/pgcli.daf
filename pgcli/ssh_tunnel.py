@@ -23,10 +23,22 @@ import threading
 from typing import Any, Optional, Tuple, cast
 from urllib.parse import urlparse
 
-import click
 import paramiko
 
 SSH_TUNNEL_SUPPORT = True
+
+
+class SSHTunnelError(Exception):
+    """The tunnel could not be opened.
+
+    Raised instead of exiting the process: at startup the callers exit with
+    the message, while \\c and the automatic reconnect report it and keep the
+    session they already have. ``str()`` is the text to show the user.
+    """
+
+    def __str__(self):
+        reason = self.args[0] if self.args else "unknown error"
+        return f"SSH tunnel error: {reason}"
 
 
 # ssh gives up at this nesting depth with "Too many recursive configuration
@@ -691,8 +703,7 @@ class SSHTunnelManager:
 
         if not ssh_hostname:
             self.logger.error("SSH tunnel URL has no hostname: %s", tunnel_url)
-            click.secho(f"SSH tunnel error: no hostname in URL '{tunnel_url}'", err=True, fg="red")
-            sys.exit(1)
+            raise SSHTunnelError(f"no hostname in URL '{tunnel_url}'")
 
         self.logger.debug(
             "Creating SSH tunnel: %s@%s:%d -> %s:%d (allow_agent=%s, key_files=%d)",
@@ -705,6 +716,7 @@ class SSHTunnelManager:
             len(key_filenames),
         )
 
+        tunnel = None
         try:
             tunnel = _NativeSSHTunnel(
                 ssh_hostname=ssh_hostname,
@@ -744,18 +756,19 @@ class SSHTunnelManager:
                 )
             msg = f"could not resolve SSH host '{ssh_hostname}' from this machine{hint}: {e}"
             self.logger.error("SSH tunnel failed: %s", msg)
-            click.secho(f"SSH tunnel error: {msg}", err=True, fg="red")
-            sys.exit(1)
+            raise SSHTunnelError(msg) from e
         except Exception as e:
             self.logger.error("SSH tunnel failed: %s", str(e))
-            click.secho(f"SSH tunnel error: {e}", err=True, fg="red")
-            sys.exit(1)
+            if tunnel is not None:
+                # An SSH session opened before the forwarding failed must not linger.
+                tunnel.stop()
+            raise SSHTunnelError(str(e)) from e
 
         atexit.register(self.stop_tunnel)
 
         local_port = tunnel.local_bind_port
         if local_port is None:
-            raise Exception("SSH tunnel started but local port is not available")
+            raise SSHTunnelError("SSH tunnel started but local port is not available")
         self.logger.debug("SSH tunnel ready, local port: %d", local_port)
 
         return "127.0.0.1", local_port

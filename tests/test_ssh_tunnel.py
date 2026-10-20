@@ -13,6 +13,7 @@ from click.testing import CliRunner
 from pgcli.main import cli, PGCli
 from pgcli.pgexecute import PGExecute
 from pgcli.ssh_tunnel import (
+    SSHTunnelError,
     SSHTunnelManager,
     get_tunnel_manager_from_config,
     _NativeSSHTunnel,
@@ -827,16 +828,18 @@ class TestProxyJump:
         mock_proxy.assert_not_called()
         assert "sock" not in mock_native_tunnel["client"].connect.call_args[1]
 
-    def test_unresolvable_host_error_names_host_and_missing_proxy(self, mock_native_tunnel, capsys):
+    def test_unresolvable_host_error_names_host_and_missing_proxy(self, mock_native_tunnel):
         mock_native_tunnel["client"].connect.side_effect = socket.gaierror(-2, "Name or service not known")
-        with pytest.raises(SystemExit):
+        # Raised, not exited: \c and the reconnect must survive a dead bastion.
+        with pytest.raises(SSHTunnelError) as excinfo:
             self._start_tunnel(mock_native_tunnel, {"hostname": "db.internal.example"})
-        err = capsys.readouterr().err
+        err = str(excinfo.value)
+        assert err.startswith("SSH tunnel error: ")
         assert "could not resolve SSH host 'db.internal.example'" in err
         assert "paramiko found no ProxyJump/ProxyCommand" in err
         assert "Name or service not known" in err
 
-    def test_unresolvable_host_error_reports_an_unreadable_config(self, mock_native_tunnel, capsys):
+    def test_unresolvable_host_error_reports_an_unreadable_config(self, mock_native_tunnel):
         mock_native_tunnel["client"].connect.side_effect = socket.gaierror(-2, "Name or service not known")
         mock_ssh_config = MagicMock()
         mock_ssh_config.lookup.side_effect = Exception("Unparsable line 7")
@@ -846,10 +849,10 @@ class TestProxyJump:
             patch("pgcli.ssh_tunnel.os.path.isfile", side_effect=lambda p: p == "~/.ssh/config"),
             patch("pgcli.ssh_tunnel.paramiko.SSHConfig", return_value=mock_ssh_config),
             patch("builtins.open", mock_open(read_data="")),
-            pytest.raises(SystemExit),
+            pytest.raises(SSHTunnelError) as excinfo,
         ):
             manager.start_tunnel(host="db.internal", port=5432)
-        err = capsys.readouterr().err
+        err = str(excinfo.value)
         assert "could not resolve SSH host 'dbalias'" in err
         assert "could not be read: Unparsable line 7" in err
 

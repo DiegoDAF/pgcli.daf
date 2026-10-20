@@ -14,7 +14,7 @@ from psycopg import OperationalError
 
 from pgcli.main import PGCli
 from pgcli.pgexecute import PGExecute
-from pgcli.ssh_tunnel import _NativeSSHTunnel
+from pgcli.ssh_tunnel import SSHTunnelError, _NativeSSHTunnel
 from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER, dbtest
 
 
@@ -199,3 +199,49 @@ def test_reset_endpoint_keeps_a_dsn_connection_copyable():
     with clone.conn.cursor() as cur:
         cur.execute("select 1")
         assert cur.fetchone()[0] == 1
+
+
+def test_a_failed_tunnel_on_c_keeps_the_session(cli, capsys):
+    # start_tunnel() used to sys.exit(1) on failure. Fine at startup, fatal
+    # once \c opened tunnels too: SystemExit sailed through change_db and the
+    # REPL died with the session.
+    old = cli._tunnel_manager.tunnel
+    cli._tunnel_manager.start_tunnel.side_effect = SSHTunnelError("Unable to connect to port 22 on bastion")
+    list(cli.change_db("postgres postgres other.internal 5432"))
+
+    captured = capsys.readouterr()
+    assert "SSH tunnel error: Unable to connect to port 22 on bastion" in captured.err
+    assert "Previous connection kept" in captured.out
+    cli.pgexecute.connect.assert_not_called()
+    assert cli._tunnel_manager.tunnel is old
+    assert cli._target == ("workforce.internal", 5432)
+
+
+def test_a_failed_tunnel_on_reconnect_is_reported_and_tried_again_later(cli, capsys):
+    old = cli._tunnel_manager.tunnel
+    old.is_active = False
+    cli._tunnel_manager.start_tunnel.side_effect = SSHTunnelError("bastion down")
+    cli.auto_retry_closed_connection = False
+    cli._handle_server_closed_connection("select 1")
+
+    captured = capsys.readouterr()
+    assert "Reconnect Failed" in captured.out
+    assert "SSH tunnel error: bastion down" in captured.err
+    cli.pgexecute.connect.assert_not_called()
+    # The dead tunnel stays registered: the next reconnect tries the bastion
+    # again instead of dialing the dead local port for good.
+    assert cli._tunnel_manager.tunnel is old
+
+    cli._tunnel_manager.start_tunnel.side_effect = _tunnel_to(cli._tunnel_manager, 50003)
+    with patch("pgcli.main.confirm", return_value=False):
+        cli._handle_server_closed_connection("select 1")
+    assert cli.pgexecute.connect.call_args.kwargs == {"port": 50003}
+
+
+def test_a_failed_tunnel_at_startup_still_exits(tmpdir, capsys):
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    with patch.object(cli._tunnel_manager, "start_tunnel", side_effect=SSHTunnelError("no route to bastion")):
+        with pytest.raises(SystemExit) as e:
+            cli.connect(database="db", host="db.internal", user="me", port=5432)
+    assert e.value.code == 1
+    assert "SSH tunnel error: no route to bastion" in capsys.readouterr().err
