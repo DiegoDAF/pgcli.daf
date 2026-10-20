@@ -229,12 +229,17 @@ def build_tunneled_args(
     original_args: List[str],
     tunnel_host: str,
     tunnel_port: int,
-    original_host: str,
-    original_port: int,
+    original_host: Optional[str],
+    original_port: Optional[int],
     has_host: bool,
     has_port: bool,
 ) -> List[str]:
-    """Rewrite the connection arguments to point at the local end of the tunnel."""
+    """Rewrite the connection arguments to point at the local end of the tunnel.
+
+    ``original_host`` and ``original_port`` are kept for the callers that
+    pass them; the rewrite itself only needs to know whether the arguments
+    named a host and a port.
+    """
     new_args: List[str] = []
     # A rewritten connection string pins both host and port on its own, so the
     # trailing -h/-p would be redundant at best and contradictory at worst.

@@ -241,7 +241,8 @@ class TestSSHTunnelBehavior:
     @patch("pgcli.isready.get_config")
     @patch("pgcli.isready.get_tunnel_manager_from_config")
     def test_tunnel_with_dsn_option(self, mock_tunnel_mgr, mock_config, mock_run):
-        mock_config.return_value = {}
+        # The alias is the server to check, as with pgcli --dsn; -h overrides its host.
+        mock_config.return_value = {"alias_dsn": {"production": "postgresql://app@db.other:5432/appdb"}}
         mock_run.return_value = MagicMock(returncode=0)
         mock_manager = MagicMock()
         mock_manager.start_tunnel.return_value = ("127.0.0.1", 12345)
@@ -251,6 +252,47 @@ class TestSSHTunnelBehavior:
         runner.invoke(cli, ["--dsn", "production", "-h", "db.internal"])
 
         mock_manager.start_tunnel.assert_called_once_with(host="db.internal", port=5432, dsn_alias="production")
+
+    @patch("pgcli.isready.subprocess.run")
+    @patch("pgcli.isready.get_config")
+    @patch("pgcli.isready.get_tunnel_manager_from_config")
+    def test_the_dsn_alias_is_the_server_to_check(self, mock_tunnel_mgr, mock_config, mock_run):
+        # --dsn only picked the tunnel: with nothing else on the line, pg_isready
+        # checked localhost:5432 (the dump wrappers had the same gap, M8).
+        mock_config.return_value = {"alias_dsn": {"production": "postgresql://app:s3cret@db.internal:5433/appdb?sslmode=require"}}
+        mock_run.return_value = MagicMock(returncode=0)
+        mock_manager = MagicMock()
+        mock_manager.start_tunnel.return_value = ("db.internal", 5433)
+        mock_tunnel_mgr.return_value = mock_manager
+
+        result = CliRunner().invoke(cli, ["--dsn", "production"])
+
+        assert result.exit_code == 0, result.output
+        mock_manager.start_tunnel.assert_called_once_with(host="db.internal", port=5433, dsn_alias="production")
+        cmd = mock_run.call_args[0][0]
+        assert cmd[1] == "-d"
+        assert "host=db.internal" in cmd[2] and "port=5433" in cmd[2] and "sslmode=require" in cmd[2]
+        assert "s3cret" not in " ".join(cmd)  # pg_isready never authenticates
+
+    @patch("pgcli.isready.subprocess.run")
+    @patch("pgcli.isready.get_config")
+    @patch("pgcli.isready.get_tunnel_manager_from_config")
+    def test_an_unknown_dsn_alias_is_one_line(self, mock_tunnel_mgr, mock_config, mock_run):
+        mock_config.return_value = {}
+        result = CliRunner().invoke(cli, ["--dsn", "nope"])
+        assert result.exit_code == 1
+        assert "Could not find a DSN with alias nope" in result.output
+        mock_run.assert_not_called()
+
+    @patch("pgcli.isready.subprocess.run")
+    @patch("pgcli.isready.get_config")
+    def test_a_port_that_is_not_a_number_is_one_line(self, mock_config, mock_run):
+        # int(args[i + 1]) used to be a traceback.
+        mock_config.return_value = {}
+        result = CliRunner().invoke(cli, ["-p", "abc"])
+        assert result.exit_code == 1
+        assert "not a valid port number" in result.output
+        mock_run.assert_not_called()
 
 
 class TestVerboseMode:

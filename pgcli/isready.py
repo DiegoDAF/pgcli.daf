@@ -14,6 +14,9 @@ from typing import List, Optional
 import click
 
 from .config import get_config
+from .dsnaliases import DsnAliases
+from .dump_args import apply_dsn_alias, parse_connection_args  # noqa: F401  re-exported, the tests import it from here
+from .dump_args import build_tunneled_args as _build_tunneled_args
 from .ssh_tunnel import SSHTunnelError, get_tunnel_manager_from_config
 
 
@@ -57,57 +60,6 @@ def find_pg_isready() -> str:
     return "pg_isready"
 
 
-def parse_connection_args(args: List[str]) -> tuple:
-    """
-    Parse connection-related arguments from the command line.
-
-    Returns:
-        Tuple of (host, port, remaining_args, has_host, has_port)
-    """
-    host = os.environ.get("PGHOST", "localhost")
-    port = int(os.environ.get("PGPORT", 5432))
-    remaining_args = []
-    has_host = False
-    has_port = False
-
-    i = 0
-    while i < len(args):
-        arg = args[i]
-
-        if arg in ("-h", "--host"):
-            if i + 1 < len(args):
-                host = args[i + 1]
-                has_host = True
-                remaining_args.extend([arg, args[i + 1]])
-                i += 2
-                continue
-        elif arg.startswith("--host="):
-            host = arg.split("=", 1)[1]
-            has_host = True
-            remaining_args.append(arg)
-            i += 1
-            continue
-
-        if arg in ("-p", "--port"):
-            if i + 1 < len(args):
-                port = int(args[i + 1])
-                has_port = True
-                remaining_args.extend([arg, args[i + 1]])
-                i += 2
-                continue
-        elif arg.startswith("--port="):
-            port = int(arg.split("=", 1)[1])
-            has_port = True
-            remaining_args.append(arg)
-            i += 1
-            continue
-
-        remaining_args.append(arg)
-        i += 1
-
-    return host, port, remaining_args, has_host, has_port
-
-
 def build_tunneled_args(
     original_args: List[str],
     tunnel_host: str,
@@ -115,40 +67,13 @@ def build_tunneled_args(
     has_host: bool,
     has_port: bool,
 ) -> List[str]:
-    """Build new argument list with tunneled connection parameters."""
-    new_args = []
-    i = 0
+    """Rewrite the connection arguments to point at the local end of the tunnel.
 
-    while i < len(original_args):
-        arg = original_args[i]
-
-        if arg in ("-h", "--host"):
-            new_args.extend(["-h", tunnel_host])
-            i += 2
-            continue
-        elif arg.startswith("--host="):
-            new_args.append(f"--host={tunnel_host}")
-            i += 1
-            continue
-
-        if arg in ("-p", "--port"):
-            new_args.extend(["-p", str(tunnel_port)])
-            i += 2
-            continue
-        elif arg.startswith("--port="):
-            new_args.append(f"--port={tunnel_port}")
-            i += 1
-            continue
-
-        new_args.append(arg)
-        i += 1
-
-    if not has_host:
-        new_args.extend(["-h", tunnel_host])
-    if not has_port:
-        new_args.extend(["-p", str(tunnel_port)])
-
-    return new_args
+    The same rewrite as the dump wrappers' (pg_isready takes the same -h, -p
+    and -d, connection strings included); this keeps the signature the
+    wrapper has always had.
+    """
+    return _build_tunneled_args(original_args, tunnel_host, tunnel_port, None, None, has_host, has_port)
 
 
 @click.command(
@@ -168,7 +93,7 @@ def build_tunneled_args(
     "--dsn",
     "dsn_alias",
     default=None,
-    help="DSN alias from pgcli config (for SSH tunnel lookup).",
+    help="DSN alias from pgcli config: the server to check, as with pgcli --dsn (it also picks the SSH tunnel).",
 )
 @click.option(
     "-v",
@@ -194,7 +119,7 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         # Explicit SSH tunnel
         pgcli_isready --ssh-tunnel user@bastion -h mydb.internal
 
-        # Use DSN alias for tunnel lookup
+        # The DSN alias is the server to check, as with pgcli --dsn
         pgcli_isready --dsn production
 
         # With timeout
@@ -210,7 +135,21 @@ def cli(ctx, ssh_tunnel: Optional[str], dsn_alias: Optional[str], verbose: bool)
         logger.warning("Could not load pgcli config: %s", e)
         config = {}
 
-    host, port, remaining_args, has_host, has_port = parse_connection_args(pg_isready_args)
+    # --dsn names the server itself, like pgcli --dsn. pg_isready never
+    # authenticates, so the alias's password is simply dropped. Bad
+    # arguments (a port that is not a number) are one line, not a traceback.
+    try:
+        if dsn_alias:
+            conninfo = DsnAliases.from_config(config).get(dsn_alias)
+            if conninfo is None:
+                raise ValueError(
+                    f"Could not find a DSN with alias {dsn_alias}. Please check the \"[alias_dsn]\" section in pgclirc or dsn.d/ directory."
+                )
+            pg_isready_args, _ = apply_dsn_alias(pg_isready_args, conninfo)
+        host, port, remaining_args, has_host, has_port = parse_connection_args(pg_isready_args)
+    except ValueError as e:
+        click.secho(f"Error: {e}", err=True, fg="red")
+        sys.exit(1)
     logger.debug("Parsed connection: host=%s, port=%d", host, port)
 
     tunnel_manager = get_tunnel_manager_from_config(
