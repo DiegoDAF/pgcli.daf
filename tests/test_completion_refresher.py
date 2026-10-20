@@ -318,9 +318,9 @@ class TestBackgroundRefresh:
         assert calls == ["first", "first", "second"]
         assert not refresher._restart_refresh.is_set()
 
-    def test_a_failing_refresher_is_logged_and_the_copy_is_closed(self, refresher, caplog):
-        # The thread used to die silently: no completer swap, the previous
-        # completions kept, and the connection made by copy() left open.
+    def test_a_failing_refresher_is_logged_and_the_copy_is_closed(self, refresher, caplog, capsys):
+        # Python dumped the whole traceback on the terminal and the connection
+        # made by copy() stayed open; the completer in use is kept either way.
         from collections import OrderedDict
 
         callback = Mock()
@@ -331,3 +331,6 @@ class TestBackgroundRefresh:
         executor.copy.return_value.conn.close.assert_called_once()
         assert "Completion refresh failed" in caplog.text
         assert "relation vanished" in caplog.text
+        err = capsys.readouterr().err
+        assert "Completion refresh failed" in err and "relation vanished" in err
+        assert "Traceback" not in err

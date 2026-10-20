@@ -84,9 +84,11 @@ Bug fixes:
   is reported and skipped instead of being an uncaught ``re.error`` at every
   connection.
 
-* A failure inside the background completion refresh is logged, and the extra
-  connection it opened is closed. The thread used to die silently, leaving the
-  previous completions in place with nothing to say why.
+* A failure inside the background completion refresh is one line on the
+  terminal, with the traceback in the log, and the extra connection it opened
+  is closed. Python used to dump the whole traceback over the prompt and leave
+  that connection open until exit; the previous completions stay in use either
+  way.
 
 * ``pgcli_isready`` reads the connection the way the dump wrappers do:
   ``--dsn ALIAS`` is the server to check (it only picked the tunnel and then

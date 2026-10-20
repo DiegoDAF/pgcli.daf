@@ -1,4 +1,5 @@
 import logging
+import sys
 import threading
 import os
 from collections import OrderedDict
@@ -89,10 +90,12 @@ class CompletionRefresher:
 
             for callback in callbacks:
                 callback(completer)
-        except Exception:
-            # A thread dies silently. Say what happened; the completer in use
-            # stays as it is, and the connection below is closed either way.
+        except Exception as e:
+            # Python would dump the whole traceback on the terminal and the
+            # connection below stayed open. One line for the user, the
+            # traceback for the log; the completer in use stays as it is.
             _logger.exception("Completion refresh failed, keeping the previous completions")
+            sys.stderr.write(f"Completion refresh failed, keeping the previous completions: {e} (details in the log)\n")
         finally:
             if executor is not None and not single_connection and executor.conn:
                 # close connection established with pgexecute.copy()
