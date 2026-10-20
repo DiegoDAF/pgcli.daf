@@ -245,3 +245,10 @@ def test_a_failed_tunnel_at_startup_still_exits(tmpdir, capsys):
             cli.connect(database="db", host="db.internal", user="me", port=5432)
     assert e.value.code == 1
     assert "SSH tunnel error: no route to bastion" in capsys.readouterr().err
+
+
+def test_c_strips_the_quotes_of_a_quoted_name(cli):
+    # The strip was computed and thrown away, so \c "my db" asked for '"my db"'.
+    list(cli.change_db('"my db" "some user"'))
+    kwargs = cli.pgexecute.connect.call_args.kwargs
+    assert (kwargs["database"], kwargs["user"]) == ("my db", "some user")

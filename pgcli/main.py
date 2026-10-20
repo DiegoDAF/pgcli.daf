@@ -667,7 +667,7 @@ class PGCli:
         else:
             self.verbose_errors = not self.verbose_errors
 
-        message = "Verbose errors " + "on." if self.verbose_errors else "off."
+        message = "Verbose errors %s." % ("on" if self.verbose_errors else "off")
         return [(None, None, None, message)]
 
     def echo(self, pattern, **_):
@@ -830,7 +830,7 @@ class PGCli:
             # Get all the parameters in pattern, handling double quotes if any.
             infos = re.findall(r'"[^"]*"|[^"\'\s]+', pattern)
             # Now removing quotes.
-            [s.strip('"') for s in infos]
+            infos = [s.strip('"') for s in infos]
 
             infos.extend([None] * (4 - len(infos)))
             db, user, host, port = infos

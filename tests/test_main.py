@@ -2715,6 +2715,13 @@ def test_no_status_still_shows_errors(executor):
     assert any('column "nope" does not exist' in line for line in output)
 
 
+def test_verbose_errors_off_says_so(tmpdir):
+    # Precedence: '"Verbose errors " + "on." if flag else "off."' printed just "off.".
+    cli = PGCli(pgclirc_file=str(tmpdir.join("rcfile")))
+    assert cli.toggle_verbose_errors("on")[0][3] == "Verbose errors on."
+    assert cli.toggle_verbose_errors("off")[0][3] == "Verbose errors off."
+
+
 def test_format_output_keeps_the_error_of_a_failed_statement():
     settings = OutputSettings(table_format="psql", show_status=False)
     assert list(format_output(None, None, None, "boom", settings, failed=True)) == ["boom"]
