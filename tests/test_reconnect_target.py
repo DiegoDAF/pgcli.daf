@@ -122,13 +122,45 @@ def test_tunnel_is_inactive_once_its_ssh_transport_died():
     assert not tunnel.is_active
 
 
+@pytest.mark.parametrize(
+    "previous",
+    [
+        {
+            "dbname": "postgres",
+            "user": "postgres",
+            "password": "old-secret",
+            "host": "workforce.internal",
+            "hostaddr": "127.0.0.1",
+            "port": 50001,
+        },
+        {"dsn": "host=workforce.internal hostaddr=127.0.0.1 port=50001 dbname=postgres user=postgres password=old-secret"},
+    ],
+    ids=["params", "dsn"],
+)
+def test_reset_endpoint_does_not_carry_the_old_password_over(previous):
+    # Like psql, the password is reused only while host, port and user stay
+    # the same; another server gets its own from .pgpass or the prompt.
+    from psycopg.conninfo import conninfo_to_dict
+
+    executor = PGExecute.__new__(PGExecute)
+    executor._conn_params = previous
+    with patch("pgcli.pgexecute.psycopg.connect", side_effect=OperationalError("stop here")) as connect:
+        with pytest.raises(OperationalError):
+            executor.connect(host="other.internal", port=5432, reset_endpoint=True)
+
+    params = conninfo_to_dict(connect.call_args.args[0])
+    assert "password" not in params and "hostaddr" not in params
+    assert (params["host"], params["port"]) == ("other.internal", "5432")
+
+
 @dbtest
 def test_reset_endpoint_drops_the_previous_server():
     # The first connection goes through hostaddr, the way a tunnel's does; the
     # host name itself does not even resolve.
     server_ip = socket.gethostbyname(POSTGRES_HOST)
     executor = PGExecute("postgres", POSTGRES_USER, POSTGRES_PASSWORD, "db.example.invalid", POSTGRES_PORT, None, hostaddr=server_ip)
-    executor.connect(host=POSTGRES_HOST, port=POSTGRES_PORT, reset_endpoint=True)
+    # The previous password is dropped with the endpoint; \c brings the new one.
+    executor.connect(host=POSTGRES_HOST, port=POSTGRES_PORT, password=POSTGRES_PASSWORD, reset_endpoint=True)
     assert "hostaddr" not in executor._conn_params
     assert executor._conn_params["host"] == POSTGRES_HOST
     with executor.conn.cursor() as cur:
@@ -159,7 +191,7 @@ def test_reset_endpoint_keeps_a_dsn_connection_copyable():
     server_ip = socket.gethostbyname(POSTGRES_HOST)
     dsn = make_conninfo(host="db.example.invalid", hostaddr=server_ip, port=POSTGRES_PORT, dbname="postgres", user=POSTGRES_USER)
     executor = PGExecute(dsn=dsn, password=POSTGRES_PASSWORD)
-    executor.connect(host=POSTGRES_HOST, port=POSTGRES_PORT, hostaddr=server_ip, reset_endpoint=True)
+    executor.connect(host=POSTGRES_HOST, port=POSTGRES_PORT, hostaddr=server_ip, password=POSTGRES_PASSWORD, reset_endpoint=True)
 
     clone = executor.copy()
     params = conninfo_to_dict(clone._conn_params["dsn"])
