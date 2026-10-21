@@ -219,6 +219,12 @@ vi = False
 # connection after a few minutes).
 connect_timeout = 30
 
+# Text from a SQL_ASCII database (or any connection whose client_encoding is
+# SQL_ASCII) arrives as raw bytes, because the server validates nothing. pgcli
+# decodes them as UTF-8 and, when that fails, with this encoding; psql prints
+# the bytes as they are. Any Python codec name works: latin-1, cp1252, euc-jp...
+sql_ascii_fallback_encoding = latin-1
+
 # Error handling
 # When one of multiple SQL statements causes an error, choose to either
 # continue executing the remaining statements, or stopping

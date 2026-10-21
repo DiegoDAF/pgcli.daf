@@ -11,6 +11,10 @@ Features:
 Bug fixes:
 ----------
 
+* Text from a SQL_ASCII connection no longer comes out as hex (``0x63616fe9``)
+  or as ``[b'\xe9']``: the server validates nothing there, so psycopg returns
+  raw bytes, which pgcli now decodes as UTF-8 and, when that fails, with the
+  new ``sql_ascii_fallback_encoding`` config option (``latin-1`` by default).
 * ``--auto-vertical-output``, ``\x auto`` and ``auto_expand`` in the config work
   in ``-c``/``-f`` mode. The terminal width was read from the prompt, which
   those modes never build, so every statement failed with ``'NoneType' object

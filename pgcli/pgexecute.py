@@ -80,6 +80,34 @@ def _decode_row(row):
     return [[_decode_if_bytes(item) for item in value] if isinstance(value, list) else _decode_if_bytes(value) for value in row]
 
 
+def sql_ascii_rows(fallback_encoding):
+    """psycopg row factory for SQL_ASCII connections.
+
+    With client_encoding SQL_ASCII the server validates nothing, so psycopg
+    hands text back as raw bytes. Rows come out with every such value decoded:
+    as UTF-8 when the bytes are valid UTF-8, with ``fallback_encoding``
+    otherwise (array elements included). Any other connection gets the plain
+    tuples psycopg builds by default.
+    """
+
+    def decode(value):
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except UnicodeDecodeError:
+                return value.decode(fallback_encoding, "replace")
+        if isinstance(value, list):
+            return [decode(item) for item in value]
+        return value
+
+    def factory(cursor):
+        if cursor.description is None or cursor.connection.info.encoding != "ascii":
+            return tuple
+        return lambda values: tuple(decode(value) for value in values)
+
+    return factory
+
+
 def split_meta_command(sql):
     """Cut a backslash command at its newline, the way psql does.
 
@@ -232,10 +260,13 @@ class PGExecute:
         port=None,
         dsn=None,
         notify_callback=None,
+        sql_ascii_fallback_encoding="latin-1",
         **kwargs,
     ):
         self._conn_params = {}
         self._is_virtual_database = None
+        # For text a SQL_ASCII connection returns as bytes; see sql_ascii_rows().
+        self.sql_ascii_fallback_encoding = sql_ascii_fallback_encoding
         self.conn: Optional[psycopg.Connection[Any]] = None
         self.dbname: Optional[str] = None
         self.user: Optional[str] = None
@@ -270,7 +301,10 @@ class PGExecute:
         (database, or the server and an SSH tunnel's endpoint): connect() keeps
         only the DSN when given one.
         """
-        return self.__class__(dsn=self._conninfo(self._conn_params))
+        return self.__class__(
+            dsn=self._conninfo(self._conn_params),
+            sql_ascii_fallback_encoding=self.sql_ascii_fallback_encoding,
+        )
 
     @staticmethod
     def _conninfo(conn_params):
@@ -331,6 +365,7 @@ class PGExecute:
 
         conn = psycopg.connect(self._conninfo(conn_params))
         conn.cursor_factory = ProtocolSafeCursor
+        conn.row_factory = sql_ascii_rows(self.sql_ascii_fallback_encoding)
 
         self._conn_params = conn_params
         if self.conn:

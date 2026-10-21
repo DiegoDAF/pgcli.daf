@@ -1157,3 +1157,109 @@ def test_full_databases_lists_each_database_size(executor):
     sizes = {row[0]: row[-1] for row in rows}
     assert sizes["template0"] == expected
     assert all(re.fullmatch(r"\d+ (bytes|kB|MB|GB|TB|PB)", size) for size in sizes.values()), sizes
+
+
+# A SQL_ASCII database validates nothing, so psycopg hands its text back as raw
+# bytes. The fixture needs a database of its own; the connection is closed and
+# the database dropped at the end.
+
+
+def _rows(executor, sql):
+    # ProtocolSafeCursor.execute() returns None, so conn.execute() cannot be chained.
+    with executor.conn.cursor() as cur:
+        cur.execute(sql)
+        return cur.fetchall()
+
+
+@pytest.fixture
+def sql_ascii_executor():
+    from pgcli.pgexecute import PGExecute
+    from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER, db_connection
+
+    name = "_test_sql_ascii"
+    with db_connection().cursor() as cur:
+        cur.execute(f"drop database if exists {name}")
+        cur.execute(f"create database {name} encoding 'SQL_ASCII' template template0 lc_collate 'C' lc_ctype 'C'")
+    executor = PGExecute(database=name, user=POSTGRES_USER, host=POSTGRES_HOST, password=POSTGRES_PASSWORD, port=POSTGRES_PORT, dsn=None)
+    run(executor, "create table t(id int, name text, tags text[], blob bytea)")
+    # 63616fe9 is "caoé" in latin-1 and not valid UTF-8; 636166c3a9 is "café" in UTF-8.
+    run(
+        executor,
+        "insert into t values"
+        " (1, convert_from(decode('63616fe9', 'hex'), 'SQL_ASCII'),"
+        "     array[convert_from(decode('e9', 'hex'), 'SQL_ASCII')], decode('e9', 'hex')),"
+        " (2, convert_from(decode('636166c3a9', 'hex'), 'SQL_ASCII'), null, null)",
+    )
+    yield executor
+    executor.conn.close()
+    with db_connection().cursor() as cur:
+        cur.execute(f"drop database {name}")
+
+
+@dbtest
+def test_sql_ascii_text_decodes_utf8_first_then_the_fallback(sql_ascii_executor):
+    assert sql_ascii_executor.conn.info.encoding == "ascii"  # what psycopg returns bytes for
+    rows = _rows(sql_ascii_executor, "select id, name, tags, current_database() from t order by 1")
+    assert rows == [(1, "caoé", ["é"], "_test_sql_ascii"), (2, "café", None, "_test_sql_ascii")]
+
+
+@dbtest
+def test_sql_ascii_bytea_reads_like_in_a_utf8_database(sql_ascii_executor, executor):
+    # bytea is text-loaded (register_typecasters), so its hex form is plain ASCII.
+    [(blob,)] = _rows(sql_ascii_executor, "select blob from t where id = 1")
+    assert blob == _rows(executor, "select '\\xe9'::bytea")[0][0] == "\\xe9"
+
+
+@dbtest
+def test_sql_ascii_output_shows_text_not_bytes(sql_ascii_executor):
+    output = run(sql_ascii_executor, "select id, name, tags, blob from t order by 1", join=True)
+    assert "caoé" in output and "café" in output and "{é}" in output and "\\xe9" in output
+    assert "b'" not in output and "0x63616fe9" not in output
+
+
+@dbtest
+def test_sql_ascii_fallback_encoding_is_configurable(sql_ascii_executor):
+    from pgcli.pgexecute import PGExecute
+
+    e = sql_ascii_executor
+    cp1252 = PGExecute(
+        database=e.dbname, user=e.user, host=e.host, password=e.password, port=e.port, dsn=None, sql_ascii_fallback_encoding="cp1252"
+    )
+    try:
+        # 0x80 is the euro sign in cp1252 and a control character in latin-1.
+        run(cp1252, "insert into t values (3, convert_from(decode('80', 'hex'), 'SQL_ASCII'), null, null)")
+        assert _rows(cp1252, "select name from t where id = 3") == [("€",)]
+        assert _rows(e, "select name from t where id = 3") == [("\x80",)]
+    finally:
+        cp1252.conn.close()
+
+
+@dbtest
+def test_sql_ascii_copy_keeps_the_fallback_encoding(sql_ascii_executor):
+    sql_ascii_executor.sql_ascii_fallback_encoding = "cp1252"
+    clone = sql_ascii_executor.copy()
+    try:
+        assert clone.sql_ascii_fallback_encoding == "cp1252"
+        assert _rows(clone, "select convert_from(decode('80', 'hex'), 'SQL_ASCII')") == [("€",)]
+    finally:
+        clone.conn.close()
+
+
+def test_sql_ascii_rows_leaves_other_connections_to_psycopg():
+    from pgcli.pgexecute import sql_ascii_rows
+
+    cursor = MagicMock()
+    cursor.connection.info.encoding = "utf-8"
+    assert sql_ascii_rows("latin-1")(cursor) is tuple  # psycopg's own default row maker
+    cursor.connection.info.encoding = "ascii"
+    cursor.description = None
+    assert sql_ascii_rows("latin-1")(cursor) is tuple
+
+
+def test_sql_ascii_rows_decodes_nested_lists():
+    from pgcli.pgexecute import sql_ascii_rows
+
+    cursor = MagicMock()
+    cursor.connection.info.encoding = "ascii"
+    make_row = sql_ascii_rows("latin-1")(cursor)
+    assert make_row((b"caf\xc3\xa9", [b"\xe9", [b"x"]], None, 3)) == ("café", ["é", ["x"]], None, 3)

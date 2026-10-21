@@ -1,5 +1,6 @@
 from zoneinfo import ZoneInfoNotFoundError
 from configobj import ParseError
+import codecs
 import configparser
 from configparser import ConfigParser
 from pgspecial.namedqueries import NamedQueries
@@ -357,6 +358,18 @@ class PGCli:
         # connection (minutes), so we ship a saner one.
         self.connect_timeout = connect_timeout
         self.default_connect_timeout = c["main"].as_int("connect_timeout")
+        # Text from a SQL_ASCII connection arrives as raw bytes: UTF-8 is tried
+        # first, then this encoding (see sql_ascii_rows in pgexecute.py).
+        self.sql_ascii_fallback_encoding = c["main"].get("sql_ascii_fallback_encoding", "latin-1")
+        try:
+            codecs.lookup(self.sql_ascii_fallback_encoding)
+        except LookupError:
+            click.secho(
+                f'Unknown sql_ascii_fallback_encoding "{self.sql_ascii_fallback_encoding}" in the config, using latin-1.',
+                err=True,
+                fg="yellow",
+            )
+            self.sql_ascii_fallback_encoding = "latin-1"
         self.decimal_format = c["data_formats"]["decimal"]
         self.float_format = c["data_formats"]["float"]
         self.column_date_formats = c["column_date_formats"]
@@ -1336,6 +1349,7 @@ class PGCli:
                     port,
                     dsn,
                     notify_callback,
+                    sql_ascii_fallback_encoding=self.sql_ascii_fallback_encoding,
                     **kwargs,
                 )
             except (OperationalError, InterfaceError) as e:

@@ -359,6 +359,28 @@ def test_pset_pager_on(term_height, term_width, text, use_pager, pset_pager_mock
         mock_echo.assert_called()
 
 
+def test_unknown_sql_ascii_fallback_encoding_falls_back_to_latin1(tmpdir, capsys):
+    rcfile = tmpdir.join("rcfile")
+    rcfile.write("[main]\nsql_ascii_fallback_encoding = no-such-codec\n")
+    cli = PGCli(pgclirc_file=str(rcfile))
+    assert cli.sql_ascii_fallback_encoding == "latin-1"
+    assert "no-such-codec" in capsys.readouterr().err
+
+
+@dbtest
+def test_sql_ascii_fallback_encoding_reaches_the_executor(tmpdir, executor):
+    from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER
+
+    rcfile = tmpdir.join("rcfile")
+    rcfile.write("[main]\nsql_ascii_fallback_encoding = cp1252\n")
+    cli = PGCli(pgclirc_file=str(rcfile))
+    cli.connect(database="_test_db", host=POSTGRES_HOST, user=POSTGRES_USER, port=POSTGRES_PORT, passwd=POSTGRES_PASSWORD)
+    try:
+        assert cli.pgexecute.sql_ascii_fallback_encoding == "cp1252"
+    finally:
+        cli.pgexecute.conn.close()
+
+
 def _fake_two_statement_run():
     """Mimic pgexecute.run() yielding one result per statement."""
     yield (None, [("2024",)], ["now"], "SELECT 1", "select now()", True, False)
@@ -1494,6 +1516,7 @@ def test_pg_service_file(tmpdir):
         "5435",
         "",
         notify_callback,
+        sql_ascii_fallback_encoding="latin-1",
         application_name="pgcli",
         connect_timeout="30",
     )
@@ -1609,7 +1632,18 @@ def test_application_name_db_uri(tmpdir, monkeypatch):
         uri = "postgres://bar@baz.com/?application_name=cow"
         cli.connect_uri(uri)
     # connect_uri now passes the URI as dsn
-    mock_pgexecute.assert_called_with("bar", "bar", "", "baz.com", "", uri, notify_callback, application_name="cow", connect_timeout="30")
+    mock_pgexecute.assert_called_with(
+        "bar",
+        "bar",
+        "",
+        "baz.com",
+        "",
+        uri,
+        notify_callback,
+        sql_ascii_fallback_encoding="latin-1",
+        application_name="cow",
+        connect_timeout="30",
+    )
 
 
 def test_jdbc_uri_error(tmpdir):
