@@ -486,3 +486,29 @@ def test_the_filter_count_is_shown_when_the_plan_has_it():
         "Execution Time": 1.0,
     }
     assert "filter (k = 3) [-1,234 rows]" in _render(plan)
+
+
+def test_a_cte_scan_child_is_not_subtracted_from_its_parent():
+    # pev's rule: the CTE's work is counted under the CTE's own node, so a
+    # parent keeps its full time when its child is a CTE Scan. The port
+    # compared against "CTEScan" and the exclusion never applied.
+    def plan_with(child_type):
+        return {
+            "Plan": {
+                "Node Type": "Aggregate",
+                "Actual Total Time": 10.0,
+                "Actual Loops": 1,
+                "Total Cost": 10,
+                "Plan Rows": 1,
+                "Actual Rows": 1,
+                "Plans": [_leaf(child_type, **{"Actual Total Time": 8.0, "Total Cost": 8})],
+            },
+            "Planning Time": 0.1,
+            "Execution Time": 10.0,
+        }
+
+    v = Visualizer(100, color=False)
+    v.load(plan_with("CTE Scan"))
+    assert v.plan["Actual Duration"] == 10.0
+    v.load(plan_with("Seq Scan"))
+    assert v.plan["Actual Duration"] == 2.0

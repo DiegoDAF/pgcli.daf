@@ -108,6 +108,11 @@ Bug fixes:
   with a message about tunnels, while the key=value form was quietly rewritten
   to one host with the tunnel pointed at ``a,b``.
 
+* The EXPLAIN visualizer's exclusive time of a node above a ``CTE Scan`` no
+  longer subtracts the scan's time, as pev meant: the port compared the node
+  type against ``CTEScan``, so the exclusion never applied and the parent of a
+  CTE scan showed less time than it spent.
+
 * The debug log keeps one handler per process. Every ``PGCli()`` added a
   handler to the ``pgcli`` logger and never removed the previous one, so a
   reconfiguration wrote each record twice, and the test suite, which builds

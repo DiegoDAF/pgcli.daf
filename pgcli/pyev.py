@@ -302,7 +302,10 @@ class Visualizer:
         plan["Actual Cost"] = plan["Total Cost"]
 
         for child in plan.get("Plans", []):
-            if child["Node Type"] != "CTEScan":
+            # pev leaves a CTE Scan's time in its parent: the CTE's work is
+            # already counted under the CTE's own node. The port spelled it
+            # "CTEScan", so the exclusion never matched a real plan.
+            if child["Node Type"] != "CTE Scan":
                 plan["Actual Duration"] = plan["Actual Duration"] - child.get("Actual Total Time", 0)
                 plan["Actual Cost"] = plan["Actual Cost"] - child.get("Total Cost", 0)
 
