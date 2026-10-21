@@ -81,6 +81,18 @@ jobs:
 
             psql -h localhost -U postgres -p 6432 pgbouncer -c 'show help'
 
+      - name: Install the PostgreSQL ${{ matrix.postgres }} client tools
+        # The image ships the 16 client only and drops the PGDG repository after
+        # installing it; pg_dump refuses a newer server ("aborting because of
+        # server version mismatch"), so the dump wrapper scenarios need the
+        # client of this job's server. PATH goes first because /usr/bin/pg_dump
+        # is pg_wrapper, which ignores -h and picks the version of the image's
+        # own 16 cluster on port 5432, not the newest client installed.
+        run: |
+            sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+            sudo apt-get install -y postgresql-client-${{ matrix.postgres }}
+            echo "/usr/lib/postgresql/${{ matrix.postgres }}/bin" >> "$GITHUB_PATH"
+
       - name: Install requirements
         run: uv sync --all-extras -p ${{ matrix.python-version }}
 
