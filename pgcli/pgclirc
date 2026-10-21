@@ -415,6 +415,7 @@ host_key_policy = auto-add
 # ^example.*\.host$ = myuser:mypasswd@my.tunnel.com:4000
 # .*\.net = another.tunnel.com
 
-# Per dsn_alias ssh tunnel configuration
+# Per dsn_alias ssh tunnel configuration. An alias with no entry here still
+# gets a tunnel when its host matches a pattern in [ssh tunnels] above.
 [dsn ssh tunnels]
 # ^example_dsn$  = myuser:mypasswd@my.tunnel.com:4000
