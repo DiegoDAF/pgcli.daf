@@ -23,6 +23,7 @@ def step_list_databases(context):
 def step_see_list_databases(context):
     assert b"List of databases" in context.cmd_output
     assert b"postgres" in context.cmd_output
+    assert b"Size" in context.cmd_output
     context.cmd_output = None
 
 

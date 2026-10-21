@@ -1,6 +1,13 @@
 Upcoming
 ========
 
+Features:
+---------
+
+* ``-l``/``--list`` shows each database's size next to its access privileges,
+  as ``\l+`` does: ``pg_size_pretty(pg_database_size())`` for the databases
+  the user may connect to, ``No Access`` for the others.
+
 Bug fixes:
 ----------
 

@@ -219,6 +219,9 @@ Run commands non-interactively, useful for scripting:
     # Output to file
     $ pgcli -o results.csv -t -c "SELECT * FROM users" mydb
 
+    # List the databases with their sizes (what psql shows with \l+)
+    $ pgcli -l
+
 Named Queries
 ^^^^^^^^^^^^^
 

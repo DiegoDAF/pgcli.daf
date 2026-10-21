@@ -188,7 +188,11 @@ class PGExecute:
             pg_catalog.pg_encoding_to_char(d.encoding) as "Encoding",
             d.datcollate as "Collate",
             d.datctype as "Ctype",
-            pg_catalog.array_to_string(d.datacl, E'\n') AS "Access privileges"
+            pg_catalog.array_to_string(d.datacl, E'\n') AS "Access privileges",
+            CASE WHEN pg_catalog.has_database_privilege(d.datname, 'CONNECT')
+                THEN pg_catalog.pg_size_pretty(pg_catalog.pg_database_size(d.datname))
+                ELSE 'No Access'
+            END AS "Size"
         FROM pg_catalog.pg_database d
         ORDER BY 1"""
 

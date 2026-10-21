@@ -1142,3 +1142,18 @@ def test_run_logs_no_secret_for_a_failed_role_password_statement(executor, caplo
         list(executor.run("alter role no_such_role_zz password 's3cretXYZ' loginn", PGSpecial(), exception_formatter=str))
     assert "Regular sql statement" in caplog.text and "error:" in caplog.text
     assert "s3cretXYZ" not in caplog.text
+
+
+@dbtest
+def test_full_databases_lists_each_database_size(executor):
+    # -l shows the size the way \l+ does; the expected value comes from the
+    # same server. template0 is compared exactly because nothing writes to it
+    # between the two reads; the other sizes only have to look like sizes.
+    rows, headers, status = executor.full_databases()
+    assert headers[-1] == "Size"
+    with executor.conn.cursor() as cur:
+        cur.execute("select pg_catalog.pg_size_pretty(pg_catalog.pg_database_size('template0'))")
+        (expected,) = cur.fetchone()
+    sizes = {row[0]: row[-1] for row in rows}
+    assert sizes["template0"] == expected
+    assert all(re.fullmatch(r"\d+ (bytes|kB|MB|GB|TB|PB)", size) for size in sizes.values()), sizes
