@@ -21,6 +21,10 @@ def before_all(context):
     os.environ["EDITOR"] = "ex"
     os.environ["VISUAL"] = "ex"
     os.environ["PROMPT_TOOLKIT_NO_CPR"] = "1"
+    # The pgcli these steps run is the real one, and the shipped config has
+    # keyring = True: without this, every scenario that connects stores the
+    # test password in the developer's OS keyring.
+    os.environ["PYTHON_KEYRING_BACKEND"] = "keyring.backends.null.Keyring"
 
     context.package_root = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     fixture_dir = os.path.join(context.package_root, "tests/features/fixture_data")
