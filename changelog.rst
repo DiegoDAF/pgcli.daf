@@ -4,6 +4,9 @@ Upcoming
 Features:
 ---------
 
+* Add ``\cd`` and ``\ls`` filesystem commands, with path completion for
+  filesystem-aware commands including ``\e``, ``\i``, ``\log-file``, and ``\o``
+  (upstream #1613).
 * ``-l``/``--list`` shows each database's size next to its access privileges,
   as ``\l+`` does: ``pg_size_pretty(pg_database_size())`` for the databases
   the user may connect to, ``No Access`` for the others.
@@ -11,6 +14,8 @@ Features:
 Bug fixes:
 ----------
 
+* Fix the development setup instructions to activate the ``.venv`` directory
+  created by ``uv venv`` (upstream #1650).
 * The ``float`` format of ``[data_formats]`` applies at last, and the numbers of
   float and numeric columns line up on their decimal point: the formatter was
   left to infer the column types from the values, and cli_helpers files float

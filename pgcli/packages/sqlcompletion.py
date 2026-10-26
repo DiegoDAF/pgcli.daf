@@ -98,7 +98,11 @@ class Alias(NamedTuple):
 
 
 class Path(NamedTuple):
-    pass
+    only_directories: bool = False
+
+
+PATH_COMMANDS = frozenset(("\\e", "\\i", "\\log-file", "\\ls", "\\o"))
+DIRECTORY_COMMANDS = frozenset(("\\cd",))
 
 
 class SqlStatement:
@@ -177,8 +181,13 @@ def suggest_type(full_text, text_before_cursor):
     A scope for a column category will be a list of tables.
     """
 
-    if full_text.startswith("\\i "):
-        return (Path(),)
+    command_text = text_before_cursor.lstrip()
+    command, _, _ = parse_special_command(command_text)
+    if command != command_text:
+        if command in PATH_COMMANDS:
+            return (Path(),)
+        if command in DIRECTORY_COMMANDS:
+            return (Path(only_directories=True),)
 
     # This is a temporary hack; the exception handling
     # here should be removed once sqlparse has been fixed
