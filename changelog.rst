@@ -1,3 +1,13 @@
+Upcoming
+========
+
+Bug fixes:
+----------
+
+* Read ``alias_map_file`` as UTF-8 (with or without a BOM) instead of the
+  locale encoding, which made non-ASCII aliases fail on Windows
+  (upstream #1656, by Wei-Lun Li).
+
 4.7.4 (2026-10-29) - upstream: 4.7.1
 ====================================
 
