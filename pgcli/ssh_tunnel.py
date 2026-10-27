@@ -52,6 +52,40 @@ _SSH_INCLUDE_MAX_DEPTH = 16
 _SYSTEM_SSH_CONFIG = "/etc/ssh/ssh_config"
 
 
+def _split_ssh_arguments(text):
+    """Split an ssh_config argument list the way OpenSSH's argv_split() does.
+
+    Whitespace separates, quotes group, and a backslash escapes only a quote,
+    another backslash or (outside quotes) a space; any other backslash is kept.
+    shlex.split() dropped every backslash, so on Windows
+    ``Include C:\\Users\\me\\.ssh\\conf.d\\*`` turned into a path that does not exist.
+    """
+    args, current, quote, in_arg = [], [], None, False
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "\\" and i + 1 < n and (text[i + 1] in "\\'\"" or (quote is None and text[i + 1] == " ")):
+            current.append(text[i + 1])
+            in_arg = True
+            i += 2
+            continue
+        if quote is None and ch in " \t":
+            if in_arg:
+                args.append("".join(current))
+                current, in_arg = [], False
+        elif quote is None and ch in "'\"":
+            quote, in_arg = ch, True
+        elif quote is not None and ch == quote:
+            quote = None
+        else:
+            current.append(ch)
+            in_arg = True
+        i += 1
+    if in_arg:
+        args.append("".join(current))
+    return args
+
+
 def _expand_ssh_includes(path: str, depth: int = 0, logger: Optional[logging.Logger] = None, base_dir: Optional[str] = None) -> str:
     """Return the text of an ssh_config with its ``Include`` directives expanded.
 
@@ -73,7 +107,7 @@ def _expand_ssh_includes(path: str, depth: int = 0, logger: Optional[logging.Log
         logger.warning("Too many recursive SSH config includes at %s", path)
         return ""
     try:
-        with open(path) as handle:
+        with open(path, encoding="utf-8", errors="replace") as handle:
             lines = handle.read().splitlines()
     except OSError as e:
         logger.debug("Could not read SSH config include %s: %s", path, e)
@@ -93,7 +127,7 @@ def _expand_ssh_includes(path: str, depth: int = 0, logger: Optional[logging.Log
             continue
 
         included: "list[str]" = []
-        for pattern in shlex.split(stripped[len("include") :].strip()):
+        for pattern in _split_ssh_arguments(stripped[len("include") :].strip()):
             pattern = os.path.expanduser(pattern)
             if not os.path.isabs(pattern):
                 pattern = os.path.join(base_dir or os.path.expanduser("~/.ssh"), pattern)
