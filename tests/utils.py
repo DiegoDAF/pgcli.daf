@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import psycopg
 from pgcli.main import format_output, OutputSettings
@@ -79,3 +81,7 @@ def run(executor, sql, join=False, expanded=False, pgspecial=None, exception_for
 
 def completions_to_set(completions):
     return {(completion.display_text, completion.display_meta_text) for completion in completions}
+
+
+# POSIX file modes, device paths and FIFOs: none of it exists on Windows.
+posix_only = pytest.mark.skipif(os.name != "posix", reason="POSIX-only behaviour")

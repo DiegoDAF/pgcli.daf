@@ -1,4 +1,3 @@
-import os
 import signal
 import time
 from unittest.mock import patch
@@ -93,7 +92,8 @@ def test_ctrl_c_during_the_last_resort_cancel_is_ignored(executor, connection):
     real_cancel = getattr(executor.conn, name)
 
     def cancel_with_ctrl_c(*args, **kwargs):
-        os.kill(os.getpid(), signal.SIGINT)
+        # raise_signal, not os.kill: on Windows os.kill(SIGINT) terminates the process.
+        signal.raise_signal(signal.SIGINT)
         return real_cancel(*args, **kwargs)
 
     with patch.object(executor.conn, name, side_effect=cancel_with_ctrl_c):

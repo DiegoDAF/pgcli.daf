@@ -35,7 +35,7 @@ from pgcli.main import (
 from pgcli.pgexecute import PGExecute
 from pgspecial.main import PAGER_OFF, PAGER_LONG_OUTPUT, PAGER_ALWAYS
 from psycopg.conninfo import conninfo_to_dict
-from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER, dbtest, run
+from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER, dbtest, run, posix_only
 from pgcli.main import plaintext_warning, ssl_banner
 from collections import namedtuple
 
@@ -659,7 +659,7 @@ def test_qecho_works(executor):
 
 def test_reload_named_queries():
     """Test \\nr command reloads named queries."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         # Create a config file with named queries
         config_file = os.path.join(tmpdir, "config")
         log_file = os.path.join(tmpdir, "pgcli.log")
@@ -695,7 +695,7 @@ def test_edit_named_query():
     """Test \\ne edits/creates a named query via the external editor."""
     from pgspecial.namedqueries import NamedQueries
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         with open(config_file, "w") as f:
             f.write("[main]\n")
@@ -758,7 +758,7 @@ def test_edit_named_query_overrides_include(tmpdir):
 
 def test_restrict_mode_enter():
     """Test \\restrict command enters restricted mode."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         log_file = os.path.join(tmpdir, "pgcli.log")
         with open(config_file, "w") as f:
@@ -780,7 +780,7 @@ def test_restrict_mode_enter():
 
 def test_restrict_mode_exit():
     """Test \\unrestrict command exits restricted mode."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         log_file = os.path.join(tmpdir, "pgcli.log")
         with open(config_file, "w") as f:
@@ -810,7 +810,7 @@ def test_restrict_mode_exit():
 
 def test_restrict_mode_requires_token():
     """Test \\restrict and \\unrestrict require token argument."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         log_file = os.path.join(tmpdir, "pgcli.log")
         with open(config_file, "w") as f:
@@ -830,7 +830,7 @@ def test_restrict_mode_blocks_meta_commands():
     """Test that meta-commands are blocked during restricted mode via pgexecute.run()."""
     from pgcli.pgexecute import PGExecute
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         log_file = os.path.join(tmpdir, "pgcli.log")
         with open(config_file, "w") as f:
@@ -895,7 +895,7 @@ def test_restrict_mode_allows_sql():
 
 @dbtest
 def test_logfile_works(executor):
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         log_file = f"{tmpdir}/tempfile.log"
         cli = PGCli(pgexecute=executor, log_file=log_file)
         statement = r"\qecho hello!"
@@ -920,7 +920,7 @@ def test_logfile_unwriteable_file(executor):
 @dbtest
 def test_log_rotation_day_of_week(executor):
     """Test log rotation by day of week (Mon-Sun)"""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         # Mock config with day-of-week rotation
         config = {"main": {"log_file": "default", "log_rotation_mode": "day-of-week", "log_destination": tmpdir, "log_level": "INFO"}}
 
@@ -939,7 +939,7 @@ def test_log_rotation_day_of_week(executor):
 @dbtest
 def test_log_rotation_day_of_month(executor):
     """Test log rotation by day of month (01-31)"""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         # Mock config with day-of-month rotation
         config = {"main": {"log_file": "default", "log_rotation_mode": "day-of-month", "log_destination": tmpdir, "log_level": "INFO"}}
 
@@ -978,7 +978,7 @@ def _init_logging_with(executor, tmpdir, extra_main):
 def test_log_truncate_on_rotation_stale_file(executor):
     """With log_truncate_on_rotation on, a rotation file last written on a
     PREVIOUS day (last week's same-weekday slot) is truncated, not appended."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         day_name = datetime.datetime.now().strftime("%a")
         log_path = os.path.join(tmpdir, f"pgcli-{day_name}.log")
         with open(log_path, "w") as f:
@@ -996,7 +996,7 @@ def test_log_truncate_on_rotation_stale_file(executor):
 @dbtest
 def test_log_truncate_on_rotation_same_day_appends(executor):
     """Same-day reopens keep appending even with truncation enabled."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         day_name = datetime.datetime.now().strftime("%a")
         log_path = os.path.join(tmpdir, f"pgcli-{day_name}.log")
         with open(log_path, "w") as f:
@@ -1012,7 +1012,7 @@ def test_log_truncate_on_rotation_same_day_appends(executor):
 def test_log_truncate_on_rotation_default_off(executor):
     """Without the option (default off), stale files keep accumulating
     (backwards compatible behavior)."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         day_name = datetime.datetime.now().strftime("%a")
         log_path = os.path.join(tmpdir, f"pgcli-{day_name}.log")
         with open(log_path, "w") as f:
@@ -1029,7 +1029,7 @@ def test_log_truncate_on_rotation_default_off(executor):
 @dbtest
 def test_log_rotation_date(executor):
     """Test log rotation by date (YYYYMMDD)"""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         # Mock config with date rotation
         config = {"main": {"log_file": "default", "log_rotation_mode": "date", "log_destination": tmpdir, "log_level": "INFO"}}
 
@@ -1048,7 +1048,7 @@ def test_log_rotation_date(executor):
 @dbtest
 def test_log_rotation_none_backwards_compatible(executor):
     """Test that 'none' rotation mode maintains backwards compatibility"""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         # Mock config with no rotation (default)
         config = {"main": {"log_file": "default", "log_rotation_mode": "none", "log_destination": tmpdir, "log_level": "INFO"}}
 
@@ -1069,7 +1069,7 @@ def test_log_rotation_none_backwards_compatible(executor):
 @dbtest
 def test_log_destination_custom(executor):
     """Test custom log destination"""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         custom_log_dir = os.path.join(tmpdir, "custom_logs")
         os.makedirs(custom_log_dir)
 
@@ -2130,7 +2130,7 @@ def test_without_force_destructive_calls_confirmation(executor):
 @dbtest
 def test_application_name_from_config(executor):
     """Test that application_name is read from config file."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         with open(config_file, "w") as f:
             f.write("[main]\napplication_name = my-custom-app\nlog_file = default\n")
@@ -2144,7 +2144,7 @@ def test_application_name_from_config(executor):
 @dbtest
 def test_application_name_cli_overrides_config(executor):
     """Test that CLI argument overrides config file value."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         with open(config_file, "w") as f:
             f.write("[main]\napplication_name = config-app\nlog_file = default\n")
@@ -2158,7 +2158,7 @@ def test_application_name_cli_overrides_config(executor):
 @dbtest
 def test_application_name_default_when_not_in_config(executor):
     """Test that default 'pgcli' is used when not specified in config."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         config_file = os.path.join(tmpdir, "config")
         with open(config_file, "w") as f:
             f.write("[main]\nlog_file = default\n")
@@ -2223,9 +2223,10 @@ class TestSanitizePath:
     def test_home_tilde_expansion(self):
         resolved, err = PGCli._sanitize_path("~/test.sql")
         assert err is None
-        assert resolved.startswith("/home/")
+        assert resolved.startswith(os.path.expanduser("~"))
 
     @pytest.mark.parametrize("path", ["/dev/null", "/dev/random", "/proc/self/environ", "/sys/class"])
+    @posix_only
     def test_blocked_system_paths(self, path):
         _, err = PGCli._sanitize_path(path)
         assert err is not None
@@ -2245,6 +2246,7 @@ class TestSanitizePath:
         assert err is None
         assert resolved == str(target)
 
+    @posix_only
     def test_symlink_to_dev_blocked(self, tmp_path):
         link = tmp_path / "sneaky"
         link.symlink_to("/dev/null")

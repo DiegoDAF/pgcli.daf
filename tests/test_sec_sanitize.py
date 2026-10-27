@@ -22,6 +22,7 @@ location, and never read or write the real ~/.pgpass, ~/.config or
 system keyring.  No real DB connection is made.
 """
 
+from utils import posix_only
 import os
 import platform
 
@@ -229,12 +230,14 @@ class TestSanitizePathSecurity:
         "blocked",
         ["/dev/null", "/dev/tcp/attacker.example/4444", "/proc/self/environ", "/sys/kernel"],
     )
+    @posix_only
     def test_direct_restricted_paths_blocked(self, blocked):
         resolved, err = PGCli._sanitize_path(blocked)
         assert resolved is None
         assert err is not None
         assert "restricted" in err.lower()
 
+    @posix_only
     def test_symlink_into_dev_is_blocked_after_resolution(self, tmp_path):
         # An attacker-provided symlink that points into /dev must be blocked
         # because realpath() resolves it before the prefix check.
@@ -245,6 +248,7 @@ class TestSanitizePathSecurity:
         assert err is not None
         assert "restricted" in err.lower()
 
+    @posix_only
     def test_dotdot_traversal_into_dev_is_blocked(self):
         # A path using ../ that ultimately resolves under /dev must be blocked.
         # realpath() collapses the '..' before the prefix check, so an
@@ -292,10 +296,12 @@ class TestSanitizePathSecurity:
     def test_tilde_expansion_stays_within_sanitizer(self, tmp_path, monkeypatch):
         # ~ must expand relative to HOME, and a plain file under HOME is fine.
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))  # what Windows reads
         resolved, err = PGCli._sanitize_path("~/query.sql")
         assert err is None
         assert resolved == str(tmp_path / "query.sql")
 
+    @posix_only
     def test_write_to_file_rejects_dev_null(self, tmp_path, monkeypatch):
         # End-to-end: \o /dev/null (via write_to_file) must refuse and leave
         # output_file unset -- exercises the sanitizer through the real caller

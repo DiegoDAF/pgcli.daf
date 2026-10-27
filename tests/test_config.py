@@ -102,7 +102,7 @@ def test_migrate_state_file_missing_old_is_noop(tmp_path):
     assert not (st / "history").exists()
 
 
-posix_only = pytest.mark.skipif(os.name != "posix", reason="POSIX file modes")
+from utils import posix_only  # noqa: E402
 
 
 @posix_only
@@ -162,7 +162,7 @@ def test_skip_initial_comment_with_multibyte_characters(tmp_path):
     # The position was advanced by character count; with accented letters in
     # the comment the seek landed inside it and the service file would not parse.
     path = tmp_path / "pg_service.conf"
-    path.write_text("# Configuración: más tildes áéíóú y ñ\n# segunda línea con ü\n[svc]\nhost=example.invalid\n", encoding="utf-8")
+    path.write_bytes("# Configuración: más tildes áéíóú y ñ\n# segunda línea con ü\n[svc]\nhost=example.invalid\n".encode())
     with open(path, encoding="utf-8", newline="") as f:
         assert skip_initial_comment(f) == 2
         assert f.readline() == "[svc]\n"
