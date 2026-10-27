@@ -149,6 +149,8 @@ jobs:
           Set-Service -InputObject $pg -StartupType Manual
           Start-Service -InputObject $pg
           & "$env:PGBIN\pg_isready.exe" --timeout 30
+          # pg_isready, pg_dump and pg_dumpall for the wrapper tests
+          Add-Content -Path $env:GITHUB_PATH -Value $env:PGBIN
 
       - name: Install requirements
         run: uv sync --all-extras -p 3.13

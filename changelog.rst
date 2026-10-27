@@ -14,6 +14,15 @@ Features:
 Bug fixes:
 ----------
 
+* On Windows the password file is read: by default at
+  ``%APPDATA%\postgresql\pgpass.conf``, as libpq does, and without the 0600
+  check, which libpq does not make there (Windows has no such mode bits).
+  The SSH tunnel and the dump wrappers ignored every Windows user's file.
+* ``Include`` in ``~/.ssh/config`` keeps a backslash that escapes nothing, as
+  OpenSSH does: ``shlex`` dropped them all, so a Windows path such as
+  ``C:\Users\me\.ssh\conf.d\*`` never matched.
+* The history and log paths migrated to the state directory are normalised
+  (``...\state/history`` on Windows).
 * Fix the development setup instructions to activate the ``.venv`` directory
   created by ``uv venv`` (upstream #1650).
 * A multi-line ``\copy (query) to 'file'`` works again. The 20-oct rule that
@@ -279,6 +288,14 @@ Bug fixes:
   ``\restrict KEY`` took the following line into its key, so the closing
   ``\unrestrict KEY`` never matched and the session stayed restricted. ``\ns``
   still saves a query that spans several lines.
+
+Internal:
+---------
+
+* CI runs the unit tests on Windows too, against the PostgreSQL the
+  ``windows-latest`` image ships; the tests that need POSIX file modes, device
+  paths or FIFOs are skipped there, and the behave suite stays Linux-only
+  (it drives pgcli through ``pexpect.spawn``).
 
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================

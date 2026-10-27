@@ -6,6 +6,7 @@ tested, so a fix could land in one and miss the other. Parametrising over both
 keeps them honest whether they share an implementation or not.
 """
 
+from utils import posix_only
 import logging
 import os
 
@@ -483,6 +484,7 @@ class TestPgpassLookup:
 
         return write
 
+    @posix_only
     def test_a_world_readable_pgpass_is_refused(self, pgpass, capsys):
         """libpq ignores a password file others can read and warns about it.
         The wrappers used to read it anyway, so pgcli_dump could authenticate
@@ -492,6 +494,7 @@ class TestPgpassLookup:
         err = capsys.readouterr().err
         assert "group or world access" in err and "0600" in err
 
+    @posix_only
     def test_a_group_readable_pgpass_is_refused(self, pgpass):
         """0640 is enough for libpq to refuse it: any group bit counts."""
         pgpass("db.example.com:5432:ventas:reader:s3cr3t", mode=0o640)
@@ -559,6 +562,7 @@ class TestPgpassLookup:
         pgpass("db.example.com:5432:*:reader:s3cr3t")
         assert dump.get_password_from_pgpass("db.example.com", 5432, "*", "reader") == "s3cr3t"
 
+    @posix_only
     def test_an_unreadable_pgpass_is_not_fatal(self, pgpass):
         path = pgpass("db.example.com:5432:ventas:reader:s3cr3t")
         path.chmod(0o000)

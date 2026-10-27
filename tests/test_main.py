@@ -35,7 +35,7 @@ from pgcli.main import (
 from pgcli.pgexecute import PGExecute
 from pgspecial.main import PAGER_OFF, PAGER_LONG_OUTPUT, PAGER_ALWAYS
 from psycopg.conninfo import conninfo_to_dict
-from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER, dbtest, run
+from utils import POSTGRES_HOST, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_USER, dbtest, run, posix_only
 from pgcli.main import plaintext_warning, ssl_banner
 from collections import namedtuple
 
@@ -2223,9 +2223,10 @@ class TestSanitizePath:
     def test_home_tilde_expansion(self):
         resolved, err = PGCli._sanitize_path("~/test.sql")
         assert err is None
-        assert resolved.startswith("/home/")
+        assert resolved.startswith(os.path.expanduser("~"))
 
     @pytest.mark.parametrize("path", ["/dev/null", "/dev/random", "/proc/self/environ", "/sys/class"])
+    @posix_only
     def test_blocked_system_paths(self, path):
         _, err = PGCli._sanitize_path(path)
         assert err is not None
@@ -2245,6 +2246,7 @@ class TestSanitizePath:
         assert err is None
         assert resolved == str(target)
 
+    @posix_only
     def test_symlink_to_dev_blocked(self, tmp_path):
         link = tmp_path / "sneaky"
         link.symlink_to("/dev/null")

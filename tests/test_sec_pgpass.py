@@ -14,6 +14,7 @@ Every test is hermetic: it uses pytest's ``tmp_path`` / ``monkeypatch`` and a
 throwaway file. The real ``~/.pgpass`` is never read or written.
 """
 
+from utils import posix_only
 import os
 import stat
 
@@ -51,6 +52,7 @@ def _write_pgpass(tmp_path, contents, mode=0o600, name="pgpass"):
         0o601,  # only other-exec set
     ],
 )
+@posix_only
 def test_rejects_group_or_world_accessible_file(tmp_path, mode):
     """Any group/other permission bit must make the reader return None."""
     path = _write_pgpass(tmp_path, "h:5432:db:u:secret\n", mode=mode)
@@ -64,6 +66,7 @@ def test_accepts_owner_only_permissions(tmp_path, mode):
     assert lookup_password("h", 5432, "db", "u", path=path) == "secret"
 
 
+@posix_only
 def test_tightening_permissions_re_enables_read(tmp_path):
     path = _write_pgpass(tmp_path, "h:5432:db:u:secret\n", mode=0o644)
     assert lookup_password("h", 5432, "db", "u", path=path) is None
@@ -71,6 +74,7 @@ def test_tightening_permissions_re_enables_read(tmp_path):
     assert lookup_password("h", 5432, "db", "u", path=path) == "secret"
 
 
+@posix_only
 def test_has_safe_permissions_predicate(tmp_path):
     safe = _write_pgpass(tmp_path, "x\n", mode=0o600, name="safe")
     unsafe = _write_pgpass(tmp_path, "x\n", mode=0o640, name="unsafe")
@@ -96,6 +100,7 @@ def test_directory_is_not_a_regular_file(tmp_path):
     assert lookup_password("h", 5432, "db", "u", path=str(d)) is None
 
 
+@posix_only
 def test_fifo_is_not_a_regular_file(tmp_path):
     """A named pipe is not a regular file and must be rejected."""
     fifo = tmp_path / "afifo"
@@ -247,13 +252,34 @@ def testpgpass_path_expands_tilde_in_env(monkeypatch):
     assert os.path.isabs(result)
 
 
+@posix_only
 def testpgpass_path_default_without_env(monkeypatch):
     monkeypatch.delenv("PGPASSFILE", raising=False)
     assert pgpass_path() == os.path.expanduser("~/.pgpass")
 
 
+@posix_only
 def test_env_override_also_enforces_permissions(tmp_path, monkeypatch):
     """A PGPASSFILE pointed at a too-open file is still rejected."""
     path = _write_pgpass(tmp_path, "h:5432:db:u:fromenv\n", mode=0o644)
     monkeypatch.setenv("PGPASSFILE", path)
     assert lookup_password("h", 5432, "db", "u") is None
+
+
+def test_windows_reads_the_file_whatever_its_mode(tmp_path, monkeypatch):
+    # libpq checks no permissions on Windows, which has no such mode bits; the
+    # check made pgcli ignore every Windows user's file.
+    from pgcli import pgpass
+
+    monkeypatch.setattr(pgpass, "_on_windows", lambda: True)
+    path = _write_pgpass(tmp_path, "h:5432:db:u:secret\n", mode=0o644)
+    assert pgpass.lookup_password("h", 5432, "db", "u", path=path) == "secret"
+
+
+def test_windows_default_file_is_under_appdata(tmp_path, monkeypatch):
+    from pgcli import pgpass
+
+    monkeypatch.setattr(pgpass, "_on_windows", lambda: True)
+    monkeypatch.delenv("PGPASSFILE", raising=False)
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    assert pgpass.pgpass_path() == os.path.join(str(tmp_path), "postgresql", "pgpass.conf")

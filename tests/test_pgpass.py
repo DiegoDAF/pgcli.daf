@@ -4,6 +4,7 @@ These never touch the real ``~/.pgpass``: they use pytest's ``tmp_path`` and a
 throwaway file passed explicitly or via the ``PGPASSFILE`` env var.
 """
 
+from utils import posix_only
 import os
 
 
@@ -66,6 +67,7 @@ def test_pgpassfile_env_override(tmp_path, monkeypatch):
     assert lookup_password("h", 5432, "db", "u") == "fromenv"
 
 
+@posix_only
 def test_unsafe_permissions_ignored(tmp_path):
     path = _write_pgpass(tmp_path, "h:5432:db:u:secret\n", mode=0o644)
     assert lookup_password("h", 5432, "db", "u", path=path) is None

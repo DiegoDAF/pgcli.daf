@@ -9,11 +9,13 @@ the ORIGINAL host:port we sidestep that limitation. See FIX_PGPASS_SSH_PORT.
 Simplifications relative to libpq (documented on purpose):
 - No "localhost == default unix socket" host aliasing: our case is a real TCP
   hostname tunneled to 127.0.0.1, so exact-or-``*`` matching is correct.
-- Windows ``%APPDATA%\\postgresql\\pgpass.conf`` is out of scope (we are Linux).
+- On Windows the default file is ``%APPDATA%\\postgresql\\pgpass.conf`` and its
+  permissions are not checked, as in libpq.
 """
 
 import os
 import stat
+import sys
 
 
 def _split_pgpass_line(line):
@@ -42,20 +44,29 @@ def _split_pgpass_line(line):
     return fields
 
 
+def _on_windows():
+    return sys.platform == "win32"
+
+
 def pgpass_path():
     """Return the path libpq would use: PGPASSFILE env, else ~/.pgpass.
 
+    On Windows libpq's default is %APPDATA%\\postgresql\\pgpass.conf.
     Public because pgcli_dump and pgcli_dumpall read the same file.
     """
     env = os.environ.get("PGPASSFILE")
     if env:
         return os.path.expanduser(env)
+    if _on_windows() and os.environ.get("APPDATA"):
+        return os.path.join(os.environ["APPDATA"], "postgresql", "pgpass.conf")
     return os.path.expanduser("~/.pgpass")
 
 
 def has_safe_permissions(path):
     """libpq ignores .pgpass if it is group/world accessible (must be <= 0600).
 
+    Windows has no such mode bits, and libpq checks nothing there (the file
+    lives in the user's profile); before, every Windows user's file was ignored.
     Public because pgcli_dump and pgcli_dumpall apply the same rule; keeping a
     second copy is what let the wrappers drift from libpq in the first place.
     """
@@ -63,6 +74,8 @@ def has_safe_permissions(path):
         mode = os.stat(path).st_mode
     except OSError:
         return False
+    if _on_windows():
+        return True
     if not stat.S_ISREG(mode):
         return False
     # Reject if any group/other permission bit is set.

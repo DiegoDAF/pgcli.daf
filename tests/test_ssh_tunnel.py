@@ -878,6 +878,16 @@ class TestSSHConfigIncludes:
         # the parent's own blocks still work
         assert config.lookup("other")["hostname"] == "other.internal"
 
+    def test_a_backslash_in_an_include_path_is_kept(self, tmp_path):
+        # OpenSSH keeps a backslash that escapes nothing; shlex.split dropped
+        # it, so a Windows path such as C:\\Users\\me\\.ssh\\conf.d\\* matched nothing.
+        odd = tmp_path / "con\\f.d"  # a separator on Windows, part of the name elsewhere
+        odd.mkdir(parents=True)
+        (odd / "x.conf").write_text("Host odd\n    HostName odd.internal\n")
+        main = tmp_path / "config"
+        main.write_text(f"Include {odd}{os.sep}*.conf\n")
+        assert self._parse(main).lookup("odd")["hostname"] == "odd.internal"
+
     def test_several_patterns_on_one_line_and_sorted_glob(self, tmp_path):
         (tmp_path / "a.conf").write_text("Host a\n    HostName a.internal\n")
         (tmp_path / "b.conf").write_text("Host b\n    HostName b.internal\n")
@@ -1492,3 +1502,20 @@ def test_a_tunnel_url_with_a_password_is_not_logged_or_echoed_verbatim(caplog):
     with pytest.raises(SSHTunnelError) as no_host:
         SSHTunnelManager(ssh_tunnel_url="ssh://me:s3cret@:22", logger=logger).start_tunnel(host="db", port=5432)
     assert "s3cret" not in str(no_host.value) and "s3cret" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("a b", ["a", "b"]),
+        ("C:\\Users\\me\\.ssh\\conf.d\\*", ["C:\\Users\\me\\.ssh\\conf.d\\*"]),  # nothing escaped: kept
+        ('"with space" x', ["with space", "x"]),
+        ("a\\ b c", ["a b", "c"]),
+        ("a\\\\b", ["a\\b"]),
+        ("'one two'", ["one two"]),
+    ],
+)
+def test_include_arguments_split_like_openssh(text, expected):
+    from pgcli.ssh_tunnel import _split_ssh_arguments
+
+    assert _split_ssh_arguments(text) == expected
