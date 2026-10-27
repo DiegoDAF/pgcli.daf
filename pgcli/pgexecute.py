@@ -113,8 +113,10 @@ def split_meta_command(sql):
 
     Returns ``(command, rest)``: the first line, and whatever followed it,
     which is more statements to run. Anything that is not a backslash command
-    comes back whole with an empty ``rest``, and so do ``\\ns`` and ``\\copy``,
-    whose argument is a query that may well span several lines.
+    comes back whole with an empty ``rest``, and so does ``\\ns``, which saves
+    a query that may well span several lines. ``\\copy`` ends at the first
+    newline where its parentheses are closed: ``\\copy (`` with the query on
+    the next lines stays whole, a one-line ``\\copy`` is cut like psql's.
 
     Without the cut a pasted dump's "\\restrict KEY" swallowed the next line
     into its token (so the closing "\\unrestrict KEY" never matched), and any
@@ -122,18 +124,78 @@ def split_meta_command(sql):
     both the prompt (PGExecute.run) and -c/-f (PGCli._execute_statements):
     two copies of it had already drifted apart on the ``\\ns`` exception.
     """
-    first_line, newline, rest = sql.strip().partition("\n")
-    if newline and first_line.startswith("\\") and first_line.split(maxsplit=1)[0] not in MULTI_LINE_META_COMMANDS:
-        return first_line, rest
-    return sql, ""
+    stripped = sql.strip()
+    first_line, newline, rest = stripped.partition("\n")
+    if not newline or not first_line.startswith("\\"):
+        return sql, ""
+    command = first_line.split(maxsplit=1)[0]
+    if command == "\\ns":
+        return sql, ""
+    if command == "\\copy":
+        end = _end_of_balanced_line(stripped)
+        if end is None:
+            return sql, ""
+        return stripped[:end], stripped[end + 1 :]
+    return first_line, rest
 
 
-# Backslash commands whose arguments may span lines: \ns saves a query, and
-# \copy takes one in parentheses, which pgcli has always let run over several
-# lines (psql wants it on one). sqlparse already ends both at their semicolon.
-# Cutting \copy at its newline (4.7.3+1, 20-oct-2026) left "\copy (" without
-# its TO clause and broke every multi-line export script.
-MULTI_LINE_META_COMMANDS = ("\\ns", "\\copy")
+def _end_of_balanced_line(sql):
+    """Index of the first newline outside parentheses, or None.
+
+    String literals (with E'' backslash escapes), quoted identifiers,
+    dollar-quoted bodies and comments are skipped, so a ``)`` or a newline
+    inside them does not count. Cutting every ``\\copy`` at its first newline
+    (20-oct-2026) left "\\copy (" without its TO clause; never cutting it let a
+    psql-style one-line ``\\copy`` swallow the statement on the next line.
+    """
+    depth, i, n = 0, 0, len(sql)
+    while i < n:
+        ch = sql[i]
+        if ch == "\n" and depth <= 0:
+            return i
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif sql.startswith("--", i):
+            end = sql.find("\n", i)
+            if end == -1:
+                return None
+            i = end  # the newline itself is looked at on the next pass
+            continue
+        elif sql.startswith("/*", i):
+            nested, i = 1, i + 2
+            while i < n and nested:
+                if sql.startswith("/*", i):
+                    nested, i = nested + 1, i + 2
+                elif sql.startswith("*/", i):
+                    nested, i = nested - 1, i + 2
+                else:
+                    i += 1
+            continue
+        elif ch in "'\"":
+            backslash_escapes = ch == "'" and i > 0 and sql[i - 1] in "eE"
+            i += 1
+            while i < n:
+                if backslash_escapes and sql[i] == "\\":
+                    i += 2
+                    continue
+                if sql[i] == ch:
+                    if i + 1 < n and sql[i + 1] == ch:  # '' or "" escapes itself
+                        i += 2
+                        continue
+                    break
+                i += 1
+        elif ch == "$":
+            match = re.match(r"\$\w*\$", sql[i:])
+            if match:
+                end = sql.find(match.group(0), i + len(match.group(0)))
+                if end == -1:
+                    return None
+                i = end + len(match.group(0))
+                continue
+        i += 1
+    return None
 
 
 # pg3: I don't know what is this

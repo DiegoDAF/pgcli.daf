@@ -21,7 +21,10 @@ Bug fixes:
   ``\copy`` too, so the statement reached pgspecial as a bare ``\copy (`` and
   failed with "Missing keyword in \copy command. Either TO or FROM is
   required"; an export script run with ``-f`` produced no file. ``\copy`` now
-  joins ``\ns`` as a command whose argument may span lines, up to its semicolon.
+  ends at the first newline where its parentheses are closed (quotes,
+  comments and dollar quotes skipped), so a multi-line query stays whole and a
+  psql-style one-line ``\copy`` without a semicolon still leaves the next line
+  to run as its own statement.
 * The ``float`` format of ``[data_formats]`` applies at last, and the numbers of
   float and numeric columns line up on their decimal point: the formatter was
   left to infer the column types from the values, and cli_helpers files float

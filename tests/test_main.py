@@ -2968,6 +2968,49 @@ def test_split_meta_command_still_cuts_the_other_commands_at_their_newline():
     assert split_meta_command("select 1\n+ 1;") == ("select 1\n+ 1;", "")
 
 
+@pytest.mark.parametrize(
+    ("sql", "expected"),
+    [
+        # psql's one-line \copy, no semicolon: the next line is a statement of its own
+        ("\\copy t to 'a.csv' csv\nselect 1;", ("\\copy t to 'a.csv' csv", "select 1;")),
+        ("\\copy (select 1) to 'a.csv'\nselect 2;", ("\\copy (select 1) to 'a.csv'", "select 2;")),
+        # a multi-line query ends where its parentheses close
+        ("\\copy (\n select 1\n) to 'a.csv'\nselect 2;", ("\\copy (\n select 1\n) to 'a.csv'", "select 2;")),
+        # parentheses and newlines inside literals, identifiers, comments and $$ do not count
+        (
+            "\\copy (\n select ')' as \"x)\" -- )\n /* ) */ , $$\n)$$ as d, E'\\')' as e\n) to 'a.csv'\nselect 2;",
+            ("\\copy (\n select ')' as \"x)\" -- )\n /* ) */ , $$\n)$$ as d, E'\\')' as e\n) to 'a.csv'", "select 2;"),
+        ),
+        # never closed: left whole for pgspecial to report
+        ("\\copy (\n select 1\nto 'a.csv'", ("\\copy (\n select 1\nto 'a.csv'", "")),
+    ],
+)
+def test_split_meta_command_ends_a_copy_where_its_parentheses_close(sql, expected):
+    from pgcli.pgexecute import split_meta_command
+
+    assert split_meta_command(sql) == expected
+
+
+@dbtest
+@pytest.mark.parametrize(
+    "script",
+    [
+        # the fabric_cdp shape that broke on 26-oct-2026: leading comment, multi-line query
+        "-- export\n\\copy (\n  select 1 as a,\n         ')' as b\n) to '{out}' with (format csv, header true);\nselect 42 as after;",
+        # psql's one-line \copy without a semicolon, then a statement
+        "\\copy (select 1 as a, ')' as b) to '{out}' with (format csv, header true)\nselect 42 as after;",
+    ],
+)
+def test_copy_in_a_file_writes_its_csv_and_runs_what_follows(executor, tmpdir, script):
+    out = tmpdir.join("out.csv")
+    cli = PGCli(pgexecute=executor, pgclirc_file=str(tmpdir.join("rcfile")))
+    with mock.patch.object(cli, "echo_via_pager") as pager:
+        ok = cli._execute_statements(script.format(out=out))
+    assert ok is True
+    assert out.read() == "a,b\n1,)\n"
+    assert any("42" in str(call) for call in pager.call_args_list)
+
+
 def test_a_custom_log_file_name_is_honoured(tmpdir):
     # Only the directory of a configured log_file was used: ~/x/mylog.txt
     # ended up as ~/x/pgcli.log, with the comment in pgclirc describing a
