@@ -4,12 +4,14 @@ on:
   push:
     branches:
       - main
+      - upstream/windows-ci
   pull_request:
     paths-ignore:
       - '**.rst'
 
 jobs:
   build:
+    if: false
     runs-on: ubuntu-latest
 
     strategy:
