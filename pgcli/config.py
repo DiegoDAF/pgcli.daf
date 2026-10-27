@@ -42,8 +42,9 @@ def migrate_state_file(filename, config_dir=None, state_dir=None):
     """
     config_dir = config_dir or config_location()
     state_dir = state_dir or state_location()
-    old_path = os.path.join(expanduser(config_dir), filename)
-    new_path = os.path.join(expanduser(state_dir), filename)
+    # normpath: the XDG locations end in "/", which on Windows gave "...\\state/history".
+    old_path = os.path.normpath(os.path.join(expanduser(config_dir), filename))
+    new_path = os.path.normpath(os.path.join(expanduser(state_dir), filename))
     if os.path.abspath(old_path) == os.path.abspath(new_path):
         return new_path  # same dir (e.g. Windows) - nothing to migrate
     try:

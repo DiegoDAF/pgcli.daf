@@ -166,3 +166,11 @@ def test_skip_initial_comment_with_multibyte_characters(tmp_path):
     with open(path, encoding="utf-8", newline="") as f:
         assert skip_initial_comment(f) == 2
         assert f.readline() == "[svc]\n"
+
+
+def test_migrate_state_file_returns_a_normalized_path(tmp_path):
+    # The XDG locations end in "/": joined as they were, Windows got "...\state/history".
+    from pgcli.config import migrate_state_file
+
+    new = migrate_state_file("history", config_dir=str(tmp_path / "cfg") + "/", state_dir=str(tmp_path / "st") + "//")
+    assert new == os.path.join(str(tmp_path / "st"), "history")

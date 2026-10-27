@@ -21,6 +21,8 @@ Bug fixes:
 * ``Include`` in ``~/.ssh/config`` keeps a backslash that escapes nothing, as
   OpenSSH does: ``shlex`` dropped them all, so a Windows path such as
   ``C:\Users\me\.ssh\conf.d\*`` never matched.
+* The history and log paths migrated to the state directory are normalised
+  (``...\state/history`` on Windows).
 * Fix the development setup instructions to activate the ``.venv`` directory
   created by ``uv venv`` (upstream #1650).
 * A multi-line ``\copy (query) to 'file'`` works again. The 20-oct rule that
