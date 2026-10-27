@@ -1,6 +1,26 @@
 Upcoming
 ==============
 
+### PENDIENTES 2026-10-21 (decisiones de Diego de la madrugada)
+- [ ] ACORDARSE: ~/.config/pgcli NO va a syncthing (decision 2026-10-21). Copiar a mano config y
+      dsn.d a `d` cuando cambien
+- [x] Candidatos a upstream de la revision (R1 y R13; los cosmeticos R9/R10/R11/R12 quedan):
+      R1: rama `upstream/auto-expand-without-prompt` (0270ec58 sobre original/main 3c3776cf) pusheada
+      al fork y PR ABIERTO con el OK de Diego ("dale"): dbcli/pgcli#1654. Tests: 2 nuevos, fallan sobre el
+      main.py de upstream; test_main.py de upstream 109/110 (el rojo es test_format_array_output_expanded,
+      ya roto en upstream por cli-helpers 2.15.2, lo arregla nuestro #1653). Autores limpios.
+      R13 NO ES LO QUE PARECIA: el bloque de column_types es codigo muerto (se calcula despues de
+      list(cur)); el bug real es que `float` de [data_formats] no aplica NUNCA (ni en el fork ni en
+      upstream): sin tipos explicitos cli_helpers infiere y su TYPES rankea float y Decimal iguales,
+      el inverso devuelve Decimal y format_numbers solo formatea `is float`. Diego: "dale gas" a las
+      tres (2026-10-21 mediodia): (a) fork: commit 19c2ceea pusheado (CI verde 6/6) e instalado en t (sha256 del
+      codigo 8667deed1e2ea3fe); tipos desde cur.description antes de list(cur), a las dos llamadas del
+      formatter; 3 tests vivos que fallan sin el fix; suite 3965 passed. Efecto visible: `float` de
+      [data_formats] aplica y los numerics/floats se alinean por el punto decimal por defecto.
+      (b) PR dbcli/pgcli#1655 desde `upstream/number-formats-from-the-cursor` (fa71875f + df8e7a19).
+      (c) issue dbcli/cli_helpers#121 (TYPES rankea float y Decimal en 3 desde v1.0.0, 2017)
+
+
 ### RELEVAMIENTO DE UPSTREAM 2026-10-02 (que cambio desde el 22/09)
 # original/main SIN commits nuevos desde la 4.7.1 (101e523e, 20/09). fork/main no tiene nada
 # de upstream sin mergear. La cola subio de 15 a 21 PRs abiertos y los mantenedores casi no
@@ -138,13 +158,8 @@ Upcoming
       Mejor hacer el merge local y pushear, que ahi manda la identidad del repo
 - [x] Arreglado el user.name local de pgcli.daf: decia "DiegoDAF", ahora "Diego"
       (tu CLAUDE.md pide "Diego"; habia 61 commits con el nombre equivocado)
-# PENDIENTE DE DECISION: el user.email GLOBAL es el gmail personal, o sea cualquier
-# repo sin override commitea con el gmail personal. Asi se filtraron 11 commits con
-# ese mail al fork publico. Conviene invertirlo: poner el noreply como default global
-# y dejar que el includeIf de la carpeta de trabajo ponga el mail de trabajo donde corresponde.
-#   git config --global user.email "DiegoDAF@users.noreply.github.com"
-# (ese includeIf ya existe y esta bien escrito, hoy no dispara porque la carpeta
-#  de trabajo no es repo git ni tiene repos adentro)
+- [x] RESUELTO (verificado 2026-10-21): el user.email GLOBAL ya es el noreply de GitHub, asi que
+      ningun repo sin override commitea con el gmail personal; el includeIf de trabajo queda igual
 
 ### PLAN DE PRs A UPSTREAM (mapa completo, revisado 2026-09-16 con datos frescos de la API)
 
@@ -273,6 +288,108 @@ Upcoming
       feature/ssh-tunnel-keyring, integration/nb-install) YA NO EXISTEN, ni local ni en el fork.
       Verificado con `git rev-parse` y `git ls-remote`
 
+### AUDITORIA READ-ONLY 2026-10-16/20: fixes pendientes (reporte: ../pgcli-daf-audit-2026-10-20.md)
+# Auditoria profunda de TODO el fork (4 auditorias paralelas + re-verificacion manual de cada
+# hallazgo contra c7d12637 / 4.7.3; los HIGH se reprodujeron en vivo). Tests: 3663 passed,
+# coverage 88%. Resultado: 4 HIGH, 10 MEDIUM, 9 LOW. Ningun HIGH toca el camino de conexion
+# normal. Los dos primeros (H4, M1) son codigo que tambien existe en upstream: candidatos a
+# PR chico. Orden sugerido de fixes:
+- [ ] HIGH-1 (H1) streaming + log file: `format_output` devuelve un chain PAREZOSO; main.py:1909-1911
+      lo consume con join() y `output.extend(formatted)` agrega nada -> con stream_results=true
+      + --log-file/log_file el log pierde TODAS las filas (van al terminal, no al archivo).
+      Fix: materializar la lista antes del join + test
+- [ ] HIGH-2 (H2) namedqueries.py:31-43: line_comments_to_block itera solo parsed[0] -> guardar
+      una named query MULTI-statement con cualquier `--` descarta calladamente todo lo que sigue
+      a la primera. Verificado en vivo ("select 1; -- c\nselect 2" queda "select 1; /* c */\n").
+      Fix: iterar todos los statements + test de regresion
+- [ ] HIGH-3 (H3) dump_args.py:85-91: `port=` en el query string del URI NO se rechaza y
+      rewrite_uri lo conserva -> libpq dialecta 127.0.0.1:<puerto original> en vez del puerto
+      del tunel; con PG local en ese puerto se hace el dump de la DB LOCAL creyendo que es la
+      remota. Verificado contra libpq real. Fix: rechazar `port` como a host/hostaddr
+- [ ] HIGH-4 (H4) pgexecute.py:677: add_notice_handler sin remove -> tras N statements cada
+      NOTICE se imprime N veces + memoria sin tope. Fix: try/finally con remove_notice_handler.
+      CANDIDATO A PR UPSTREAM
+- [ ] MEDIUM-5 (M1) pgexecute.py:557: put_copy_end(b"use \copy instead") ENVIA esa fila como
+      ultimo row del COPY FROM STDIN -> se INSERTA en la tabla destino (corrupcion silente).
+      Fix: put_copy_end(None). Candidato a PR upstream
+- [ ] MEDIUM-6 (M2) `\c newdb newhost` con tunel: connect() copia _conn_params viejos
+      (hostaddr=127.0.0.1 + puerto del tunel) -> dialecta el tunel viejo, el host nuevo solo
+      sirve para .pgpass/SSL. main.py:795 + pgexecute.py:254-290
+- [ ] MEDIUM-7 (M3) `\watch` en -c/-f: loop infinito hasta Ctrl-C (psql lo ignora en modo no
+      interactivo). main.py:1646-1653. Fix: ejecutar una vez (o saltar) en command/file mode
+- [ ] MEDIUM-8 (M4) restrict mode (CVE-2025-8714): el token se snapshot-kea por invocacion de
+      run(); un \restrict en medio de un batch multi-statement (paste interactivo) no protege
+      el resto del batch. El camino -f SI esta seguro (run() por statement). Fix: provider del
+      token por statement
+- [ ] MEDIUM-9 (M5) ssh_tunnel.py:686-689: URL del tunel (puede ser ssh://user:pass@host) se
+      imprime a STDERR en el error de no-hostname y a DEBUG en el match. Fix: borrar userinfo
+- [ ] MEDIUM-10 (M6) dump.py:105-124: parse_user_and_database lee el valor de opciones que no
+      conoce (-t, -n, --exclude-table, --role...) como database -> lookup de .pgpass con dbname
+      equivocado (falla con lineas exactas)
+- [ ] MEDIUM-11 (M7) dump.py:191-196/dumpall.py:87-92: el -v/--verbose del wrapper se come el
+      -v propio de pg_dump -> el verbose de pg_dump nunca se activa
+- [ ] MEDIUM-12 (M8) pgcli_dump --dsn X no resuelve el alias a host/port/user/db (pgcli --dsn
+      SI lo hace, main.py:1197-1208) -> el tunel lleva a localhost:5432 en el bastion
+- [ ] MEDIUM-13 (M9) main.py:417-431: -o/--output y --log-file CLI bypasean _sanitize_path
+      (los metacomandos \o/\log-file SI lo usan, main.py:877)
+- [ ] MEDIUM-14 (M10) main.py:1553: -f abre el archivo sin _sanitize_path (inconsistente con
+      M9)
+- [ ] LOW (L1-L9, ver reporte): URI con password en log DEBUG (main.py:2595), SQL crudo en log
+      DEBUG antes del masking (main.py:1808), cmd del dump con credenciales en log (dump.py:281),
+      re.error sin atrapar (ssh_tunnel.py:592/604), traceback de ValueError en el wrapper,
+      fallback dsn->host sin documentar, thread de refresh sin try/except (pierde callback +
+      fuga de conexion en modo 2-conexiones), auto-reconnect con _conn_params viejos sin
+      re-evaluar el tunel, SQL_ASCII muestra bytes como repr
+
+2026-10-26
+===================
+
+### PUESTA AL DIA CON UPSTREAM (Diego: "no pushees nada")
+- [x] Upstream mergeo #1613 (\cd/\ls + path completion) y #1650 (docs uv venv) el 24/10. Merge en la
+      rama LOCAL `sync/upstream-2026-10-26` (4aec1830, sin pushear): conflictos en sqlcompletion.py (Path
+      tipado con only_directories), test_main.py (imports) y changelog; faltaba `import pathlib` en main.py.
+      pytest 3980 passed / 1 xfailed, behave 62/62, ruff/mypy ok, `\ls` probado por -c
+- [x] Los 7 PRs en conflicto (#1645 #1647 #1651 #1652 #1653 #1654 #1655), todos solo por changelog.rst:
+      original/main mergeado en cada rama LOCAL, las dos entradas conservadas. Suite de upstream verde en
+      cada una salvo el rojo preexistente test_format_array_output_expanded (lo arregla #1653, que da verde)
+- [x] j-bennet apreto "Update branch" en #1649 el 24/10 (f887059d): rama local alineada. #1637 y #1640
+      siguen mergeables
+- [x] Diego: "dale": main ff a 4aec1830 (el sync) y pusheado; las 7 ramas pusheadas. Los 10 PRs quedan
+      MERGEABLE (#1653 CLEAN; el resto UNSTABLE por el rojo de cli-helpers que arregla #1653 + codex-review).
+      Build de 4aec1830 instalada en t (sha256 del codigo 318391670bc0f2b9, 37 archivos); DEV por el tunel
+      y `\ls` ok. `d` sigue con 19c2ceea
+
+2026-10-21
+===================
+
+### DECISIONES DE DIEGO (madrugada) Y LO QUE SALIO DE ELLAS
+- [x] L9 (auditoria 2026-10-20), opcion (b): el texto que una conexion SQL_ASCII devuelve como
+      bytes se decodifica UTF-8 y, si falla, con `sql_ascii_fallback_encoding` (pgclirc, default
+      latin-1). row_factory de psycopg en la conexion (pgexecute.sql_ascii_rows), bytea queda como
+      en una base UTF-8, copy() hereda el encoding, codec invalido en la config avisa y usa latin-1.
+      9 tests nuevos (fallan sin el fix) + repro vivo en una base SQL_ASCII del PG descartable
+      (antes: `0x63616fe9` y `[b'\xe9']`). Commit ad20e73a
+- [x] L6: queda como esta, documentado en pgclirc ([dsn ssh tunnels]). Commit 4b3686e2
+- [x] behave tambien usa el backend nulo del keyring (environment.py): la corrida de hoy habia
+      guardado postgres@127.0.0.1@55433 en el keyring real. Commit b85b1bb0
+- [x] Suite completa con los tres: 3962 passed / 1 xfailed, behave 62/62, ruff/mypy/docutils ok.
+      Diego: "si push & install": pusheados al fork (main = b85b1bb0) e instalados en t (sha256 del
+      codigo 17acb3d694a45ed8); verificado en vivo contra la base SQL_ASCII descartable y contra DEV
+- [x] Keyring: borradas las 7 entradas loopback descartables + la de 55433 (quedan 206; se mantienen
+      postgres@localhost@5432, postgres@localhost@None y daf@localhost@None)
+- [x] ~/.local/state/pgcli en t: a la papelera `log` (huerfano del 27/08), `my.log` y `mylog.txt`
+      (restos de tests) y `pgcli.log` (1.1 GB que escribio la suite antes del aislamiento)
+- [x] Ramas borradas: review/2026-10-20, review-2026-10-20-prerebase, -prerebase2 y
+      fix/sql-ascii-bytes-decode (mergeada). Quedan tmp-1645, pr1546 y rebase/* (viejas, sin mergear)
+- [x] Decisiones sin cambio de codigo: el stripper de markdown sigue aplicando a -f; la columna Size
+      de -l queda al final; el historial publico se deja (sin force-push)
+- [x] `d` volvio a estar online (tarde): instalada la MISMA build que t (main 19c2ceea, sha256 del codigo
+      8667deed1e2ea3fe, 37 archivos; wheel por scp a dist/main-19c2ceea/, uv tool install --force
+      --reinstall --python 3.12 con [sshtunnel,keyring]). Config igualada: solo diferian .pgpass (copiado
+      de t, backup ~/.pgpass.bak-20261021-1704 en d) y un cert de servidor de dsn.d (faltaba en d); config,
+      dsn.d, namedqueries.d, .psqlrc* y el completion ya eran identicos (270 archivos por hash). Queda en
+      d un dsn.d/*.conf.bak-20260821 extra que pgcli no lee. El .git de d sigue atrasado, a proposito
+
 2026-10-20
 ===================
 
@@ -282,6 +399,55 @@ Upcoming
       visible". Su build puede caer en el test de cli-helpers hasta que entre #1653
 - [x] Rotar las passwords de workforce que se filtraron el 15/10: lo hace Diego
 - [ ] `aws login` (que cuenta va como default) y syncthing para ~/.config/pgcli: "lo vemos en un rato"
+
+### AUDITORIA READ-ONLY COMPLETADA (reanudada tras el corte de luz del 19/10)
+- [x] Auditoria profunda de TODO el fork cerrada: 4 auditorias paralelas (main/ssh_tunnel,
+      pgexecute/completer, dump wrappers, seguridad) + re-verificacion manual de CADA hallazgo
+      contra c7d12637; los HIGH se reprodujeron en vivo (sqlparse, libpq real)
+- [x] Test status: pytest 3663 passed / 8 skipped / 1 xfailed en 62s, coverage 88%
+- [x] Reporte completo (en ingles, fuera del repo): ../pgcli-daf-audit-2026-10-20.md
+      (4 HIGH, 10 MEDIUM, 9 LOW + seccion VERIFIED OK + orden sugerido de fixes)
+- [x] Fixes pendientes anotados en Upcoming ("AUDITORIA READ-ONLY 2026-10-16/20")
+
+### REVISION PROFUNDA DEL FORK (tarde/noche; Diego: "revisada super bien profunda... todo RO")
+- [x] Los 6 grupos de la auditoria (H2/H4, H3, H1, dump wrappers, \c/reconnect, restrict) corregidos
+      en main (9916c536..d5ccfcc5 + 3f7d9a56 por el CI con scram), instalados en t
+- [x] Revision propia de TODO pgcli/ (11.4k lineas): 2 HIGH (auto-expand rompia -c/-f; \c a un host
+      con tunel caido cerraba pgcli, regresion de 12d92428), 6 MEDIUM, 9 LOW + L1/L2/L3/L4/L7 de la
+      auditoria. Cada fix con su test (falla sin el fix), un commit por fix
+- [x] Un agente adversarial (14 hallazgos) + 4 lentes EN SERIE (tunel/args 10, enmascarado 11,
+      tests/entorno 3, historia/docs): todo corregido. El panel paralelo de 4 agentes murio por
+      el limite de sesion (767k tokens, cero resultados): de a uno, incluso con ultracode
+- [x] Hallazgos graves de las lentes: tras revivir un tunel, un connect fallido dejaba el puerto
+      muerto para siempre; el `error:` del log repetia la sentencia con la password (LINE 1: ...)
+      a nivel INFO; la suite escribia passwords de prueba en el KEYRING REAL (keyring = True por
+      defecto) y en ~/.local/state/pgcli -> conftest aisla XDG_STATE_HOME y usa el backend nulo
+- [x] Nuevo pgcli/redact.py (redact_dsn/redact_sql/redact_text/redact_process_title) con las
+      palabras clave secretas leidas de libpq (password, sslpassword, oauth_client_secret)
+- [x] Deps del venv al dia (psycopg 3.3.6, paramiko 5.1.0, click 8.5.0, pygments 2.21.0, wcwidth
+      0.9.3, mypy 2.4.0, ruff 0.17.1); pip-audit limpio; Actions del CI a sus ultimas versiones
+      (checkout v7.0.1, setup-uv v10.3.0, setup-python v7.0.0) + un job con postgres:18
+- [x] Historia reconstruida dos veces (cherry-pick) para que cada commit lleve sus hunks y pase sus
+      tests; arbol final identico. Backups: review-2026-10-20-prerebase y -prerebase2 (borrar)
+- [x] Suite final: 3952 passed / 1 xfailed / 0 skipped, behave 62, ruff/mypy/docutils limpios
+- [x] Diego ("arreglalo todo, pushea, instala en t"): main ff a e7086511, pusheado al fork,
+      instalado en t (sha256 del codigo 3d8340621a5435f3, 37 archivos, sigue diciendo 4.7.3)
+- [x] Smoke en DEV con la instalacion nueva: \c de un servidor DEV a otro por sus propios tuneles,
+      pgcli_dump/pgcli_dumpall/pgcli_isready --dsn, --list-dsn sin passwords, -c sin auto-expand
+- [x] CI del fork en e7086511: todo verde salvo el job nuevo (3.14, PG 18): la imagen del runner
+      trae pg_dump 16 ("aborting because of server version mismatch" contra postgres:18) y
+      pg_wrapper ignora -h. Fix d1812a4e: instalar postgresql-client-<matrix> desde PGDG (la
+      imagen borra el repo) y poner /usr/lib/postgresql/<N>/bin primero en el PATH. CI verde 6/6
+- [x] `-l` muestra el tamaño de cada db (columna Size como `\l+`: pg_size_pretty(pg_database_size()),
+      `No Access` sin CONNECT); test contra servidor vivo + escenario behave. Commit 0193b5a8
+      pusheado al fork e instalado en t (2026-10-21, madrugada; sha256 del codigo 6babda378266349d).
+      CI verde 6/6. `d` sin respuesta por ssh, sigue con el release 4.7.3
+- [x] Keyring: borradas 30 entradas de tests (16 hosts ficticios + 14 loopback descartables);
+      quedan 10 loopback ambiguas (postgres@localhost@5432, daf@127.0.0.1@5439, vigil@localhost...)
+- [ ] Informe: ../pgcli-daf-deep-review-2026-10-20.md. Decisiones tomadas por mi: el stripper de
+      markdown sigue aplicando a -f (lista de keywords completa, riesgo bajo); CTE Scan excluido
+      del tiempo exclusivo como pev lo quiso; CI con PG 16 + un job PG 18. Quedan: L6 y L9 de la
+      auditoria; `d` sigue en 4.7.3; proxima release mensual 2026-11-17
 
 2026-10-19
 ===================
