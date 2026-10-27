@@ -16,6 +16,12 @@ Bug fixes:
 
 * Fix the development setup instructions to activate the ``.venv`` directory
   created by ``uv venv`` (upstream #1650).
+* A multi-line ``\copy (query) to 'file'`` works again. The 20-oct rule that
+  ends a backslash command at its newline, psql's behaviour, was cutting
+  ``\copy`` too, so the statement reached pgspecial as a bare ``\copy (`` and
+  failed with "Missing keyword in \copy command. Either TO or FROM is
+  required"; an export script run with ``-f`` produced no file. ``\copy`` now
+  joins ``\ns`` as a command whose argument may span lines, up to its semicolon.
 * The ``float`` format of ``[data_formats]`` applies at last, and the numbers of
   float and numeric columns line up on their decimal point: the formatter was
   left to infer the column types from the values, and cli_helpers files float

@@ -113,8 +113,8 @@ def split_meta_command(sql):
 
     Returns ``(command, rest)``: the first line, and whatever followed it,
     which is more statements to run. Anything that is not a backslash command
-    comes back whole with an empty ``rest``, and so does ``\\ns``, which saves
-    a query that may well span several lines.
+    comes back whole with an empty ``rest``, and so do ``\\ns`` and ``\\copy``,
+    whose argument is a query that may well span several lines.
 
     Without the cut a pasted dump's "\\restrict KEY" swallowed the next line
     into its token (so the closing "\\unrestrict KEY" never matched), and any
@@ -123,9 +123,17 @@ def split_meta_command(sql):
     two copies of it had already drifted apart on the ``\\ns`` exception.
     """
     first_line, newline, rest = sql.strip().partition("\n")
-    if newline and first_line.startswith("\\") and first_line.split(maxsplit=1)[0] != "\\ns":
+    if newline and first_line.startswith("\\") and first_line.split(maxsplit=1)[0] not in MULTI_LINE_META_COMMANDS:
         return first_line, rest
     return sql, ""
+
+
+# Backslash commands whose arguments may span lines: \ns saves a query, and
+# \copy takes one in parentheses, which pgcli has always let run over several
+# lines (psql wants it on one). sqlparse already ends both at their semicolon.
+# Cutting \copy at its newline (4.7.3+1, 20-oct-2026) left "\copy (" without
+# its TO clause and broke every multi-line export script.
+MULTI_LINE_META_COMMANDS = ("\\ns", "\\copy")
 
 
 # pg3: I don't know what is this

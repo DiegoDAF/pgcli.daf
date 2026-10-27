@@ -2949,6 +2949,25 @@ def test_a_multi_line_ns_is_saved_whole_in_command_mode(executor, tmpdir):
     assert NamedQueries.instance.get("two_lines_cmd") == "select 1 as a,\n2 as b"
 
 
+def test_split_meta_command_keeps_a_multi_line_copy_whole():
+    # The newline cut of 20-oct-2026 left "\\copy (" without its TO clause and
+    # pgspecial raised "Missing keyword in \\copy command": every export script
+    # with a query in parentheses over several lines stopped producing its file.
+    from pgcli.pgexecute import split_meta_command
+
+    copy = "\\copy (\n  select 1 as a,\n         2 as b\n) to 'out.csv' with (format csv, header true)"
+    assert split_meta_command(copy) == (copy, "")
+    assert split_meta_command(copy + ";\n") == (copy + ";\n", "")  # returned as given, run() strips it
+
+
+def test_split_meta_command_still_cuts_the_other_commands_at_their_newline():
+    from pgcli.pgexecute import split_meta_command
+
+    assert split_meta_command("\\restrict KEY\nselect 1;") == ("\\restrict KEY", "select 1;")
+    assert split_meta_command("\\echo x\nselect 1;") == ("\\echo x", "select 1;")
+    assert split_meta_command("select 1\n+ 1;") == ("select 1\n+ 1;", "")
+
+
 def test_a_custom_log_file_name_is_honoured(tmpdir):
     # Only the directory of a configured log_file was used: ~/x/mylog.txt
     # ended up as ~/x/pgcli.log, with the comment in pgclirc describing a
