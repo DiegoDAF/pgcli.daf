@@ -14,6 +14,10 @@ Features:
 Bug fixes:
 ----------
 
+* On Windows the password file is read: by default at
+  ``%APPDATA%\postgresql\pgpass.conf``, as libpq does, and without the 0600
+  check, which libpq does not make there (Windows has no such mode bits).
+  The SSH tunnel and the dump wrappers ignored every Windows user's file.
 * Fix the development setup instructions to activate the ``.venv`` directory
   created by ``uv venv`` (upstream #1650).
 * A multi-line ``\copy (query) to 'file'`` works again. The 20-oct rule that
