@@ -74,10 +74,10 @@ def has_safe_permissions(path):
         mode = os.stat(path).st_mode
     except OSError:
         return False
-    if _on_windows():
-        return True
     if not stat.S_ISREG(mode):
         return False
+    if _on_windows():
+        return True
     # Reject if any group/other permission bit is set.
     return (stat.S_IMODE(mode) & 0o077) == 0
 

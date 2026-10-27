@@ -283,3 +283,10 @@ def test_windows_default_file_is_under_appdata(tmp_path, monkeypatch):
     monkeypatch.delenv("PGPASSFILE", raising=False)
     monkeypatch.setenv("APPDATA", str(tmp_path))
     assert pgpass.pgpass_path() == os.path.join(str(tmp_path), "postgresql", "pgpass.conf")
+
+
+def test_windows_still_requires_a_regular_file(tmp_path, monkeypatch):
+    from pgcli import pgpass
+
+    monkeypatch.setattr(pgpass, "_on_windows", lambda: True)
+    assert pgpass.has_safe_permissions(str(tmp_path)) is False
