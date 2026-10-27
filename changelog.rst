@@ -289,6 +289,14 @@ Bug fixes:
   ``\unrestrict KEY`` never matched and the session stayed restricted. ``\ns``
   still saves a query that spans several lines.
 
+Internal:
+---------
+
+* CI runs the unit tests on Windows too, against the PostgreSQL the
+  ``windows-latest`` image ships; the tests that need POSIX file modes, device
+  paths or FIFOs are skipped there, and the behave suite stays Linux-only
+  (it drives pgcli through ``pexpect.spawn``).
+
 4.7.3 (2026-10-19) - upstream: 4.7.1
 ====================================
 
