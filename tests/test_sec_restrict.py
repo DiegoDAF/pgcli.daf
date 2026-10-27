@@ -59,14 +59,14 @@ def _statuses(results):
 
 def test_fresh_cli_is_not_restricted():
     """A newly constructed PGCli must start OUTSIDE restricted mode."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         cli = _make_cli(tmpdir)
         assert cli.restrict_token is None
 
 
 def test_enter_sets_token():
     """\\restrict <token> stores the token and reports silent success."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         cli = _make_cli(tmpdir)
         result = cli.enter_restrict_mode("dump_secret_9f3a")
         assert cli.restrict_token == "dump_secret_9f3a"
@@ -81,7 +81,7 @@ def test_reentry_does_not_overwrite_token():
     controls, it could then \\unrestrict itself. Re-entry is rejected and
     the original token is preserved.
     """
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         cli = _make_cli(tmpdir)
         cli.enter_restrict_mode("original_token")
         result = cli.enter_restrict_mode("attacker_token")
@@ -91,7 +91,7 @@ def test_reentry_does_not_overwrite_token():
 
 def test_unrestrict_requires_matching_token():
     """\\unrestrict with the wrong token must stay restricted."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         cli = _make_cli(tmpdir)
         cli.enter_restrict_mode("correct-token-123")
 
@@ -108,7 +108,7 @@ def test_unrestrict_requires_matching_token():
 
 def test_unrestrict_when_not_restricted_is_rejected():
     """\\unrestrict outside restricted mode is a no-op error, not a crash."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         cli = _make_cli(tmpdir)
         result = cli.exit_restrict_mode("whatever")
         assert "Not in restricted mode" in result[0][3]
@@ -117,7 +117,7 @@ def test_unrestrict_when_not_restricted_is_rejected():
 
 def test_enter_requires_token_argument():
     """\\restrict with no argument must not silently enter restricted mode."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         cli = _make_cli(tmpdir)
         result = cli.enter_restrict_mode("   ")  # whitespace-only == empty
         assert "requires a token" in result[0][3]
@@ -126,7 +126,7 @@ def test_enter_requires_token_argument():
 
 def test_unrestrict_requires_token_argument():
     """\\unrestrict with no argument must not exit restricted mode."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         cli = _make_cli(tmpdir)
         cli.enter_restrict_mode("locked")
         result = cli.exit_restrict_mode("")
@@ -136,7 +136,7 @@ def test_unrestrict_requires_token_argument():
 
 def test_token_comparison_is_case_sensitive():
     """Token matching must be exact (case-sensitive) to resist guessing."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         cli = _make_cli(tmpdir)
         cli.enter_restrict_mode("AbCdEf")
         result = cli.exit_restrict_mode("abcdef")
@@ -151,7 +151,7 @@ def test_token_argument_is_trimmed_symmetrically():
     ``\\unrestrict tok  `` refer to the same logical token, so a legitimate
     pg_dump/restore round-trip still works.
     """
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         cli = _make_cli(tmpdir)
         cli.enter_restrict_mode("  padded_tok  ")
         assert cli.restrict_token == "padded_tok"
