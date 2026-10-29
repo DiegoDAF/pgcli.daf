@@ -287,18 +287,49 @@ def test_format_output_formats_numbers_in_the_auto_vertical_fallback_too(executo
     assert "RECORD 1" in output and "1,234,567" in output and "123,456.78" in output
 
 
+_NUMBERS_AND_TEXT = "select n, n::float8 as f, n::int as i, 12345::oid as o, 'x' as t from (values (1.5), (123.456)) as v(n) order by 1"
+
+
 @dbtest
-def test_format_output_aligns_float_and_numeric_columns_on_the_decimal_point(executor):
-    # With no float format, align_decimals pads the numbers of a float column
-    # so their decimal points line up; it needs the column typed as float.
+def test_format_output_right_aligns_number_columns_like_psql(executor):
+    # psql right-aligns int, float, numeric, oid, xid, cid and money columns
+    # (column_type_alignment in src/fe_utils/print.c) and left-aligns the rest.
     with executor.conn.cursor() as cur:
-        cur.execute("select n, n::float8 as f from (values (1.5), (123.456)) as t(n) order by 1")
-        lines = list(format_output(None, cur, ["n", "f"], "SELECT 2", OutputSettings(table_format="psql")))
-    values = [line for line in lines if "1.5" in line or "123.456" in line]
-    assert len(values) == 2
-    for column in (0, 1):
-        points = {line.split("|")[column + 1].index(".") for line in values}
-        assert len(points) == 1, values
+        cur.execute(_NUMBERS_AND_TEXT)
+        lines = list(format_output(None, cur, ["n", "f", "i", "o", "t"], "SELECT 2", OutputSettings(table_format="psql")))
+    assert lines[3] == "|     1.5 |     1.5 |   2 | 12345 | x |"
+    assert lines[4] == "| 123.456 | 123.456 | 123 | 12345 | x |"
+
+
+@dbtest
+def test_format_output_keeps_number_arrays_left_aligned_like_psql(executor):
+    # psycopg's type registry answers an array oid with the element type.
+    with executor.conn.cursor() as cur:
+        cur.execute("select array[1, 22]::bigint[] as a, 7::bigint as b union all select array[333]::bigint[], 1234")
+        lines = list(format_output(None, cur, ["a", "b"], "SELECT 2", OutputSettings(table_format="psql")))
+    assert lines[3:5] == ["| [1, 22] |    7 |", "| [333]   | 1234 |"]
+
+
+@dbtest
+@pytest.mark.parametrize("table_format", ["csv", "tsv"])
+def test_format_output_does_not_pad_numbers_in_delimited_output(executor, table_format):
+    # align_decimals, active once the column types were known, padded every
+    # float/numeric value: "  1.5" in a csv file.
+    with executor.conn.cursor() as cur:
+        cur.execute(_NUMBERS_AND_TEXT)
+        lines = list(format_output(None, cur, ["n", "f", "i", "o", "t"], "SELECT 2", OutputSettings(table_format=table_format)))
+    sep = "," if table_format == "csv" else "\t"
+    assert lines[1].replace('"', "") == sep.join(["1.5", "1.5", "2", "12345", "x"])
+
+
+@dbtest
+def test_format_output_tuples_only_with_a_numeric_column(executor):
+    # -t drops the headers, and align_decimals sized its work from them:
+    # IndexError, "list index out of range", for any float or numeric column.
+    with executor.conn.cursor() as cur:
+        cur.execute(_NUMBERS_AND_TEXT)
+        lines = list(format_output(None, cur, ["n", "f", "i", "o", "t"], "SELECT 2", OutputSettings(table_format="psql", tuples_only=True)))
+    assert lines == ["    1.5      1.5    2  12345  x", "123.456  123.456  123  12345  x"]
 
 
 def test_column_types_of_keeps_one_entry_per_column():

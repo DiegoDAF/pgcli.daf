@@ -25,7 +25,6 @@ from typing import Any, List, NamedTuple, Optional
 
 from cli_helpers.tabular_output import TabularOutputFormatter
 from cli_helpers.tabular_output.preprocessors import (
-    align_decimals,
     format_numbers,
     format_timestamps,
 )
@@ -2934,6 +2933,21 @@ def column_types_of(cur):
     return column_types
 
 
+# The types psql right-aligns (column_type_alignment in src/fe_utils/print.c).
+RIGHT_ALIGNED_TYPES = frozenset(("int2", "int4", "int8", "float4", "float8", "numeric", "oid", "xid", "xid8", "cid", "money"))
+
+
+def column_alignments_of(cur):
+    """tabulate's colalign for ``cur``: numbers to the right, the rest to the left, as psql does."""
+    alignments = []
+    for d in cur.description:
+        col_type = cur.adapters.types.get(d.type_code)
+        # The registry answers an array's oid with its element type: bigint[] is not a number.
+        number = col_type is not None and col_type.oid == d.type_code and col_type.name in RIGHT_ALIGNED_TYPES
+        alignments.append("right" if number else "left")
+    return alignments
+
+
 def format_output(title, cur, headers, status, settings, explain_mode=False, failed=False):
     output: Any = []
     expanded = settings.expanded or settings.table_format == "vertical"
@@ -2987,7 +3001,10 @@ def format_output(title, cur, headers, status, settings, explain_mode=False, fai
         "max_field_width": settings.max_field_width,
     }
     if not settings.floatfmt:
-        output_kwargs["preprocessors"] = (align_decimals,)
+        # Not align_decimals: with the column types known it padded every
+        # float/numeric value, csv and tsv cells included, and crashed with -t
+        # (no headers). Numbers are right-aligned instead, like psql.
+        output_kwargs["preprocessors"] = ()
 
     if settings.column_date_formats:
         output_kwargs["preprocessors"] += (format_timestamps,)
@@ -3007,13 +3024,14 @@ def format_output(title, cur, headers, status, settings, explain_mode=False, fai
         headers = [] if settings.tuples_only else [case_function(x) for x in headers]
         # The types come from the cursor, which list(cur) below turns into plain
         # rows. Left to infer them from the values, cli_helpers files float and
-        # Decimal alike under Decimal, which neither format_numbers nor
-        # align_decimals treats as a number: the float format never applied.
+        # Decimal alike under Decimal, which format_numbers does not treat as a
+        # number: the float format never applied.
         column_types = column_types_of(cur) if hasattr(cur, "description") else None
+        colalign = column_alignments_of(cur) if hasattr(cur, "description") and cur.description else None
         if max_width is not None:
             cur = list(cur)
 
-        formatted = formatter.format_output(cur, headers, column_types=column_types, **output_kwargs)
+        formatted = formatter.format_output(cur, headers, column_types=column_types, colalign=colalign, **output_kwargs)
         if isinstance(formatted, str):
             formatted = iter(formatted.splitlines())
         first_line = next(formatted)

@@ -34,13 +34,18 @@ Bug fixes:
   comments and dollar quotes skipped), so a multi-line query stays whole and a
   psql-style one-line ``\copy`` without a semicolon still leaves the next line
   to run as its own statement.
-* The ``float`` format of ``[data_formats]`` applies at last, and the numbers of
-  float and numeric columns line up on their decimal point: the formatter was
+* The ``float`` format of ``[data_formats]`` applies at last: the formatter was
   left to infer the column types from the values, and cli_helpers files float
-  and Decimal alike under Decimal, which neither its number formatting nor its
-  decimal alignment treats as a number. The types now come from the cursor
-  description (``float4``, ``float8`` and ``numeric`` as float, ``int2`` to
-  ``int8`` as int), in the table and in the auto-vertical fallback.
+  and Decimal alike under Decimal, which its number formatting does not treat
+  as a number. The types now come from the cursor description (``float4``,
+  ``float8`` and ``numeric`` as float, ``int2`` to ``int8`` as int), in the
+  table and in the auto-vertical fallback.
+* Number columns are right-aligned, as psql and pgAdmin show them: ``int2``,
+  ``int4``, ``int8``, ``float4``, ``float8``, ``numeric``, ``oid``, ``xid``,
+  ``xid8``, ``cid`` and ``money``, the types psql right-aligns. This replaces
+  the decimal-point alignment, which once fed the real column types padded
+  float and numeric values with spaces in csv and tsv output and crashed
+  ``-t`` with "list index out of range".
 * Text from a SQL_ASCII connection no longer comes out as hex (``0x63616fe9``)
   or as ``[b'\xe9']``: the server validates nothing there, so psycopg returns
   raw bytes, which pgcli now decodes as UTF-8 and, when that fails, with the
