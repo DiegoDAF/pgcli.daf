@@ -1,6 +1,14 @@
 Upcoming
 ==============
 
+### PENDIENTES 2026-10-29
+- [ ] Publicar 4.7.4 cuando Diego diga "publicalo": tag v4.7.4 sobre 02c66376 + push de main y del tag +
+      GitHub release con el wheel y ../release_notes_v4.7.4.md + fila en la tabla de releases
+- [ ] `d` apagada: instalar 4.7.4 (wheel por scp, `ssh daf@$(tailscale ip -4 d)`; el nombre `d` no resuelve)
+- [ ] PR #1655 (draft) tiene la regresion de align_decimals (-t se cae, csv con espacios): rehacerlo
+      con la alineacion a la derecha antes de sacarlo de draft
+- [ ] .pgpass de lm1/lm2/beta: tienen el suyo (860 lineas vs 772 de t); Diego decide si se pisa
+
 ### PENDIENTES 2026-10-21 (decisiones de Diego de la madrugada)
 - [ ] ACORDARSE: ~/.config/pgcli NO va a syncthing (decision 2026-10-21). Copiar a mano config y
       dsn.d a `d` cuando cambien
@@ -340,6 +348,29 @@ Upcoming
       fallback dsn->host sin documentar, thread de refresh sin try/except (pierde callback +
       fuga de conexion en modo 2-conexiones), auto-reconnect con _conn_params viejos sin
       re-evaluar el tunel, SQL_ASCII muestra bytes como repr
+
+2026-10-29
+===================
+
+- [x] Numeros alineados a la derecha como psql (a4ccce28): colalign por tipo (los de
+      column_type_alignment de psql), arrays a la izquierda. Saca align_decimals, que desde 19c2ceea
+      rompia -t ("list index out of range") y metia espacios en csv/tsv. 5 tests (fallan sin el fix),
+      pytest 4004, behave 62. Instalado en t, lm1, lm2, beta
+- [x] 4.7.4 preparada (Diego: "saca un release, 474 capicua"): bump 02c66376 local, wheel
+      dist/pgcli-4.7.4-py3-none-any.whl (sha256 b81b66e0...) instalado en t, lm1, lm2, beta (codigo
+      93cd03ad29436845). Notas en ../release_notes_v4.7.4.md. Falta "publicalo"
+
+2026-10-28
+===================
+
+- [x] Windows CI en el fork (nada a upstream, "primero seamos forkeros"): job windows-latest con el
+      PostgreSQL 17 de la imagen, solo unit tests (behave usa pexpect.spawn). Salieron dos bugs reales:
+      .pgpass ignorado en Windows (chequeo 0600) y Include del ssh config sin backslashes (shlex).
+      5 commits 4cbf3a91..3cafe0dd; Windows 3955 passed, Linux 4000. CI 7/7 verde
+- [x] Build 3cafe0dd + config de pgcli (rsync desde t, backups ~/.config/pgcli.bak-20261028-*) en t, d,
+      lm1, lm2, beta. .pgpass sin tocar en lm1/lm2/beta
+- [x] \copy multilinea (60a6ea9f de la otra sesion) corregido en 518f4ebf: termina donde cierran sus
+      parentesis; el fix original rompia el \copy de una linea estilo psql
 
 2026-10-26
 ===================
