@@ -2,8 +2,6 @@ Upcoming
 ==============
 
 ### PENDIENTES 2026-10-29
-- [ ] Publicar 4.7.4 cuando Diego diga "publicalo": tag v4.7.4 sobre 02c66376 + push de main y del tag +
-      GitHub release con el wheel y ../release_notes_v4.7.4.md + fila en la tabla de releases
 - [ ] `d` apagada: instalar 4.7.4 (wheel por scp, `ssh daf@$(tailscale ip -4 d)`; el nombre `d` no resuelve)
 - [ ] PR #1655 (draft) tiene la regresion de align_decimals (-t se cae, csv con espacios): rehacerlo
       con la alineacion a la derecha antes de sacarlo de draft
@@ -348,6 +346,12 @@ Upcoming
       fallback dsn->host sin documentar, thread de refresh sin try/except (pierde callback +
       fuga de conexion en modo 2-conexiones), auto-reconnect con _conn_params viejos sin
       re-evaluar el tunel, SQL_ASCII muestra bytes como repr
+
+2026-10-30
+===================
+
+- [x] 4.7.4 PUBLICADA ("publique nomas"): tag v4.7.4 sobre 02c66376, GitHub release con el wheel
+      (asset identico al local). Instalada en t, lm1, lm2, beta; `d` apagada
 
 2026-10-29
 ===================
