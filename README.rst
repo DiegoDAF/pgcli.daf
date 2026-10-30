@@ -23,17 +23,28 @@ make sense for everyone are sent upstream as small PRs.
 .. image:: screenshots/pgcli.gif
 .. image:: screenshots/image01.png
 
-Install
--------
+Quick start
+-----------
 
-se acuerdan del ping de la muerte, bueno, volvio en forma de sms https://x.com/The_Cyber_News/status/2116072361178919169With `uv <https://docs.astral.sh/uv/>`_, in its own isolated environment:
+pgcli.daf installs with `uv <https://docs.astral.sh/uv/>`_, in an environment
+of its own, so it never touches the system Python or other tools (pgAdmin
+included). Get uv first if you do not have it
+(`other ways <https://docs.astral.sh/uv/getting-started/installation/>`_):
+
+::
+
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+Then pgcli.daf, from the release wheel or straight from the tag:
 
 ::
 
     uv tool install "pgcli[sshtunnel,keyring] @ https://github.com/DiegoDAF/pgcli.daf/releases/download/v4.7.4/pgcli-4.7.4-py3-none-any.whl"
 
-    # or straight from a tag
     uv tool install "pgcli[sshtunnel,keyring] @ git+https://github.com/DiegoDAF/pgcli.daf@v4.7.4"
+
+To upgrade, run the same command for the new version with
+``--force --reinstall`` (without ``--reinstall`` the dependencies stay old).
 
 Both extras matter: ``sshtunnel`` brings paramiko for the tunnels, ``keyring``
 lets pgcli save database and tunnel passwords in the OS keyring. That installs
