@@ -1,260 +1,202 @@
-pgcli.daf — A REPL for Postgres
-================================
+pgcli.daf
+=========
 
-Fork of `pgcli <https://github.com/dbcli/pgcli>`_ with additional features.
-Compatible with upstream pgcli **4.4.0**.
+::
 
-This is a postgres client that does auto-completion and syntax highlighting.
+     .--.   .--.                         _  _         _          __
+    /    \_/    \    _ __    __ _   ___ | |(_)     __| |  __ _  / _|
+    |  o     o  |   | '_ \  / _` | / __|| || |    / _` | / _` || |_
+     \   .-.   /    | |_) || (_| || (__ | || | _ | (_| || (_| ||  _|
+      '-'| |'-'     | .__/  \__, | \___||_||_|(_) \__,_| \__,_||_|
+         | |        |_|     |___/
+         '-'        the Postgres REPL, with a DBA's toolbox bolted on
+
+A fork of `pgcli <https://github.com/dbcli/pgcli>`_: everything upstream
+does (auto-completion, syntax highlighting, pretty tables), plus SSH tunnels,
+psql-style scripting, dump wrappers, named-query libraries and a set of safety
+rails, built by a DBA who lives in it all day.
+
+Tracks upstream **4.7.1**. Latest release: **4.7.4**
+(`releases <https://github.com/DiegoDAF/pgcli.daf/releases>`_). Fixes that
+make sense for everyone are sent upstream as small PRs.
 
 .. image:: screenshots/pgcli.gif
 .. image:: screenshots/image01.png
 
-Quick Start
------------
+Install
+-------
+
+se acuerdan del ping de la muerte, bueno, volvio en forma de sms https://x.com/The_Cyber_News/status/2116072361178919169With `uv <https://docs.astral.sh/uv/>`_, in its own isolated environment:
 
 ::
 
-    $ pip install -U pgcli
+    uv tool install "pgcli[sshtunnel,keyring] @ https://github.com/DiegoDAF/pgcli.daf/releases/download/v4.7.4/pgcli-4.7.4-py3-none-any.whl"
 
-    or
+    # or straight from a tag
+    uv tool install "pgcli[sshtunnel,keyring] @ git+https://github.com/DiegoDAF/pgcli.daf@v4.7.4"
 
-    $ sudo apt-get install pgcli # Only on Debian based Linux (e.g. Ubuntu, Mint, etc)
-    $ brew install pgcli  # Only on macOS
+Both extras matter: ``sshtunnel`` brings paramiko for the tunnels, ``keyring``
+lets pgcli save database and tunnel passwords in the OS keyring. That installs
+four commands: ``pgcli``, ``pgcli_dump``, ``pgcli_dumpall`` and
+``pgcli_isready``. The CI runs the tests on Linux and on Windows.
 
 Usage
 -----
 
 ::
 
-    $ pgcli [database_name]
+    pgcli mydb
+    pgcli postgresql://user@db.example.com:5432/app?sslmode=verify-full
+    pgcli --dsn production                       # an alias from the config
+    pgcli service=reporting                      # .pg_service.conf, every libpq key
+    pgcli --ssh-tunnel user@bastion -h db.internal app
 
-    or
+``pgcli --help`` lists every option. The usual libpq `environment variables
+<https://www.postgresql.org/docs/current/libpq-envars.html>`_ (``PGHOST``,
+``PGSSLMODE``, ``PGPASSFILE``...) work as in psql.
 
-    $ pgcli postgresql://[user[:password]@][netloc][:port][/dbname][?extra=value[&other=other-value]]
+What pgcli.daf adds
+-------------------
 
-Examples:
+SSH tunnels
+^^^^^^^^^^^
 
-::
+Native paramiko, no ``sshtunnel`` library.
 
-    $ pgcli local_database
+* ``--ssh-tunnel user@bastion[:port]`` on the command line, or automatic:
+  ``[ssh tunnels]`` matches hosts by regex, ``[dsn ssh tunnels]`` matches DSN
+  aliases.
+* ``~/.ssh/config`` is honoured the way ``ssh`` reads it: ``IdentityFile``,
+  ``ProxyJump``, ``ProxyCommand`` (with ``%h %p %r``), ``Include``, and
+  ``/etc/ssh/ssh_config`` after the user's file.
+* ``host_key_policy`` (``auto-add``, ``warn``, ``reject``), ``allow_agent``,
+  and ``ssh_tunnel_save_password`` to keep the key passphrase in the keyring.
+* ``.pgpass`` works through the tunnel: the password is looked up for the
+  real host and port, not for the tunnel's local one.
+* ``\c db user otherhost`` opens that server's own tunnel; a reconnect after a
+  dropped connection revives a dead tunnel. Tunnel failures are one clear line.
 
-    $ pgcli postgres://amjith:pa$$w0rd@example.com:5432/app_db?sslmode=verify-ca&sslrootcert=/myrootcert
-
-For more details:
-
-::
-
-    $ pgcli --help
-
-    Usage: pgcli [OPTIONS] [DBNAME] [USERNAME]
-
-    Options:
-      --application-name TEXT   Application name for the connection.
-      --auto-vertical-output    Automatically switch to vertical output mode if
-                                the result is wider than the terminal width.
-      -c, --command TEXT        Run command (SQL or internal) and exit. Multiple
-                                -c options are allowed.
-      -d, --dbname TEXT         Database name to connect to.
-      -D, --dsn TEXT            Use DSN configured into the [alias_dsn] section of
-                                pgclirc file.
-      -f, --file FILE           Execute commands from file, then exit. Multiple -f
-                                options are allowed.
-      -h, --host TEXT           Host address of the postgres database.
-      --init-command TEXT       SQL statement to execute after connecting.
-      --less-chatty             Skip intro on startup and goodbye on exit.
-      -l, --list                List available databases, then exit.
-      --list-dsn                List of DSN configured into the [alias_dsn]
-                                section of pgclirc file.
-      --log-file TEXT           Write all queries & output into a file, in
-                                addition to the normal output destination.
-      -w, --no-password         Never prompt for password.
-      --no-status               Suppress query status line (e.g., SELECT 1).
-      --no-timings              Suppress query execution time display.
-      -o, --output TEXT         Send query results to file (or |pipe).
-      --on-error [stop|resume]  Whether to STOP or RESUME after an error in multi-
-                                statement input. Overrides the on_error config
-                                value.
-      --timeout INTEGER         Seconds to wait for a connection before giving up
-                                (0 waits forever). Overrides the connection string
-                                and $PGCONNECT_TIMEOUT.
-      -W, --password            Force password prompt.
-      --pgclirc FILE            Location of pgclirc file.
-      --ping                    Check database connectivity, then exit.
-      -p, --port INTEGER        Port number at which the postgres instance is
-                                listening.
-      --prompt TEXT             Prompt format (Default: "\u@\h:\d> ").
-      --prompt-dsn TEXT         Prompt format for connections using DSN aliases
-                                (Default: "\u@\h:\d> ").
-      --row-limit INTEGER       Set threshold for row limit prompt. Use 0 to
-                                disable prompt.
-      --single-connection       Do not use a separate connection for completions.
-      --ssh-tunnel TEXT         Open an SSH tunnel to the given address and
-                                connect to the database from it.
-      -t, --tuples-only         Print rows only, suppress headers, status, and
-                                timing.
-      -U, --username TEXT       Username to connect to the postgres database.
-      -u, --user TEXT           Username to connect to the postgres database.
-      -v, --version             Version of pgcli.
-      --warn TEXT               Warn before running a destructive query.
-      -y, --yes                 Force destructive commands without confirmation
-                                prompt.
-      --help                    Show this message and exit.
-
-``pgcli`` also supports many of the same `environment variables`_ as ``psql`` for login options (e.g. ``PGHOST``, ``PGPORT``, ``PGUSER``, ``PGPASSWORD``, ``PGDATABASE``).
-
-The SSL-related environment variables are also supported, so if you need to connect a postgres database via ssl connection, you can set set environment like this:
-
-::
-
-    export PGSSLMODE="verify-full"
-    export PGSSLCERT="/your-path-to-certs/client.crt"
-    export PGSSLKEY="/your-path-to-keys/client.key"
-    export PGSSLROOTCERT="/your-path-to-ca/ca.crt"
-    pgcli -h localhost -p 5432 -U username postgres
-
-.. _environment variables: https://www.postgresql.org/docs/current/libpq-envars.html
-
-Features
---------
-
-The `pgcli` is written using prompt_toolkit_.
-
-* Auto-completes as you type for SQL keywords as well as tables and
-  columns in the database.
-* Syntax highlighting using Pygments.
-* Smart-completion (enabled by default) will suggest context-sensitive
-  completion.
-
-    - ``SELECT * FROM <tab>`` will only show table names.
-    - ``SELECT * FROM users WHERE <tab>`` will only show column names.
-
-* Primitive support for ``psql`` back-slash commands.
-* Pretty prints tabular data.
-
-.. _prompt_toolkit: https://github.com/jonathanslenders/python-prompt-toolkit
-
-Config
-------
-
-A config file is automatically created at ``~/.config/pgcli/config`` at first launch.
-See the file itself for a description of all available options.
-
-pgcli.daf Features
-------------------
-
-SSH Tunnel Support
-^^^^^^^^^^^^^^^^^^
-
-Connect to databases through SSH tunnels using native Paramiko (no ``sshtunnel`` dependency):
-
-::
-
-    $ pgcli --ssh-tunnel user@bastion-host -h db.internal mydb
-
-Configure per-DSN tunnels in ``~/.config/pgcli/config``:
-
-::
-
-    [ssh tunnels]
-    # Match by hostname
-    db.internal = ssh://user@bastion:22
-
-    # Per-DSN tunnel
-    [alias_dsn.ssh tunnels]
-    production = ssh://user@bastion:22
-
-SSH tunnel features:
-
-* Reads ``IdentityFile`` from ``~/.ssh/config`` (host-specific and wildcard)
-* Configurable host key verification: ``auto-add`` (default), ``warn``, ``reject``
-* ``.pgpass`` support works correctly through tunnels
-* ``allow_agent`` config option for passphrase-protected keys
-
-Companion Commands
-^^^^^^^^^^^^^^^^^^
-
-Three additional commands are installed alongside ``pgcli``:
-
-* ``pgcli_dump`` — ``pg_dump`` wrapper with SSH tunnel support
-* ``pgcli_dumpall`` — ``pg_dumpall`` wrapper with SSH tunnel support
-* ``pgcli_isready`` — ``pg_isready`` wrapper with SSH tunnel support
-
-All three support ``--ssh-tunnel`` and ``--dsn``, and pass all other options
-through to the underlying PostgreSQL command. The tunnel debug output is
-``--tunnel-verbose`` on ``pgcli_dump`` and ``pgcli_dumpall``, since ``-v`` is
-their dump tool's own verbose mode, and ``-v/--verbose`` on ``pgcli_isready``.
-
-::
-
-    $ pgcli_dump --ssh-tunnel user@bastion -h db.internal mydb > backup.sql
-    $ pgcli_dump --dsn production mydb -F c -f backup.dump
-    $ pgcli_isready --dsn production
-
-CLI Execution Options
-^^^^^^^^^^^^^^^^^^^^^
-
-Run commands non-interactively, useful for scripting:
-
-::
-
-    # Execute SQL and exit
-    $ pgcli -c "SELECT count(*) FROM users" mydb
-
-    # Multiple commands
-    $ pgcli -c "SELECT 1" -c "SELECT 2" mydb
-
-    # Execute from file
-    $ pgcli -f setup.sql -f data.sql mydb
-
-    # Tuples-only output (no headers, no status — like psql -t)
-    $ pgcli -t -c "SELECT name FROM users" mydb
-
-    # Suppress timings or status independently
-    $ pgcli --no-timings -c "SELECT 1" mydb
-    $ pgcli --no-status -c "SELECT 1" mydb
-
-    # Skip destructive query confirmation
-    $ pgcli -y -f cleanup.sql mydb
-
-    # Output to file
-    $ pgcli -o results.csv -t -c "SELECT * FROM users" mydb
-
-    # List the databases with their sizes (what psql shows with \l+)
-    $ pgcli -l
-
-Named Queries
+Dump wrappers
 ^^^^^^^^^^^^^
 
-* ``namedqueries.d/`` directory support for organizing queries in separate files
-* ``dsn.d/`` directory support for organizing DSN aliases
-* ``\nq`` — quiet mode: execute named query without printing the query text
-* ``\nr`` — reload named queries without restarting pgcli
-* Alphabetically sorted ``\n`` output
+``pgcli_dump``, ``pgcli_dumpall`` and ``pgcli_isready`` wrap the PostgreSQL
+tools with the same tunnels and aliases. Every other option goes through
+untouched.
 
-Prompt and Display
-^^^^^^^^^^^^^^^^^^
+::
 
-* ``\T`` escape sequence — shows transaction status in prompt (idle, in transaction, failed)
-* ``--init-command`` — execute SQL after connecting (also configurable per-DSN in config)
-* Log rotation with multiple modes: ``day-of-week``, ``day-of-month``, ``date``
+    pgcli_dump --dsn production -F c -f app.dump          # the alias is the connection
+    pgcli_dump --ssh-tunnel user@bastion -h db.internal app > app.sql
+    pgcli_dumpall --dsn production -g -f globals.sql
+    pgcli_isready --dsn production
+
+* ``--dsn ALIAS`` uses the alias as the connection, as ``pgcli --dsn`` does
+  (``-h``/``-p``/``-U`` still override it, a bare database name replaces its
+  database).
+* ``-v`` reaches pg_dump and pg_dumpall; the tunnel's own debug output is
+  ``--tunnel-verbose`` there (``-v`` on ``pgcli_isready``).
+* The password file is read exactly as libpq reads it.
+
+Scripting, the psql way
+^^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+    pgcli -c "select count(*) from orders" -c "\dt" app        # several -c
+    pgcli -f schema.sql -f data.sql app                        # several -f, and -c with -f
+    pgcli -t -o out.csv -c "select id, name from users" app    # rows only, to a file
+    pgcli -y -f cleanup.sql app                                # no destructive-query prompt
+    pgcli --no-timings --no-status -c "select 1" app
+    pgcli -l                                                   # databases, with their size
+
+* Exit codes as in psql: 1 for a failed ``-c``, 3 for a failed script when
+  ``--on-error stop`` (the default, psql's ``ON_ERROR_STOP``); ``resume`` runs
+  everything.
+* Statements run one at a time: ``\watch`` repeats only its own statement, a
+  backslash command ends at its line, a multi-line ``\copy (query) to 'file'``
+  stays whole.
+* ``--timeout`` / ``connect_timeout`` so a dead host fails fast.
+* SQL pasted straight from a markdown answer runs: the fences and the prose are
+  dropped, and pgcli says what it removed.
+
+Query tool comforts (pgAdmin-inspired)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* **F5** cycles EXPLAIN mode: off, plan, plan with an analysis summary
+  (diagnostics, depesz-style per-node stats). **F6** toggles paste mode (each
+  statement echoed with its result). **F9** runs only the selected text.
+* ``\autocommit [on|off]``, ``stream_results`` (each statement's result as soon
+  as it finishes), NOTICE messages streamed live (``vacuum verbose``).
+* ``\hist [N]``: the SQL run this session, with elapsed times.
+* Completion for ``SET`` (from ``pg_settings``) and ``SET ROLE``.
+* Prompt tokens ``\T`` (transaction status) and ``\service``.
+* ``$PSQL_EDITOR`` honoured by ``\e``; ``\cd`` and ``\ls`` with path completion.
+
+Named queries and aliases, organised
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* ``dsn.d/`` and ``namedqueries.d/``: one file per alias or query family.
+  A ``-17`` suffix (``activity-17.conf``) offers those queries only on servers
+  of that version or newer, as ``.psqlrc-17`` does.
+* ``\ne name`` edits a named query in your editor, ``\nq`` runs one without
+  echoing it, ``\nr`` reloads them all, ``\n`` lists them sorted.
+* ``--init-command`` globally or per DSN, ``application_name``.
+
+Output
+^^^^^^
+
+* Number columns right-aligned, as psql and pgAdmin show them.
+* The ``float`` format of ``[data_formats]`` actually applies.
+* Text from ``SQL_ASCII`` databases decoded (UTF-8, then
+  ``sql_ascii_fallback_encoding``) instead of printed as bytes.
+* ``#`` is PostgreSQL's XOR operator, not a comment.
+* A second Ctrl-C while a query is being cancelled no longer leaves the
+  connection stuck.
+* The banner says whether SSL is on, and warns when ``sslmode=prefer`` fell
+  back to plain text.
+
+Logs and state
+^^^^^^^^^^^^^^
+
+* ``log_rotation_mode``: ``none``, ``day-of-week``, ``day-of-month`` or
+  ``date``; ``log_destination``; ``log_truncate_on_rotation``.
+* History and log live in ``$XDG_STATE_HOME`` (``~/.local/state/pgcli``).
 
 Security
 ^^^^^^^^
 
-* ``\restrict`` / ``\unrestrict`` — meta-command blocking for safe dump restoration (CVE-2025-8714)
-* SSH passwords sanitized from debug logs
-* Passwords masked in ``--list-dsn`` output
-* ``re.fullmatch()`` for SSH tunnel hostname matching (prevents partial matches)
-* SQL passwords redacted from debug logs (``CREATE/ALTER USER/ROLE``)
-* File path sanitization in ``\i``, ``\o``, ``\log-file`` (symlink resolution, system path blocking)
+* ``\restrict`` / ``\unrestrict`` (CVE-2025-8714), applied per statement.
+* Passwords never reach the debug log, ``--list-dsn``, error lines or the
+  process title, in any spelling libpq accepts.
+* History, log and config files are created readable by their owner only.
+* ``\i``, ``\o`` and ``\log-file`` resolve symlinks and refuse system paths.
+
+Windows
+^^^^^^^
+
+* The password file is read the way libpq does there
+  (``%APPDATA%\postgresql\pgpass.conf``, no POSIX mode check).
+* ``Include`` paths in the ssh config keep their backslashes.
+
+Config
+------
+
+The first run writes ``~/.config/pgcli/config`` with every option documented
+in place. ``\?`` inside pgcli lists the commands.
+
+Versions
+--------
+
+``<upstream major.minor>.<our patch>``: 4.7.4 is upstream 4.7 plus our patch
+level 4. See the `changelog <changelog.rst>`_.
 
 Thanks
 ------
 
-Based on the work of `Amjith Ramanujam <https://github.com/amjith>`_ and
-`Irina Truong <https://github.com/j-bennet>`_ on the original
-`pgcli <https://github.com/dbcli/pgcli>`_.
-
-Built with `Python Prompt Toolkit <https://github.com/jonathanslenders/python-prompt-toolkit>`_,
-`Click <https://click.palletsprojects.com/>`_, and
-`psycopg <https://www.psycopg.org/>`_.
+To `Amjith Ramanujam <https://github.com/amjith>`_,
+`Irina Truong <https://github.com/j-bennet>`_,
+`Damien Baty <https://github.com/dbaty>`_ and everyone behind
+`dbcli/pgcli <https://github.com/dbcli/pgcli>`_. Built on
+`prompt_toolkit <https://github.com/prompt-toolkit/python-prompt-toolkit>`_,
+`psycopg <https://www.psycopg.org/>`_, `paramiko <https://www.paramiko.org/>`_
+and `Click <https://click.palletsprojects.com/>`_.
