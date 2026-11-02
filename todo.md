@@ -1,6 +1,17 @@
 Upcoming
 ==============
 
+### PENDIENTES 2026-11-02 (decide Diego)
+- [ ] REGRESION EN UPSTREAM: cli_helpers 2.15.3 (28/10, su #122, a partir de nuestro issue #121) infiere
+      float para float/Decimal y despierta align_decimals en pgcli: `pgcli -t` con una columna numeric o
+      float da "list index out of range" y el csv sale con espacios ("  1.5"). Verificado en original/main
+      d948fd0b con 2.15.3. El fork no lo tiene (a4ccce28). Opciones: rehacer #1655 (draft) con el fix de
+      a4ccce28 y sacarlo de draft; issue corto en pgcli; PR a cli_helpers (align_decimals dimensiona por
+      headers y revienta con headers vacios)
+- [ ] #1656 (tercero, alias_map_file en UTF-8): el fork tiene el mismo bug (open() sin encoding). Traerlo
+      cuando lo mergeen, o arreglarlo antes en el fork
+- [ ] #1656: j-bennet ve los tests rojos; es el rojo que arregla nuestro #1653 (comentar? decide Diego)
+
 ### PENDIENTES 2026-10-29
 - [ ] `d` apagada: instalar 4.7.4 (wheel por scp, `ssh daf@$(tailscale ip -4 d)`; el nombre `d` no resuelve)
 - [ ] PR #1655 (draft) tiene la regresion de align_decimals (-t se cae, csv con espacios): rehacerlo
