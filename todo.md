@@ -1,6 +1,12 @@
 Upcoming
 ==============
 
+### WINDOWS CI EN UPSTREAM (2026-11-04)
+- [ ] dbcli/pgcli#1657 en DRAFT (rama upstream/windows-unit-tests, bcee5e32 + b1901849 sobre original/main
+      27be0dda): job windows-latest + 3 fixes de tests. Verde en el fork (2808 passed). Retoma #1442 de Damien.
+      Sacar de draft cuando Diego diga; avisar en #1442
+- [x] #1653 mergeado por Irina el 2026-11-03; traido al fork (3d9c8d79)
+
 ### PENDIENTES 2026-11-02 (decide Diego)
 - [ ] REGRESION EN UPSTREAM: cli_helpers 2.15.3 (28/10, su #122, a partir de nuestro issue #121) infiere
       float para float/Decimal y despierta align_decimals en pgcli: `pgcli -t` con una columna numeric o
