@@ -1,14 +1,20 @@
 import logging
+from prompt_toolkit.application import get_app
 from prompt_toolkit.document import Document
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.filters import (
+    Condition,
     completion_is_selected,
+    control_is_searchable,
     is_searching,
     has_completions,
     has_selection,
+    vi_insert_mode,
     vi_mode,
 )
+from prompt_toolkit.search import SearchDirection, accept_search, start_search, stop_search
 
 from .pgbuffer import buffer_should_be_handled, safe_multi_line_mode
 
@@ -159,5 +165,41 @@ def pgcli_bindings(pgcli):
     def _(event):
         """Move down in history."""
         event.current_buffer.history_forward(count=event.arg)
+
+    # prompt_toolkit's stop_search() always leaves Vi in navigation mode. That
+    # suits "/" and "?", but after Ctrl-R from insert mode Backspace would move
+    # the cursor instead of deleting, so go back to insert mode there.
+    search_from_insert = False
+
+    def start_search_from_insert(direction):
+        def handler(event):
+            nonlocal search_from_insert
+            search_from_insert = True
+            start_search(direction=direction)
+
+        return handler
+
+    def leave_search(leave, back_to_insert=True):
+        def handler(event):
+            nonlocal search_from_insert
+            leave()
+            if search_from_insert and back_to_insert:
+                event.app.vi_state.input_mode = InputMode.INSERT
+            search_from_insert = False
+
+        return handler
+
+    search_buffer_is_empty = Condition(lambda: get_app().current_buffer.text == "")
+    can_start_search = vi_insert_mode & control_is_searchable
+    vi_searching = vi_mode & is_searching
+
+    kb.add("c-r", filter=can_start_search)(start_search_from_insert(SearchDirection.BACKWARD))
+    kb.add("c-s", filter=can_start_search)(start_search_from_insert(SearchDirection.FORWARD))
+    kb.add("enter", filter=vi_searching)(leave_search(accept_search))
+    kb.add("c-c", filter=vi_searching)(leave_search(stop_search))
+    kb.add("c-g", filter=vi_searching)(leave_search(stop_search))
+    kb.add("backspace", filter=vi_searching & search_buffer_is_empty)(leave_search(stop_search))
+    # Escape stays in navigation mode: leaving insert mode is what it is for.
+    kb.add("escape", filter=vi_searching)(leave_search(accept_search, back_to_insert=False))
 
     return kb

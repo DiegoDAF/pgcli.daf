@@ -1,8 +1,16 @@
 from unittest.mock import Mock
 
+import pytest
+from prompt_toolkit import PromptSession
+from prompt_toolkit.application import create_app_session
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
+from prompt_toolkit.enums import EditingMode
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
+from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.keys import Keys
+from prompt_toolkit.output import DummyOutput
 
 from pgcli.key_bindings import pgcli_bindings
 
@@ -279,11 +287,12 @@ class TestEnterRunsTheQuery:
         _bindings_for(kb, "ControlM")[1].handler(_event_on(buff))
         buff.validate_and_handle.assert_called_once()
 
-    def test_there_are_exactly_two_enter_bindings(self):
-        # One closes the dropdown, one submits. A third would make which runs
-        # depend on registration order.
+    def test_there_are_exactly_three_enter_bindings(self):
+        # One closes the dropdown, one submits, one ends a Vi search (the submit
+        # one is off while searching). Another that could overlap would make
+        # which runs depend on registration order.
         kb = pgcli_bindings(_make_pgcli())
-        assert len(_bindings_for(kb, "ControlM")) == 2
+        assert len(_bindings_for(kb, "ControlM")) == 3
 
 
 class TestAltEnter:
@@ -310,3 +319,65 @@ class TestHistoryKeys:
         event.arg = 3
         _bindings_for(kb, "ControlN")[0].handler(event)
         buff.history_forward.assert_called_once_with(count=3)
+
+
+QUERY = "select 1 from t where relname = 'foo_bar';"
+CTRL_C, CTRL_G, CTRL_R, CTRL_S = "\x03", "\x07", "\x12", "\x13"
+BACKSPACE, ENTER, ESC, END, LEFT = "\x7f", "\r", "\x1b", "\x1b[F", "\x1b[D"
+
+
+def _type_at_prompt(keys, editing_mode=EditingMode.VI):
+    """Type keys at a real prompt holding QUERY; return its text, cursor and Vi mode."""
+    done = KeyBindings()
+
+    @done.add("f12")
+    def _(event):
+        buff = event.current_buffer
+        event.app.exit(result=(buff.text, buff.cursor_position, event.app.vi_state.input_mode))
+
+    with create_pipe_input() as pipe, create_app_session(input=pipe, output=DummyOutput()):
+        pipe.send_text(keys + "\x1b[24~")  # F12
+        session = PromptSession(
+            multiline=True,
+            key_bindings=merge_key_bindings([pgcli_bindings(_make_pgcli()), done]),
+            editing_mode=editing_mode,
+        )
+        return session.prompt(default=QUERY)
+
+
+@pytest.mark.parametrize(
+    "keys",
+    [
+        CTRL_R + "foo_b" + ENTER,
+        CTRL_S + "foo_b" + ENTER,
+        CTRL_R + "foo_b" + CTRL_C,
+        CTRL_R + "foo_b" + CTRL_G,
+        CTRL_R + BACKSPACE,
+    ],
+)
+def test_vi_search_from_insert_mode_returns_to_insert_mode(keys):
+    assert _type_at_prompt(keys)[2] == InputMode.INSERT
+
+
+@pytest.mark.parametrize("editing_mode", [EditingMode.VI, EditingMode.EMACS])
+def test_backspace_deletes_after_accepting_ctrl_r(editing_mode):
+    """Ctrl-R, Enter, End, two lefts, Backspace: deletes the character before the cursor."""
+    keys = CTRL_R + "foo_b" + ENTER + END + LEFT + LEFT + BACKSPACE
+    assert _type_at_prompt(keys, editing_mode)[0] == QUERY.replace("foo_bar", "foo_ba")
+
+
+@pytest.mark.parametrize(
+    "keys",
+    [
+        ESC + "/foo_b" + ENTER,  # Vi search from navigation mode
+        ESC + CTRL_R + "foo_b" + ENTER,
+        CTRL_R + "foo_b" + ESC,  # Escape means leaving insert mode
+        CTRL_R + "foo_b" + ESC + "/foo_b" + ENTER,  # the Ctrl-R before is forgotten
+    ],
+)
+def test_vi_search_stays_in_navigation_mode(keys):
+    assert _type_at_prompt(keys)[2] == InputMode.NAVIGATION
+
+
+def test_ctrl_r_during_a_vi_search_goes_to_the_previous_match():
+    assert _type_at_prompt(CTRL_R + "re" + CTRL_R + ENTER)[1] == QUERY.index("re")

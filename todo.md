@@ -364,6 +364,13 @@ Upcoming
       fuga de conexion en modo 2-conexiones), auto-reconnect con _conn_params viejos sin
       re-evaluar el tunel, SQL_ASCII muestra bytes como repr
 
+2026-11-05
+===================
+
+- [x] Vi: salir de una busqueda Ctrl-R/Ctrl-S iniciada en insert vuelve a insert. prompt_toolkit
+      (`stop_search`) siempre deja navegacion, donde Backspace solo mueve el cursor. Esc, `/` y `?`
+      siguen terminando en navegacion. Tests con teclas reales en test_key_bindings.py
+
 2026-10-30
 ===================
 

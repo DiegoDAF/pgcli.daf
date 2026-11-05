@@ -4,6 +4,9 @@ Upcoming
 Bug fixes:
 ----------
 
+* Vi mode: leaving a Ctrl-R or Ctrl-S search started from insert mode goes back
+  to insert mode instead of navigation mode, where Backspace only moved the
+  cursor. Escape, ``/`` and ``?`` still end in navigation mode.
 * Bash completion for ``pgcli_dump``, ``pgcli_dumpall`` and ``pgcli_isready``:
   ``--dsn`` aliases, ``--ssh-tunnel`` hosts and the wrapped tool's own long
   options. For ``pgcli``, ``-f``, ``-o``, ``--log-file`` and ``--pgclirc``
