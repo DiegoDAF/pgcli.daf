@@ -80,8 +80,16 @@ _pgcli()
             _pgcli_dsn_aliases
             return 0
             ;;
-        --help|-v|--version|-p|--port|-R|--row-limit|--application-name|--prompt|--prompt-dsn|--ssh-tunnel|--log-file|--init-command|-c|--command|-f|--file|-t|--tuples-only|-o|--output)
-            # all other arguments are noop with these
+        -f|--file|-o|--output|--log-file|--pgclirc)
+            _filedir
+            return 0
+            ;;
+        --on-error)
+            COMPREPLY=( $( compgen -W 'stop resume' -- "$cur" ) )
+            return 0
+            ;;
+        --help|-v|--version|-p|--port|-R|--row-limit|--application-name|--prompt|--prompt-dsn|--ssh-tunnel|--init-command|-c|--command|--timeout|--warn)
+            # these take a value pgcli cannot guess
             return 0
             ;;
     esac
@@ -93,11 +101,12 @@ _pgcli()
             ;;
         --*)
             # return list of available options
-            COMPREPLY=( $( compgen -W '--host --port --user --password --no-password
+            COMPREPLY=( $( compgen -W '--host --port --user --username --password --no-password
                 --single-connection --version --dbname --pgclirc --dsn --list-dsn
                 --row-limit --application-name --less-chatty --prompt --prompt-dsn
                 --list --ping --auto-vertical-output --warn --ssh-tunnel --log-file
-                --init-command --yes --command --file --tuples-only --output --help' -- "$cur" ) )
+                --init-command --yes --command --file --tuples-only --output --timeout
+                --on-error --no-timings --no-status --help' -- "$cur" ) )
             [[ $COMPREPLY == *= ]] && compopt -o nospace
             return 0
             ;;
@@ -113,3 +122,57 @@ _pgcli()
     esac
 } &&
 complete -F _pgcli pgcli
+
+_pgcli_wrapper()
+{
+    # pgcli_dump, pgcli_dumpall and pgcli_isready: their own options plus the
+    # long options of the PostgreSQL tool they wrap, read from its --help.
+    local cur prev words cword
+    _init_completion -s || return
+
+    local tool own
+    case "${words[0]##*/}" in
+        pgcli_dump)    tool=pg_dump;    own='--dsn --ssh-tunnel --tunnel-verbose' ;;
+        pgcli_dumpall) tool=pg_dumpall; own='--dsn --ssh-tunnel --tunnel-verbose' ;;
+        pgcli_isready) tool=pg_isready; own='--dsn --ssh-tunnel --verbose' ;;
+        *) return ;;
+    esac
+
+    case $prev in
+        --dsn)
+            _pgcli_dsn_aliases
+            return 0
+            ;;
+        -h|--host|--ssh-tunnel)
+            _known_hosts_real "$cur"
+            return 0
+            ;;
+        -U|--username)
+            _pg_users
+            return 0
+            ;;
+        -f|--file)
+            _filedir
+            return 0
+            ;;
+        -F|--format)
+            COMPREPLY=( $( compgen -W 'plain custom directory tar' -- "$cur" ) )
+            return 0
+            ;;
+        -d|--dbname|-p|--port|-n|--schema|-N|--exclude-schema|-t|--table|-T|--exclude-table|-j|--jobs|-Z|--compress|-E|--encoding|-l|--database|-S|--superuser|--role|--timeout)
+            # these take a value
+            return 0
+            ;;
+    esac
+
+    # With --dsn the alias is the connection, so after it the useful thing to
+    # offer is the options; a bare word would otherwise get file names.
+    if [[ -z "$cur" || "$cur" == -* ]]; then
+        local tool_opts
+        tool_opts=$( "$tool" --help 2>/dev/null | grep -oE -- '--[a-z][a-z-]*=?' | sort -u )
+        COMPREPLY=( $( compgen -W "$own $tool_opts" -- "${cur:---}" ) )
+        [[ $COMPREPLY == *= ]] && compopt -o nospace
+        return 0
+    fi
+} &&
+complete -F _pgcli_wrapper pgcli_dump pgcli_dumpall pgcli_isready

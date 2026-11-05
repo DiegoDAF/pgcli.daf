@@ -4,6 +4,11 @@ Upcoming
 Bug fixes:
 ----------
 
+* Bash completion for ``pgcli_dump``, ``pgcli_dumpall`` and ``pgcli_isready``:
+  ``--dsn`` aliases, ``--ssh-tunnel`` hosts and the wrapped tool's own long
+  options. For ``pgcli``, ``-f``, ``-o``, ``--log-file`` and ``--pgclirc``
+  complete file names, and ``--timeout``, ``--on-error``, ``--no-timings`` and
+  ``--no-status`` are offered.
 * Read ``alias_map_file`` as UTF-8 (with or without a BOM) instead of the
   locale encoding, which made non-ASCII aliases fail on Windows
   (upstream #1656, by Wei-Lun Li).
