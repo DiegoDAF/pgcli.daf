@@ -997,6 +997,43 @@ def test_other_programming_errors_are_not_swallowed(executor):
     assert "\\copy" not in str(excinfo.value)
 
 
+def _refused_copy_to_stdout(executor):
+    """Run a COPY to stdout, which pgcli refuses, watching whether it gets cancelled."""
+    with patch.object(executor.conn, "cancel", wraps=executor.conn.cancel) as cancel:
+        with pytest.raises(psycopg.ProgrammingError):
+            list(executor.run("copy (select generate_series(1, 100000)) to stdout"))
+    return cancel
+
+
+@dbtest
+def test_copy_to_stdout_is_cancelled_outside_a_transaction(executor):
+    """Reading a big table to the end only to throw it away could take hours."""
+    assert _refused_copy_to_stdout(executor).call_count == 1
+    assert executor.conn.info.transaction_status == psycopg.pq.TransactionStatus.IDLE
+    assert run(executor, "select 1 as x", join=True)
+
+
+@dbtest
+def test_copy_to_stdout_is_read_to_the_end_when_the_cancel_fails(executor):
+    with patch.object(executor.conn, "cancel", side_effect=psycopg.OperationalError("no route")):
+        with pytest.raises(psycopg.ProgrammingError) as excinfo:
+            run(executor, "copy (select generate_series(1, 100000)) to stdout")
+    assert "\\copy" in str(excinfo.value)
+    assert run(executor, "select 1 as x", join=True)
+
+
+@dbtest
+def test_copy_to_stdout_keeps_an_open_transaction(executor):
+    """Cancelling would abort the transaction: its commit would turn into a rollback."""
+    run(executor, "create table copy_tx(a int)")
+    run(executor, "begin")
+    run(executor, "insert into copy_tx values (1)")
+    assert _refused_copy_to_stdout(executor).call_count == 0
+    assert executor.conn.info.transaction_status == psycopg.pq.TransactionStatus.INTRANS
+    run(executor, "commit")
+    assert "| 1 |" in run(executor, "select * from copy_tx", join=True)
+
+
 @dbtest
 def test_get_socket_directory_decodes_sql_ascii_bytes(executor):
     with patch.object(executor.conn, "cursor") as mock_cursor:

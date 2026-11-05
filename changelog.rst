@@ -4,6 +4,9 @@ Upcoming
 Bug fixes:
 ----------
 
+* ``copy ... to stdout`` is cancelled instead of read to the end before pgcli
+  refuses it, which took as long as the whole table. Inside a transaction it is
+  still read to the end, because a cancel would abort the transaction.
 * Vi mode: leaving a Ctrl-R or Ctrl-S search started from insert mode goes back
   to insert mode instead of navigation mode, where Backspace only moved the
   cursor. Escape, ``/`` and ``?`` still end in navigation mode.

@@ -367,6 +367,8 @@ Upcoming
 2026-11-05
 ===================
 
+- [x] `copy ... to stdout` rechazado: se cancela en vez de leerse entero (30M filas: 43 s -> 1,6 s). Dentro
+      de una transaccion se sigue leyendo entero: el cancel la aborta y su commit pasa a ser rollback
 - [x] Vi: salir de una busqueda Ctrl-R/Ctrl-S iniciada en insert vuelve a insert. prompt_toolkit
       (`stop_search`) siempre deja navegacion, donde Backspace solo mueve el cursor. Esc, `/` y `?`
       siguen terminando en navegacion. Tests con teclas reales en test_key_bindings.py

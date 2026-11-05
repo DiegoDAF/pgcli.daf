@@ -702,11 +702,14 @@ class PGExecute:
         """
         return self.conn.closed != 0  # type: ignore[union-attr]
 
-    def _end_stray_copy(self):
+    def _end_stray_copy(self, cancel):
         """Finish a COPY that cursor.execute() started and then refused.
 
         Without this the connection stays in the COPY state for the rest of
         the session.
+
+        :param cancel: Bool. Whether a COPY TO STDOUT may be cancelled, which
+            would abort a transaction, instead of read to the end.
         """
         pgconn = self.conn.pgconn  # type: ignore[union-attr]
         nonblocking = pgconn.nonblocking
@@ -717,7 +720,13 @@ class PGExecute:
                 # COPY FROM STDIN: abort it without sending any data.
                 pgconn.put_copy_end(b"use \\copy instead")
             except psycopg.OperationalError:
-                # COPY TO STDOUT: drain the rows the server is sending.
+                # COPY TO STDOUT: its rows are thrown away, so stop it rather
+                # than read a big table to the end, then drain what was sent.
+                if cancel:
+                    try:
+                        self.conn.cancel()  # type: ignore[union-attr]
+                    except psycopg.Error as e:
+                        _logger.debug("Could not cancel the COPY, reading it to the end: %s", e)
                 while pgconn.get_copy_data(0)[0] > 0:
                     pass
             while pgconn.get_result() is not None:
@@ -841,6 +850,8 @@ class PGExecute:
                 return title, None, None, res.command_status.decode()
 
             cur = self.conn.cursor()  # type: ignore[union-attr]
+            # Read it now: during the COPY the status only says ACTIVE.
+            outside_transaction = self.conn.info.transaction_status == psycopg.pq.TransactionStatus.IDLE  # type: ignore[union-attr]
             try:
                 cur.execute(split_sql)
             except psycopg.ProgrammingError as e:
@@ -851,7 +862,7 @@ class PGExecute:
                 # transaction is open. Close the COPY before reporting the error.
                 if self.conn.info.transaction_status != psycopg.pq.TransactionStatus.ACTIVE:  # type: ignore[union-attr]
                     raise
-                self._end_stray_copy()
+                self._end_stray_copy(cancel=outside_transaction)
                 raise psycopg.ProgrammingError("COPY to STDOUT or from STDIN is not supported, use \\copy instead") from e
 
             # cur.description will be None for operations that do not return
