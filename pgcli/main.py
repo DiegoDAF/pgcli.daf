@@ -89,7 +89,7 @@ click.disable_unicode_literals_warning = True
 
 from getpass import getuser, getpass
 
-from psycopg import OperationalError, InterfaceError, Notify
+from psycopg import DatabaseError, OperationalError, InterfaceError, Notify
 from psycopg.conninfo import make_conninfo, conninfo_to_dict
 from psycopg.errors import Diagnostic
 
@@ -1741,7 +1741,7 @@ class PGCli:
 
                 try:
                     text = self.handle_editor_command(text)
-                except RuntimeError as e:
+                except (RuntimeError, DatabaseError) as e:
                     logger.error("sql: %r, error: %r", redact_sql(text), redact_text(e))
                     logger.error("traceback: %r", redact_text(traceback.format_exc()))
                     click.secho(str(e), err=True, fg="red")
