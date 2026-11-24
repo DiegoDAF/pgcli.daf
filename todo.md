@@ -10,7 +10,8 @@ Upcoming
 - [ ] Propuesta de flujo de PRs: Irina (17/11) prefiere una seccion "Before opening a PR" en
       CONTRIBUTING.rst (buscar issue/PR existente, comentar ahi, linkear si igual abris otro), sin
       gate de aprobacion (tiene ~2h por semana). Damien de acuerdo, sin bot. Nosotros ofrecimos
-      redactarla. Diego dio el OK (24/11): rama upstream/contributing-before-pr, PR a abrir
+      redactarla. PR dbcli/pgcli#1666 ABIERTO como draft el 24/11 (rama upstream/contributing-before-pr,
+      177b8551 sobre original/main dc9ce944). Pasarlo a ready cuando el CI de upstream de verde
 
 ### UPSTREAM AL 2026-11-10
 - [ ] #1636 (COPY): anandghegde sumo el cancel que le propusimos (76d4da97, 2026-11-10). Revisar
