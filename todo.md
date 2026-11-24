@@ -2,16 +2,15 @@ Upcoming
 ==============
 
 ### UPSTREAM AL 2026-11-24 (original/main sigue en dc9ce944, nada mergeado desde el 04/11)
-- [ ] 4.7.5 PREPARADA, falta que Diego pruebe y diga "publicalo": tag v4.7.5 sobre el bump f52b6ec8
-      + push del tag + GitHub release con el wheel (sha256 a0a82b38...) + fila en la tabla del CLAUDE.md
+- [ ] Instalar 4.7.5 en `lm1`, `lm2`, `beta` y `d` (siguen con 4.7.4); wheel del release v4.7.5
 - [ ] Terceros nuevos: #1663 (SSL de pg_service.conf; el fork ya pasa todos los params, #1474),
       #1664 (arrays en formato Postgres), #1665 (URL desde .env), #1662 (FROM con comas).
       #1660 cerrado tras el comentario de dbaty ("no manden PRs si no pueden usar pgcli")
 - [ ] Propuesta de flujo de PRs: Irina (17/11) prefiere una seccion "Before opening a PR" en
       CONTRIBUTING.rst (buscar issue/PR existente, comentar ahi, linkear si igual abris otro), sin
       gate de aprobacion (tiene ~2h por semana). Damien de acuerdo, sin bot. Nosotros ofrecimos
-      redactarla. PR dbcli/pgcli#1666 ABIERTO como draft el 24/11 (rama upstream/contributing-before-pr,
-      177b8551 sobre original/main dc9ce944). Pasarlo a ready cuando el CI de upstream de verde
+      redactarla. PR dbcli/pgcli#1666 (rama upstream/contributing-before-pr, 177b8551 sobre original/main
+      dc9ce944): Diego lo paso a ready el 24/11, CI verde 7/7. Esperando review
 
 ### UPSTREAM AL 2026-11-10
 - [ ] #1636 (COPY): anandghegde sumo el cancel que le propusimos (76d4da97, 2026-11-10). Revisar
@@ -392,6 +391,8 @@ Upcoming
 - [x] 4.7.5 (Diego: "saquemos nuestro release"): bump f52b6ec8, changelog `4.7.5 (2026-11-24) -
       upstream: 4.7.1`, wheel dist/pgcli-4.7.5-py3-none-any.whl (sha256 a0a82b38...) instalado en `t`
       con --reinstall (codigo 9e89abb484bf6fd8, 37 archivos; keyring SecretService OK)
+- [x] 4.7.5 PUBLICADA (Diego: "saca el 475"): CI del fork verde 7/7, tag anotado v4.7.5 sobre f52b6ec8,
+      GitHub release con el wheel (asset verificado identico, sha256 a0a82b38...), fila en la tabla
 
 2026-11-10
 ===================
