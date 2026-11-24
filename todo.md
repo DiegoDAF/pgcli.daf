@@ -1,6 +1,23 @@
 Upcoming
 ==============
 
+### UPSTREAM AL 2026-11-24 (original/main sigue en dc9ce944, nada mergeado desde el 04/11)
+- [ ] 4.7.5 PREPARADA, falta que Diego pruebe y diga "publicalo": tag v4.7.5 sobre el bump f52b6ec8
+      + push del tag + GitHub release con el wheel (sha256 a0a82b38...) + fila en la tabla del CLAUDE.md
+- [ ] Terceros nuevos: #1663 (SSL de pg_service.conf; el fork ya pasa todos los params, #1474),
+      #1664 (arrays en formato Postgres), #1665 (URL desde .env), #1662 (FROM con comas).
+      #1660 cerrado tras el comentario de dbaty ("no manden PRs si no pueden usar pgcli")
+- [ ] Propuesta de flujo de PRs: Irina (17/11) prefiere una seccion "Before opening a PR" en
+      CONTRIBUTING.rst (buscar issue/PR existente, comentar ahi, linkear si igual abris otro), sin
+      gate de aprobacion (tiene ~2h por semana). Damien de acuerdo, sin bot. Nosotros ofrecimos
+      redactarla. Diego dio el OK (24/11): rama upstream/contributing-before-pr, PR a abrir
+
+### UPSTREAM AL 2026-11-10
+- [ ] #1636 (COPY): anandghegde sumo el cancel que le propusimos (76d4da97, 2026-11-10). Revisar
+- [ ] #1658 (service files como libpq, tercero): sumo nuestras dos sugerencias. Traer cuando mergeen
+- [ ] #1204 tiene tres PRs para el mismo crash (#1605, #1638, #1659). Propuesta de flujo a los
+      mantenedores (feature: discussion primero; bug: issue confirmado antes del PR), mail de Diego
+
 ### WINDOWS CI EN UPSTREAM (2026-11-04)
 - [ ] dbcli/pgcli#1657 en DRAFT (rama upstream/windows-unit-tests, bcee5e32 + b1901849 sobre original/main
       27be0dda): job windows-latest + 3 fixes de tests. Verde en el fork (2808 passed). Retoma #1442 de Damien.
@@ -19,7 +36,8 @@ Upcoming
 - [ ] #1656: j-bennet ve los tests rojos; es el rojo que arregla nuestro #1653 (comentar? decide Diego)
 
 ### PENDIENTES 2026-10-29
-- [ ] `d` apagada: instalar 4.7.4 (wheel por scp, `ssh daf@$(tailscale ip -4 d)`; el nombre `d` no resuelve)
+- [ ] El checkout de pgcli.daf en `d` (HEAD 137867ce) tiene archivos modificados sin commitear
+      (ci.yml, codeql.yml, AUTHORS, README...). No se toco el 2026-11-10: revisar antes de actualizarlo
 - [ ] PR #1655 (draft) tiene la regresion de align_decimals (-t se cae, csv con espacios): rehacerlo
       con la alineacion a la derecha antes de sacarlo de draft
 - [ ] .pgpass de lm1/lm2/beta: tienen el suyo (860 lineas vs 772 de t); Diego decide si se pisa
@@ -363,6 +381,24 @@ Upcoming
       fallback dsn->host sin documentar, thread de refresh sin try/except (pierde callback +
       fuga de conexion en modo 2-conexiones), auto-reconnect con _conn_params viejos sin
       re-evaluar el tunel, SQL_ASCII muestra bytes como repr
+
+2026-11-24
+===================
+- [x] Merge de original/main dc9ce944 (01adc31e): #1648 ya lo teniamos desde 4.7.2 (#1392); se
+      conservo el log redactado y entro su test. #1656 ya estaba (43c318eb)
+- [x] Suite con cli_helpers 2.15.4, psycopg 3.3.9 y sqlparse 0.6.1 contra PG 18 scram descartable:
+      4023 passed, 0 skipped. ruff y mypy limpios
+- [x] 4.7.5 (Diego: "saquemos nuestro release"): bump f52b6ec8, changelog `4.7.5 (2026-11-24) -
+      upstream: 4.7.1`, wheel dist/pgcli-4.7.5-py3-none-any.whl (sha256 a0a82b38...) instalado en `t`
+      con --reinstall (codigo 9e89abb484bf6fd8, 37 archivos; keyring SecretService OK)
+
+2026-11-10
+===================
+- [x] 4.7.4 instalada en `d`: mismo wheel que `t` (dist/main-6b64b038, sha256 2693b560) por scp,
+      `uv tool install --force --reinstall`; codigo instalado igual en ambas (98fca7ce).
+      `pgcli -D st-bentobox-dev-ro -c` OK desde `d`. El nombre `d` ya resuelve por ssh
+- [x] ~/.config/pgcli de `t` a `d`: config + dsn.d (232 archivos, 0 diferencias). Los viejos de
+      `d` a la papelera (tenian nombres pre-rename: pg2/pg3.masdelivery.com, holocron, airflow2)
 
 2026-11-05
 ===================
