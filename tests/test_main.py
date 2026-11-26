@@ -308,7 +308,18 @@ def test_format_output_keeps_number_arrays_left_aligned_like_psql(executor):
     with executor.conn.cursor() as cur:
         cur.execute("select array[1, 22]::bigint[] as a, 7::bigint as b union all select array[333]::bigint[], 1234")
         lines = list(format_output(None, cur, ["a", "b"], "SELECT 2", OutputSettings(table_format="psql")))
-    assert lines[3:5] == ["| [1, 22] |    7 |", "| [333]   | 1234 |"]
+    assert lines[3:5] == ["| {1,22} |    7 |", "| {333}  | 1234 |"]
+
+
+@dbtest
+def test_format_output_shows_arrays_like_postgres_with_the_default_formats(executor):
+    # Without a float format (the default) the preprocessors were replaced
+    # wholesale, format_arrays included: arrays printed as Python lists,
+    # ['a', 'b'] and [Decimal('1.5'), Decimal('2')].
+    with executor.conn.cursor() as cur:
+        cur.execute("select array['a', 'b'] as t, '{}'::text[] as e, array[1.5, 2]::numeric[] as n")
+        lines = list(format_output(None, cur, ["t", "e", "n"], "SELECT 1", OutputSettings(table_format="psql")))
+    assert lines[3] == "| {a,b} | {} | {1.5,2} |"
 
 
 @dbtest

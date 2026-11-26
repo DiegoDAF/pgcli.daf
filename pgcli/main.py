@@ -2988,9 +2988,8 @@ def format_output(title, cur, headers, status, settings, explain_mode=False, fai
         return "{" + ",".join(str(format_array(e)) for e in val) + "}"
 
     def format_arrays(data, headers, **_):
-        data = list(data)
-        for row in data:
-            row[:] = [format_array(val) if isinstance(val, list) else val for val in row]
+        # New rows: the cursor's are tuples when no preprocessor ran before.
+        data = [[format_array(val) if isinstance(val, list) else val for val in row] for row in data]
 
         return data, headers
 
@@ -3020,7 +3019,8 @@ def format_output(title, cur, headers, status, settings, explain_mode=False, fai
         # Not align_decimals: with the column types known it padded every
         # float/numeric value, csv and tsv cells included, and crashed with -t
         # (no headers). Numbers are right-aligned instead, like psql.
-        output_kwargs["preprocessors"] = ()
+        # format_arrays stays: without it arrays printed as Python lists.
+        output_kwargs["preprocessors"] = (format_arrays,)
 
     if settings.column_date_formats:
         output_kwargs["preprocessors"] += (format_timestamps,)

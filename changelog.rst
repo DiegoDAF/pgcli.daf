@@ -10,6 +10,10 @@ Bug fixes:
   the server, which only notices a closed client when it next sends it data.
   pgcli now sends the cancel again with the key libpq gave when connecting,
   which still reaches the backend after the connection is closed.
+* Arrays show in Postgres format (``{a,b}``, ``{1.5,2}``) with the default
+  ``[data_formats]``, instead of Python lists (``['a', 'b']``,
+  ``[Decimal('1.5'), Decimal('2')]``). The array formatter only ran when a
+  ``float`` format was set (upstream #1664, by jayhemnani9910).
 
 4.7.5 (2026-11-24) - upstream: 4.7.1
 ====================================
