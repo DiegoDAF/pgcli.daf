@@ -1,3 +1,16 @@
+Upcoming
+========
+
+Bug fixes:
+----------
+
+* Two quick Ctrl-C on a long query cancel it on the server again. Since
+  psycopg 3.3.9 a second Ctrl-C during its cancel closes the connection
+  (psycopg #1435): the next statement worked, but the query kept running on
+  the server, which only notices a closed client when it next sends it data.
+  pgcli now sends the cancel again with the key libpq gave when connecting,
+  which still reaches the backend after the connection is closed.
+
 4.7.5 (2026-11-24) - upstream: 4.7.1
 ====================================
 
