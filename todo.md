@@ -2,7 +2,6 @@ Upcoming
 ==============
 
 ### UPSTREAM AL 2026-11-24 (original/main sigue en dc9ce944, nada mergeado desde el 04/11)
-- [ ] Instalar 4.7.5 en `lm1`, `lm2`, `beta` y `d` (siguen con 4.7.4); wheel del release v4.7.5
 - [ ] Terceros nuevos: #1663 (SSL de pg_service.conf; el fork ya pasa todos los params, #1474),
       #1664 (arrays en formato Postgres), #1665 (URL desde .env), #1662 (FROM con comas).
       #1660 cerrado tras el comentario de dbaty ("no manden PRs si no pueden usar pgcli")
@@ -15,10 +14,6 @@ Upcoming
 ### TRIAGE DE UPSTREAM 2026-11-26 (reproducido contra PG 18, original/main dc9ce944)
 - [ ] #1204: comentario con la comparacion de #1605/#1638/#1659 esperando que Diego confirme la
       eleccion (#1605: el mas viejo y el mas chico, cubre los tres casos)
-- [ ] Portar el fix del cancel guardado (9027d5f6) a la rama de #1651 (draft) y actualizar su cuerpo:
-      con psycopg 3.3.9 el chequeo de "busy" ya no alcanza (lo dijimos en #1607)
-- [ ] `t` y las demas siguen con 4.7.5, que no tiene 9027d5f6: con psycopg 3.3.9 un doble Ctrl-C
-      deja el query corriendo en el server
 
 ### UPSTREAM AL 2026-11-10
 - [ ] #1636 (COPY): anandghegde sumo el cancel que le propusimos (76d4da97, 2026-11-10). Revisar
@@ -402,6 +397,14 @@ Upcoming
       guardada al conectar (thread, 2 s, Ctrl-C ignorado). 2 tests que fallan sin el fix; e2e con
       proxy de 150 ms: 0 pg_sleep vivos con psycopg 3.3.8 y 3.3.9
 - [x] Suite con cli_helpers 2.15.5 y psycopg 3.3.9: 4025 passed, 0 skipped; ruff y mypy limpios
+- [x] #1651 (draft): rama al dia con original/main dc9ce944 (merge 5531b5ab, conflicto solo en el
+      changelog) + el fix del cancel guardado (93f26c33). Suite de upstream 2820 passed, 0 skipped;
+      los 7 tests fallan en main; e2e con proxy de 150 ms OK con psycopg 3.3.8 y 3.3.9. Cuerpo
+      actualizado (3.3.9 cierra la conexion, #1444 era duplicado de psycopg #1435). CI verde 7/7.
+      Sigue en draft
+- [x] Build de `main` 6713270b (dice 4.7.5; wheel en dist/main-6713270b/, codigo 895e2666507896f0,
+      psycopg 3.3.9, cli_helpers 2.15.5) instalada en `t`, `lm1`, `lm2`, `beta` y `d`. Doble Ctrl-C
+      verificado con el pgcli instalado en `t`
 
 2026-11-24
 ===================
