@@ -14,6 +14,9 @@ Bug fixes:
   ``[data_formats]``, instead of Python lists (``['a', 'b']``,
   ``[Decimal('1.5'), Decimal('2')]``). The array formatter only ran when a
   ``float`` format was set (upstream #1664, by jayhemnani9910).
+* Completion treats the tables of a comma-separated ``FROM`` list like a single
+  table, so upper-case names are folded: ``select  from USERS, ORDERS`` offered
+  no columns (upstream #1662, by Lee Sang Gyu).
 
 4.7.5 (2026-11-24) - upstream: 4.7.1
 ====================================
