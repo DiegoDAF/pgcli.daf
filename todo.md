@@ -2,24 +2,18 @@ Upcoming
 ==============
 
 ### UPSTREAM AL 2026-11-24 (original/main sigue en dc9ce944, nada mergeado desde el 04/11)
-- [ ] Terceros nuevos: #1663 (SSL de pg_service.conf; el fork ya pasa todos los params, #1474),
-      #1664 (arrays en formato Postgres), #1665 (URL desde .env), #1662 (FROM con comas).
-      #1660 cerrado tras el comentario de dbaty ("no manden PRs si no pueden usar pgcli")
+- [ ] Terceros probados el 2026-11-26 contra PG 18 (comentarios propuestos a Diego, sin publicar):
+      #1664 (arrays) y #1662 (FROM con comas) reproducidos y arreglados, los dos traidos al fork;
+      #1661 (\sf con colores) anda, \o y pipe sin escapes; #1665 (--env-file, dotenv) anda en smoke.
+      #1663 (SSL de pg_service.conf): el fork ya pasa todos los params (#1474)
 - [ ] Propuesta de flujo de PRs: Irina (17/11) prefiere una seccion "Before opening a PR" en
       CONTRIBUTING.rst (buscar issue/PR existente, comentar ahi, linkear si igual abris otro), sin
       gate de aprobacion (tiene ~2h por semana). Damien de acuerdo, sin bot. Nosotros ofrecimos
       redactarla. PR dbcli/pgcli#1666 (rama upstream/contributing-before-pr, 177b8551 sobre original/main
       dc9ce944): Diego lo paso a ready el 24/11, CI verde 7/7. Esperando review
 
-### TRIAGE DE UPSTREAM 2026-11-26 (reproducido contra PG 18, original/main dc9ce944)
-- [ ] #1204: comentario con la comparacion de #1605/#1638/#1659 esperando que Diego confirme la
-      eleccion (#1605: el mas viejo y el mas chico, cubre los tres casos)
-
 ### UPSTREAM AL 2026-11-10
-- [ ] #1636 (COPY): anandghegde sumo el cancel que le propusimos (76d4da97, 2026-11-10). Revisar
 - [ ] #1658 (service files como libpq, tercero): sumo nuestras dos sugerencias. Traer cuando mergeen
-- [ ] #1204 tiene tres PRs para el mismo crash (#1605, #1638, #1659). Propuesta de flujo a los
-      mantenedores (feature: discussion primero; bug: issue confirmado antes del PR), mail de Diego
 
 ### WINDOWS CI EN UPSTREAM (2026-11-04)
 - [ ] dbcli/pgcli#1657 en DRAFT (rama upstream/windows-unit-tests, bcee5e32 + b1901849 sobre original/main
@@ -28,15 +22,12 @@ Upcoming
 - [x] #1653 mergeado por Irina el 2026-11-03; traido al fork (3d9c8d79)
 
 ### PENDIENTES 2026-11-02 (decide Diego)
-- [ ] REGRESION EN UPSTREAM: cli_helpers 2.15.3 (28/10, su #122, a partir de nuestro issue #121) infiere
+- [ ] REGRESION EN UPSTREAM (sigue con cli_helpers 2.15.5, verificado 2026-11-26 en dc9ce944): cli_helpers 2.15.3 (28/10, su #122, a partir de nuestro issue #121) infiere
       float para float/Decimal y despierta align_decimals en pgcli: `pgcli -t` con una columna numeric o
       float da "list index out of range" y el csv sale con espacios ("  1.5"). Verificado en original/main
       d948fd0b con 2.15.3. El fork no lo tiene (a4ccce28). Opciones: rehacer #1655 (draft) con el fix de
       a4ccce28 y sacarlo de draft; issue corto en pgcli; PR a cli_helpers (align_decimals dimensiona por
       headers y revienta con headers vacios)
-- [ ] #1656 (tercero, alias_map_file en UTF-8): el fork tiene el mismo bug (open() sin encoding). Traerlo
-      cuando lo mergeen, o arreglarlo antes en el fork
-- [ ] #1656: j-bennet ve los tests rojos; es el rojo que arregla nuestro #1653 (comentar? decide Diego)
 
 ### PENDIENTES 2026-10-29
 - [ ] El checkout de pgcli.daf en `d` (HEAD 137867ce) tiene archivos modificados sin commitear
@@ -402,6 +393,13 @@ Upcoming
       los 7 tests fallan en main; e2e con proxy de 150 ms OK con psycopg 3.3.8 y 3.3.9. Cuerpo
       actualizado (3.3.9 cierra la conexion, #1444 era duplicado de psycopg #1435). CI verde 7/7.
       Sigue en draft
+- [x] Fork 1928b56e: arrays en formato Postgres con los [data_formats] por defecto (salian como listas
+      de Python, numeric[] como [Decimal('1.5')]); el preprocesador se perdia sin `float` desde 2017.
+      Mismo bug que arregla upstream #1664. format_arrays arma filas nuevas (recibia tuplas)
+- [x] Fork 5103a99a: #1662 (FROM con comas en mayusculas no completaba columnas), autor Lee Sang Gyu
+- [x] #1204: comentario publicado con la comparacion de #1605/#1638/#1659 y la recomendacion de #1605
+      (OK de Diego); #1636 76d4da97 revisado y comentado en el triage
+- [x] #1656: mergeado en upstream (dc9ce944) y traido al fork (43c318eb, en la 4.7.5)
 - [x] Build de `main` 6713270b (dice 4.7.5; wheel en dist/main-6713270b/, codigo 895e2666507896f0,
       psycopg 3.3.9, cli_helpers 2.15.5) instalada en `t`, `lm1`, `lm2`, `beta` y `d`. Doble Ctrl-C
       verificado con el pgcli instalado en `t`
