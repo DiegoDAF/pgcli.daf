@@ -12,6 +12,16 @@ Upcoming
       redactarla. PR dbcli/pgcli#1666 (rama upstream/contributing-before-pr, 177b8551 sobre original/main
       dc9ce944): Diego lo paso a ready el 24/11, CI verde 7/7. Esperando review
 
+### TRIAGE DE UPSTREAM 2026-11-26 (reproducido contra PG 18, original/main dc9ce944)
+- [ ] OJO FORK: psycopg 3.3.9 (12/11, su #1435) cierra la conexion cuando un segundo Ctrl-C corta el
+      cancel. Ya no queda trabada, pero el query SIGUE CORRIENDO en el server, y nuestro #1651 ya no
+      cancela (ve la conexion cerrada, no ACTIVE). Con 3.3.8 #1651 si cancelaba. Rehacer: mandar el
+      cancel antes de que psycopg cierre (cancel capturado antes del execute) o pedirselo a psycopg
+- [ ] cli_helpers 2.15.5 (25/11, conserva los iteradores al inferir tipos): correr la suite del fork
+- [ ] Comentarios propuestos a Diego (sin postear): #1204 (comparacion de #1605/#1638/#1659),
+      #1392 (cerrable, lo arreglo #1648), #1636 (probado en los dos caminos), #1607 (psycopg 3.3.9),
+      #1422 + #1629 (SQL_ASCII: el refresh muere en las funciones y Tab no completa nada)
+
 ### UPSTREAM AL 2026-11-10
 - [ ] #1636 (COPY): anandghegde sumo el cancel que le propusimos (76d4da97, 2026-11-10). Revisar
 - [ ] #1658 (service files como libpq, tercero): sumo nuestras dos sugerencias. Traer cuando mergeen
