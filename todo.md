@@ -2,10 +2,10 @@ Upcoming
 ==============
 
 ### UPSTREAM AL 2026-11-24 (original/main sigue en dc9ce944, nada mergeado desde el 04/11)
-- [ ] Terceros probados el 2026-11-26 contra PG 18 (comentarios propuestos a Diego, sin publicar):
-      #1664 (arrays) y #1662 (FROM con comas) reproducidos y arreglados, los dos en el fork;
-      #1661 (\sf con colores) anda, \o y pipe sin escapes; #1665 (--env-file, dotenv) anda en smoke.
-      #1663 (SSL de pg_service.conf): el fork ya pasa todos los params (#1474)
+- [ ] Terceros probados el 2026-11-26 contra PG 18: #1661 (\sf con colores) anda, \o y pipe sin
+      escapes; #1665 (--env-file, dotenv) anda en smoke. Comentarios escritos, sin publicar (son
+      features; Diego decide). #1663 (SSL de pg_service.conf): el fork ya pasa todos los params (#1474)
+- [ ] Instalar en `lm1`, `lm2`, `beta` y `d` la build con arrays y #1662 (hoy solo en `t`, d1cbe223)
 - [ ] Propuesta de flujo de PRs: Irina (17/11) prefiere una seccion "Before opening a PR" en
       CONTRIBUTING.rst (buscar issue/PR existente, comentar ahi, linkear si igual abris otro), sin
       gate de aprobacion (tiene ~2h por semana). Damien de acuerdo, sin bot. Nosotros ofrecimos
@@ -396,6 +396,9 @@ Upcoming
 - [x] Fork 1928b56e: arrays en formato Postgres con los [data_formats] por defecto (salian como listas
       de Python, numeric[] como [Decimal('1.5')]); el preprocesador se perdia sin `float` desde 2017.
       Mismo bug que arregla upstream #1664. format_arrays arma filas nuevas (recibia tuplas)
+- [x] Comentarios publicados en #1664 y #1662 (reproducidos, antes y despues; OK de Diego)
+- [x] Build de `main` d1cbe223 instalada en `t` (codigo b8ba1e3a0135f618): arrays, #1662 y doble
+      Ctrl-C verificados con el pgcli instalado
 - [x] CI del fork rojo en 09e73e5e (py3.10): test_query_is_cancelled_when_psycopg_closed_the_connection.
       Causa: un cancel que llega antes de que el backend arranque el query se descarta, y el test
       cancelaba microsegundos despues del send_query. Reproducido con un proxy que demora el query y no
