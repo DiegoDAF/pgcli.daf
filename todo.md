@@ -5,7 +5,6 @@ Upcoming
 - [ ] Terceros probados el 2026-11-26 contra PG 18: #1661 (\sf con colores) anda, \o y pipe sin
       escapes; #1665 (--env-file, dotenv) anda en smoke. Comentarios escritos, sin publicar (son
       features; Diego decide). #1663 (SSL de pg_service.conf): el fork ya pasa todos los params (#1474)
-- [ ] Instalar en `lm1`, `lm2`, `beta` y `d` la build con arrays y #1662 (hoy solo en `t`, d1cbe223)
 - [ ] Propuesta de flujo de PRs: Irina (17/11) prefiere una seccion "Before opening a PR" en
       CONTRIBUTING.rst (buscar issue/PR existente, comentar ahi, linkear si igual abris otro), sin
       gate de aprobacion (tiene ~2h por semana). Damien de acuerdo, sin bot. Nosotros ofrecimos
@@ -397,8 +396,8 @@ Upcoming
       de Python, numeric[] como [Decimal('1.5')]); el preprocesador se perdia sin `float` desde 2017.
       Mismo bug que arregla upstream #1664. format_arrays arma filas nuevas (recibia tuplas)
 - [x] Comentarios publicados en #1664 y #1662 (reproducidos, antes y despues; OK de Diego)
-- [x] Build de `main` d1cbe223 instalada en `t` (codigo b8ba1e3a0135f618): arrays, #1662 y doble
-      Ctrl-C verificados con el pgcli instalado
+- [x] Build de `main` d1cbe223 instalada en `t`, `lm1`, `lm2`, `beta` y `d` (codigo b8ba1e3a0135f618
+      en las cinco): arrays, #1662 y doble Ctrl-C verificados con el pgcli instalado en `t`
 - [x] CI del fork rojo en 09e73e5e (py3.10): test_query_is_cancelled_when_psycopg_closed_the_connection.
       Causa: un cancel que llega antes de que el backend arranque el query se descarta, y el test
       cancelaba microsegundos despues del send_query. Reproducido con un proxy que demora el query y no
