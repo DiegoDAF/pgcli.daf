@@ -13,14 +13,12 @@ Upcoming
       dc9ce944): Diego lo paso a ready el 24/11, CI verde 7/7. Esperando review
 
 ### TRIAGE DE UPSTREAM 2026-11-26 (reproducido contra PG 18, original/main dc9ce944)
-- [ ] OJO FORK: psycopg 3.3.9 (12/11, su #1435) cierra la conexion cuando un segundo Ctrl-C corta el
-      cancel. Ya no queda trabada, pero el query SIGUE CORRIENDO en el server, y nuestro #1651 ya no
-      cancela (ve la conexion cerrada, no ACTIVE). Con 3.3.8 #1651 si cancelaba. Rehacer: mandar el
-      cancel antes de que psycopg cierre (cancel capturado antes del execute) o pedirselo a psycopg
-- [ ] cli_helpers 2.15.5 (25/11, conserva los iteradores al inferir tipos): correr la suite del fork
-- [ ] Comentarios propuestos a Diego (sin postear): #1204 (comparacion de #1605/#1638/#1659),
-      #1392 (cerrable, lo arreglo #1648), #1636 (probado en los dos caminos), #1607 (psycopg 3.3.9),
-      #1422 + #1629 (SQL_ASCII: el refresh muere en las funciones y Tab no completa nada)
+- [ ] #1204: comentario con la comparacion de #1605/#1638/#1659 esperando que Diego confirme la
+      eleccion (#1605: el mas viejo y el mas chico, cubre los tres casos)
+- [ ] Portar el fix del cancel guardado (9027d5f6) a la rama de #1651 (draft) y actualizar su cuerpo:
+      con psycopg 3.3.9 el chequeo de "busy" ya no alcanza (lo dijimos en #1607)
+- [ ] `t` y las demas siguen con 4.7.5, que no tiene 9027d5f6: con psycopg 3.3.9 un doble Ctrl-C
+      deja el query corriendo en el server
 
 ### UPSTREAM AL 2026-11-10
 - [ ] #1636 (COPY): anandghegde sumo el cancel que le propusimos (76d4da97, 2026-11-10). Revisar
@@ -391,6 +389,19 @@ Upcoming
       fallback dsn->host sin documentar, thread de refresh sin try/except (pierde callback +
       fuga de conexion en modo 2-conexiones), auto-reconnect con _conn_params viejos sin
       re-evaluar el tunel, SQL_ASCII muestra bytes como repr
+
+2026-11-26
+===================
+- [x] Triage de upstream: reproducidos #1204 (los tres PRs arreglan; difieren en variadic con nombre
+      y OUT sin nombre), #1607 (psycopg 3.3.8 trabado, 3.3.9 reconecta pero el query sigue en el
+      server), #1392 (arreglado por #1648), #1505 vs #1636 76d4da97 (anda en los dos caminos), #1422
+      (SQL_ASCII: el refresh muere en parse_defaults y Tab no completa; #1629 lo arregla)
+- [x] Comentarios publicados en #1392, #1636, #1607 y #1422 (OK de Diego)
+- [x] Fork 9027d5f6: con psycopg >= 3.3.9 un segundo Ctrl-C hace que psycopg cierre la conexion
+      (#1435) y el query seguia en el server; ahora se reenvia el cancel con la clave de PQgetCancel
+      guardada al conectar (thread, 2 s, Ctrl-C ignorado). 2 tests que fallan sin el fix; e2e con
+      proxy de 150 ms: 0 pg_sleep vivos con psycopg 3.3.8 y 3.3.9
+- [x] Suite con cli_helpers 2.15.5 y psycopg 3.3.9: 4025 passed, 0 skipped; ruff y mypy limpios
 
 2026-11-24
 ===================
