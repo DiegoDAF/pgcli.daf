@@ -3,7 +3,7 @@ Upcoming
 
 ### UPSTREAM AL 2026-11-24 (original/main sigue en dc9ce944, nada mergeado desde el 04/11)
 - [ ] Terceros probados el 2026-11-26 contra PG 18 (comentarios propuestos a Diego, sin publicar):
-      #1664 (arrays) y #1662 (FROM con comas) reproducidos y arreglados, los dos traidos al fork;
+      #1664 (arrays) y #1662 (FROM con comas) reproducidos y arreglados, los dos en el fork;
       #1661 (\sf con colores) anda, \o y pipe sin escapes; #1665 (--env-file, dotenv) anda en smoke.
       #1663 (SSL de pg_service.conf): el fork ya pasa todos los params (#1474)
 - [ ] Propuesta de flujo de PRs: Irina (17/11) prefiere una seccion "Before opening a PR" en
@@ -396,6 +396,10 @@ Upcoming
 - [x] Fork 1928b56e: arrays en formato Postgres con los [data_formats] por defecto (salian como listas
       de Python, numeric[] como [Decimal('1.5')]); el preprocesador se perdia sin `float` desde 2017.
       Mismo bug que arregla upstream #1664. format_arrays arma filas nuevas (recibia tuplas)
+- [x] CI del fork rojo en 09e73e5e (py3.10): test_query_is_cancelled_when_psycopg_closed_the_connection.
+      Causa: un cancel que llega antes de que el backend arranque el query se descarta, y el test
+      cancelaba microsegundos despues del send_query. Reproducido con un proxy que demora el query y no
+      el cancel; los tests ahora esperan el query `active` (fork 6dcee05d, #1651 ae542ff5)
 - [x] Fork 5103a99a: #1662 (FROM con comas en mayusculas no completaba columnas), autor Lee Sang Gyu
 - [x] #1204: comentario publicado con la comparacion de #1605/#1638/#1659 y la recomendacion de #1605
       (OK de Diego); #1636 76d4da97 revisado y comentado en el triage
